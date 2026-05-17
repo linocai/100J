@@ -4,6 +4,9 @@
 .LSOverride
 
 # Xcode / Swift
+.build/
+.swiftpm/
+Package.resolved
 DerivedData/
 *.xcuserstate
 *.xcworkspace/xcuserdata/

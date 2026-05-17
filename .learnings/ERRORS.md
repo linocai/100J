@@ -27,6 +27,36 @@ Setuptools package discovery should include only `app*` for this backend package
 
 ---
 
+## [ERR-20260517-004] swiftpm_percent_path_index_store
+
+**Logged**: 2026-05-17T11:00:00+08:00
+**Priority**: medium
+**Status**: pending
+**Area**: frontend
+
+### Summary
+SwiftPM build failed when the workspace path contained `%`.
+
+### Error
+```text
+failed to create temporary file: /Users/linotsai/Lino/100bJ/frontend/apple/.build/...
+missing required module 'SwiftShims'
+```
+
+### Context
+- Command: `swift build`
+- Working directory: `/Users/linotsai/Lino/100%J/frontend/apple`
+- SwiftPM / Swift index store appears to mis-handle `%J` in the source path.
+
+### Suggested Fix
+Use a scratch path outside the `%` directory, such as `swift build --scratch-path /tmp/personal-affairs-apple-build`, and document this workaround for this repo path.
+
+### Metadata
+- Reproducible: yes
+- Related Files: `frontend/apple/README.md`
+
+---
+
 ## [ERR-20260517-002] passlib_bcrypt_5_incompatibility
 
 **Logged**: 2026-05-17T10:00:00+08:00
