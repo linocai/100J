@@ -1,0 +1,2 @@
+"""Personal Affairs backend package."""
+
