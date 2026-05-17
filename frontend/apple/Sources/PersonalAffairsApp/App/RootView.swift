@@ -6,7 +6,11 @@ struct RootView: View {
     var body: some View {
         Group {
             if model.isAuthenticated {
+                #if os(iOS)
+                IOSMainShellView()
+                #else
                 MainShellView()
+                #endif
             } else {
                 AuthView()
             }
@@ -22,6 +26,7 @@ struct RootView: View {
     }
 }
 
+#if os(macOS)
 struct MainShellView: View {
     @EnvironmentObject private var model: AppModel
 
@@ -82,4 +87,4 @@ private struct SidebarRow: View {
         }
     }
 }
-
+#endif

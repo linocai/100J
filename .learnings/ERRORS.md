@@ -27,6 +27,35 @@ Setuptools package discovery should include only `app*` for this backend package
 
 ---
 
+## [ERR-20260517-005] ios_build_ios16_contentunavailable_hsplitview
+
+**Logged**: 2026-05-17T11:35:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+iOS simulator build failed because the package targets iOS 16 while new iOS views used iOS 17-only `ContentUnavailableView`, and macOS `HSplitView` files were compiled for iOS.
+
+### Error
+```text
+'ContentUnavailableView' is only available in iOS 17.0 or newer
+'HSplitView' is unavailable in iOS
+```
+
+### Context
+- Command: `xcodebuild -scheme PersonalAffairsApp -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' -derivedDataPath /tmp/personal-affairs-xcode-derived build`
+- Working directory: `frontend/apple`
+
+### Suggested Fix
+Use a custom iOS 16-compatible empty-state view and wrap macOS-only SwiftUI screens with `#if os(macOS)`.
+
+### Metadata
+- Reproducible: yes
+- Related Files: `frontend/apple/Sources/PersonalAffairsApp/Features/iOS`, `frontend/apple/Sources/PersonalAffairsApp/Features/Company/CompanyProjectsView.swift`, `frontend/apple/Sources/PersonalAffairsApp/Features/Agent/AgentView.swift`
+
+---
+
 ## [ERR-20260517-004] swiftpm_percent_path_index_store
 
 **Logged**: 2026-05-17T11:00:00+08:00

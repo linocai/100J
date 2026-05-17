@@ -29,14 +29,26 @@ struct AuthView: View {
                         .textFieldStyle(.roundedBorder)
                 }
             }
+            #if os(macOS)
             .formStyle(.grouped)
+            #endif
+            #if os(macOS)
             .frame(width: 360)
+            #else
+            .frame(maxWidth: 420)
+            .padding(.horizontal)
+            #endif
 
             HStack {
                 Button(isRegistering ? "Have an account?" : "Create account") {
                     isRegistering.toggle()
                 }
+                #if os(macOS)
                 .buttonStyle(.link)
+                #else
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.accentColor)
+                #endif
 
                 Spacer()
 
@@ -59,8 +71,17 @@ struct AuthView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(email.isEmpty || password.isEmpty || model.isLoading)
             }
+            #if os(macOS)
             .frame(width: 360)
+            #else
+            .frame(maxWidth: 420)
+            .padding(.horizontal)
+            #endif
         }
+        #if os(macOS)
         .padding(40)
+        #else
+        .padding(.vertical, 28)
+        #endif
     }
 }

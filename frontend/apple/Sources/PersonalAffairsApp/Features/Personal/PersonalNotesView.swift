@@ -153,7 +153,7 @@ private struct NoteRow: View {
     }
 }
 
-private struct NoteDraft {
+struct NoteDraft {
     var title = ""
     var body = ""
     var type: NoteType = .idea
@@ -196,4 +196,3 @@ private struct NoteFormView: View {
         .frame(width: 480)
     }
 }
-

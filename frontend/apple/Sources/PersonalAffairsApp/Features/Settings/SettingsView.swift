@@ -32,10 +32,11 @@ struct SettingsView: View {
                     LabeledContent("Company Space", value: company.id)
                 }
             }
+            #if os(macOS)
             .formStyle(.grouped)
+            #endif
             Spacer()
         }
         .padding()
     }
 }
-

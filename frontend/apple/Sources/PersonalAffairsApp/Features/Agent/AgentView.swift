@@ -2,6 +2,7 @@ import Foundation
 import PersonalAffairsCore
 import SwiftUI
 
+#if os(macOS)
 struct AgentView: View {
     @EnvironmentObject private var model: AppModel
     @State private var command = "create_task"
@@ -204,4 +205,4 @@ private func render(_ response: AgentCommandResponse) -> String {
     }
     return lines.joined(separator: "\n")
 }
-
+#endif

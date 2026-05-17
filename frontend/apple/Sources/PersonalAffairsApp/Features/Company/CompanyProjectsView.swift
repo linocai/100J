@@ -1,6 +1,14 @@
 import PersonalAffairsCore
 import SwiftUI
 
+struct ProjectDraft {
+    var name = ""
+    var description = ""
+    var startDate = ""
+    var targetDate = ""
+}
+
+#if os(macOS)
 struct CompanyProjectsView: View {
     @EnvironmentObject private var model: AppModel
     @State private var status: ProjectStatus = .active
@@ -172,13 +180,6 @@ private struct ProjectDetailView: View {
     }
 }
 
-private struct ProjectDraft {
-    var name = ""
-    var description = ""
-    var startDate = ""
-    var targetDate = ""
-}
-
 private struct ProjectFormView: View {
     let save: (ProjectDraft) async -> Void
 
@@ -212,3 +213,4 @@ private struct ProjectFormView: View {
         .frame(width: 460)
     }
 }
+#endif
