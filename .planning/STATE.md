@@ -6,7 +6,7 @@ Build Personal Affairs App v1 in phases: backend, macOS, iOS, local E2E testing,
 
 ## Current Position
 
-Phase 3 iOS is implemented and locally build-verified. Next useful action is Phase 4 local testing: run backend, seed or create a test user, then verify backend + macOS + iOS cross-client flows.
+Phase 4 automated local verification is complete. The local backend is running on port 8000 for manual macOS and iOS testing.
 
 ## Completed
 
@@ -15,6 +15,7 @@ Phase 3 iOS is implemented and locally build-verified. Next useful action is Pha
 - Phase 3 iOS SwiftUI client with TabView shell and iOS-specific screens for Personal, Company, Calendar, Agent, and Settings.
 - iOS shares `PersonalAffairsCore` Domain / API / Repository with macOS.
 - iOS Simulator build passes on iPhone 17, iOS 26.5.
+- Phase 4 backend tests, migration check, OpenAPI check, API smoke test, macOS build/test, and iOS simulator build pass.
 
 ## Verification
 
@@ -28,6 +29,16 @@ xcodebuild -quiet -scheme PersonalAffairsApp -destination 'platform=iOS Simulato
 
 Latest result: all passed on 2026-05-17.
 
+Backend Phase 4 checks:
+
+```bash
+cd backend
+.venv/bin/ruff check .
+.venv/bin/python -m pytest
+DATABASE_URL=sqlite:////tmp/personal_affairs_phase4_migration.db .venv/bin/alembic upgrade head
+.venv/bin/python scripts/phase4_smoke.py --base-url http://127.0.0.1:8000
+```
+
 ## Decisions
 
 - Keep Calendar and Agent as global top-level navigation entries on both macOS and iOS.
@@ -37,4 +48,4 @@ Latest result: all passed on 2026-05-17.
 
 ## Next Action
 
-Start Phase 4 by running backend migrations and API server locally, then perform E2E checks across macOS and iOS against the same local API.
+Manual test macOS and iOS against `http://127.0.0.1:8000/api/v1`, using `.planning/PHASE4_LOCAL_TEST.md` as the checklist. Stop the local backend with `kill $(cat /tmp/personal-affairs-phase4-api.pid)` when testing is done.

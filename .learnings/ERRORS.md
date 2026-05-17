@@ -86,6 +86,62 @@ Use a scratch path outside the `%` directory, such as `swift build --scratch-pat
 
 ---
 
+## [ERR-20260517-006] phase4_smoke_reserved_email_domain
+
+**Logged**: 2026-05-17T12:00:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: backend
+
+### Summary
+Phase 4 API smoke registration failed because `email-validator` rejects reserved test domains such as `local.test`.
+
+### Error
+```text
+value is not a valid email address: The part after the @-sign is a special-use or reserved name
+```
+
+### Context
+- Command: Phase 4 smoke script against local API.
+- Input email: `phase4_<timestamp>@local.test`
+
+### Suggested Fix
+Use a syntactically valid disposable email under an accepted domain, such as `phase4_<timestamp>@example.com`, for local smoke tests.
+
+### Metadata
+- Reproducible: yes
+- Related Files: `backend/scripts/phase4_smoke.py`
+
+---
+
+## [ERR-20260517-007] detached_uvicorn_nohup_unreliable
+
+**Logged**: 2026-05-17T12:00:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: backend
+
+### Summary
+Starting uvicorn through a one-line `nohup env ... uvicorn ... &` command exited silently in this Codex desktop session.
+
+### Error
+```text
+backend did not become healthy
+```
+
+### Context
+- Command: detached local Phase 4 API startup.
+- Log file was empty and no server process remained.
+
+### Suggested Fix
+Launch the local API with Python `subprocess.Popen(..., start_new_session=True)` and write PID/log paths explicitly.
+
+### Metadata
+- Reproducible: unknown
+- Related Files: `.planning/PHASE4_LOCAL_TEST.md`
+
+---
+
 ## [ERR-20260517-002] passlib_bcrypt_5_incompatibility
 
 **Logged**: 2026-05-17T10:00:00+08:00
@@ -94,7 +150,7 @@ Use a scratch path outside the `%` directory, such as `swift build --scratch-pat
 **Area**: backend
 
 ### Summary
-`passlib==1.7.4` failed with `bcrypt==5.0.0` during password hashing.
+`passlib==1.7.4` failed with `bcrypt==5.0.0` during password hashing and logs noisy backend warnings with newer bcrypt 4.1+ releases.
 
 ### Error
 ```text
@@ -108,7 +164,7 @@ AttributeError: module 'bcrypt' has no attribute '__about__'
 - `passlib[bcrypt]` allowed the latest `bcrypt` release, but Passlib's bcrypt backend is not compatible with bcrypt 5.0.0.
 
 ### Suggested Fix
-Pin `bcrypt<5.0.0` while using Passlib 1.7.4.
+Pin `bcrypt<4.1.0` while using Passlib 1.7.4.
 
 ### Metadata
 - Reproducible: yes

@@ -69,6 +69,17 @@ pytest
 
 Tests use in-memory SQLite and do not require a local PostgreSQL server.
 
+## Phase 4 Local Smoke
+
+With the API running locally, execute:
+
+```bash
+cd backend
+.venv/bin/python scripts/phase4_smoke.py --base-url http://127.0.0.1:8000
+```
+
+The smoke test registers a disposable test user and verifies auth, spaces, tasks, projects, notes, calendar items, business-rule failures, Agent confirmation, action logs, and token refresh.
+
 ## v1 API Areas
 
 - Auth: `/api/v1/auth/*`
@@ -89,4 +100,3 @@ Tests use in-memory SQLite and do not require a local PostgreSQL server.
 - Notes can only belong to Personal space.
 - Agent write operations create `agent_action_logs`.
 - Risky Agent operations require confirmation.
-
