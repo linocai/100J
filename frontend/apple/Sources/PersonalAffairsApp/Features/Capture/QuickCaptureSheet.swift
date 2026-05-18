@@ -16,22 +16,22 @@ struct QuickCaptureSheet: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
             SectionHeaderView(
                 eyebrow: "Quick Capture",
-                title: "Choose where this belongs",
-                subtitle: "100J does not write automatically until you choose Task, Fixed Calendar, or Note."
+                title: "选择它应该落在哪里",
+                subtitle: "在你明确选择待办、固定日程或备忘之前，100J 不会自动写入。"
             )
 
             SurfaceView(cornerRadius: AppTheme.Radius.md, padding: AppTheme.Spacing.md) {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-                    Text("Raw input")
+                    Text("原始输入")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(AppTheme.Colors.tertiaryText)
-                    Text(draft.rawText.isEmpty ? "Untitled capture" : draft.rawText)
+                    Text(draft.rawText.isEmpty ? "未命名记录" : draft.rawText)
                         .font(.callout.weight(.semibold))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Picker("Target", selection: $draft.target) {
+            Picker("落点", selection: $draft.target) {
                 ForEach(CaptureTarget.allCases) { target in
                     Text(target.label).tag(target)
                 }
@@ -42,8 +42,8 @@ struct QuickCaptureSheet: View {
             }
 
             Form {
-                TextField("Title", text: $draft.title)
-                TextField("Description", text: $draft.description, axis: .vertical)
+                TextField("标题", text: $draft.title)
+                TextField("描述", text: $draft.description, axis: .vertical)
                     .lineLimit(2...5)
 
                 switch draft.target {
@@ -54,7 +54,7 @@ struct QuickCaptureSheet: View {
                 case .fixedCalendar:
                     calendarFields
                 case .personalNote:
-                    Picker("Note type", selection: $draft.noteType) {
+                    Picker("备忘类型", selection: $draft.noteType) {
                         ForEach(NoteType.allCases) { type in
                             Text(type.label).tag(type)
                         }
@@ -74,8 +74,8 @@ struct QuickCaptureSheet: View {
 
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }
-                Button("Save") {
+                Button("取消") { dismiss() }
+                Button("保存") {
                     save()
                 }
                 .buttonStyle(.borderedProminent)
@@ -96,15 +96,15 @@ struct QuickCaptureSheet: View {
 
     @ViewBuilder
     private func taskFields(allowsProject: Bool) -> some View {
-        Picker("Priority", selection: $draft.priority) {
+        Picker("优先级", selection: $draft.priority) {
             ForEach(TaskPriority.allCases) { priority in
                 Text(priority.label).tag(priority)
             }
         }
-        TextField("Due date (YYYY-MM-DD)", text: $draft.dueDate)
+        TextField("截止日期 (YYYY-MM-DD)", text: $draft.dueDate)
         if allowsProject {
-            Picker("Project", selection: $draft.projectId) {
-                Text("No Project").tag(Optional<String>.none)
+            Picker("项目", selection: $draft.projectId) {
+                Text("无项目").tag(Optional<String>.none)
                 ForEach(model.projects) { project in
                     Text(project.name).tag(Optional(project.id))
                 }
@@ -114,30 +114,30 @@ struct QuickCaptureSheet: View {
 
     private var calendarFields: some View {
         Group {
-            Picker("Space", selection: $draft.calendarSpace) {
+            Picker("空间", selection: $draft.calendarSpace) {
                 ForEach(SpaceType.allCases) { space in
                     Text(space.label).tag(space)
                 }
             }
-            Picker("Type", selection: $draft.calendarType) {
+            Picker("类型", selection: $draft.calendarType) {
                 ForEach(CalendarItemType.allCases) { type in
                     Text(type.label).tag(type)
                 }
             }
-            Toggle("All day", isOn: $draft.allDay)
+            Toggle("全天", isOn: $draft.allDay)
             if draft.allDay {
-                TextField("Start date (YYYY-MM-DD)", text: $draft.startDate)
+                TextField("开始日期 (YYYY-MM-DD)", text: $draft.startDate)
             } else {
-                DatePicker("Start time", selection: $draft.startAt)
+                DatePicker("开始时间", selection: $draft.startAt)
             }
-            Picker("Recurrence", selection: $draft.recurrence) {
+            Picker("重复", selection: $draft.recurrence) {
                 ForEach(Recurrence.allCases) { recurrence in
                     Text(recurrence.label).tag(recurrence)
                 }
             }
             if draft.calendarSpace == .company {
-                Picker("Project", selection: $draft.projectId) {
-                    Text("No Project").tag(Optional<String>.none)
+                Picker("项目", selection: $draft.projectId) {
+                    Text("无项目").tag(Optional<String>.none)
                     ForEach(model.projects) { project in
                         Text(project.name).tag(Optional(project.id))
                     }
@@ -217,11 +217,11 @@ struct QuickCaptureSheet: View {
     private var validationMessage: String? {
         let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
         if title.isEmpty {
-            return "Add a title before saving."
+            return "保存前请先填写标题。"
         }
 
         if draft.target == .fixedCalendar && draft.allDay && draft.startDate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "All-day fixed items need a start date."
+            return "全天固定日程需要开始日期。"
         }
 
         return nil

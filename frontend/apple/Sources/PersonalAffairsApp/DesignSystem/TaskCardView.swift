@@ -25,8 +25,8 @@ struct TaskCardView: View {
                         .frame(width: 24, height: 24)
                 }
                 .buttonStyle(.plain)
-                .help(task.status == .done ? "Reopen task" : "Complete task")
-                .accessibilityLabel(task.status == .done ? "Reopen \(task.title)" : "Complete \(task.title)")
+                .help(task.status == .done ? "重新打开任务" : "完成任务")
+                .accessibilityLabel(task.status == .done ? "重新打开 \(task.title)" : "完成 \(task.title)")
 
                 VStack(alignment: .leading, spacing: compact ? 4 : 6) {
                     Text(task.title)
@@ -47,7 +47,7 @@ struct TaskCardView: View {
                         PillView(text: task.status.label, style: task.status == .done ? .success : .neutralSubtle)
                         PillView(text: spaceLabel, style: spaceStyle)
                         if let dueDate = task.dueDate {
-                            PillView(text: "Due \(dueDate)", style: .warningSubtle, systemImage: "calendar.badge.clock")
+                            PillView(text: "截止 \(dueDate)", style: .warningSubtle, systemImage: "calendar.badge.clock")
                         }
                         if let projectName {
                             PillView(text: projectName, style: .company, systemImage: "folder")
@@ -68,7 +68,7 @@ struct TaskCardView: View {
                         .frame(width: 26, height: 26)
                 }
                 .buttonStyle(.plain)
-                .help("Archive")
+                .help("归档")
                 .opacity(isHovering || isSelected ? 1 : 0.58)
             }
             .padding(compact ? 10 : 12)
@@ -89,7 +89,7 @@ struct TaskCardView: View {
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(task.title), \(task.status.label) task")
+        .accessibilityLabel("\(task.title)，\(task.status.label)任务")
     }
 
     private var cardBackground: some ShapeStyle {

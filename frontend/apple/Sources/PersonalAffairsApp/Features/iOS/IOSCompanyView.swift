@@ -4,8 +4,8 @@ import SwiftUI
 
 struct IOSCompanyView: View {
     enum Segment: String, CaseIterable, Identifiable {
-        case tasks = "Tasks"
-        case projects = "Projects"
+        case tasks = "待办"
+        case projects = "项目"
         var id: String { rawValue }
     }
 
@@ -14,8 +14,8 @@ struct IOSCompanyView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                IOSScreenHeader(title: "Company", subtitle: "All company tasks live here, with projects as one view.")
-                Picker("Company view", selection: $segment) {
+                IOSScreenHeader(title: "公司", subtitle: "所有公司待办都在这里，项目只是其中一种视角。")
+                Picker("公司视图", selection: $segment) {
                     ForEach(Segment.allCases) { segment in
                         Text(segment.rawValue).tag(segment)
                     }
@@ -30,7 +30,7 @@ struct IOSCompanyView: View {
                     IOSCompanyProjectsList()
                 }
             }
-            .navigationTitle("Company")
+            .navigationTitle("公司")
             .navigationBarTitleDisplayMode(.inline)
             .overlay { IOSLoadingOverlay() }
             .iosErrorAlert()
@@ -49,7 +49,7 @@ private struct IOSCompanyTasksList: View {
     var body: some View {
         List {
             Section {
-                Picker("Status", selection: $status) {
+                Picker("状态", selection: $status) {
                     ForEach(TaskStatus.allCases) { status in
                         Text(status.label).tag(status)
                     }
@@ -57,17 +57,17 @@ private struct IOSCompanyTasksList: View {
                 .pickerStyle(.segmented)
                 .onChange(of: status) { _ in Task { await reload() } }
 
-                Picker("Scope", selection: $scope) {
-                    Text("All").tag("all")
-                    Text("No Project").tag("no_project")
-                    Text("With Project").tag("with_project")
-                    Text("Project").tag("project")
+                Picker("范围", selection: $scope) {
+                    Text("全部").tag("all")
+                    Text("无项目").tag("no_project")
+                    Text("有项目").tag("with_project")
+                    Text("项目").tag("project")
                 }
                 .onChange(of: scope) { _ in Task { await reload() } }
 
                 if scope == "project" {
-                    Picker("Project", selection: $selectedProjectId) {
-                        Text("Choose").tag(Optional<String>.none)
+                    Picker("项目", selection: $selectedProjectId) {
+                        Text("选择").tag(Optional<String>.none)
                         ForEach(model.projects) { project in
                             Text(project.name).tag(Optional(project.id))
                         }
@@ -77,7 +77,7 @@ private struct IOSCompanyTasksList: View {
             }
 
             if model.companyTasks.isEmpty {
-                IOSUnavailableView(title: "No Tasks", systemImage: "briefcase", message: "Company tasks can be project work or no-project work.")
+                IOSUnavailableView(title: "暂无待办", systemImage: "briefcase", message: "公司待办可以属于项目，也可以无项目。")
             } else {
                 ForEach(model.companyTasks) { task in
                     IOSTaskRow(task: task, projectName: projectName(task.projectId, projects: model.projects))
@@ -89,14 +89,14 @@ private struct IOSCompanyTasksList: View {
                             Button(role: .destructive) {
                                 Task { await archive(task) }
                             } label: {
-                                Label("Archive", systemImage: "archivebox")
+                                Label("归档", systemImage: "archivebox")
                             }
                         }
                         .swipeActions(edge: .leading) {
                             Button {
                                 Task { await toggleDone(task) }
                             } label: {
-                                Label(task.status == .done ? "Reopen" : "Done", systemImage: task.status == .done ? "arrow.uturn.left" : "checkmark")
+                                Label(task.status == .done ? "重新打开" : "完成", systemImage: task.status == .done ? "arrow.uturn.left" : "checkmark")
                             }
                             .tint(.green)
                         }
@@ -111,7 +111,7 @@ private struct IOSCompanyTasksList: View {
             }
         }
         .sheet(isPresented: $showingNewTask) {
-            IOSTaskForm(title: "New Company Task", projects: model.projects, allowsProject: true) { draft in
+            IOSTaskForm(title: "新建公司待办", projects: model.projects, allowsProject: true) { draft in
                 guard let space = model.companySpace else { return }
                 await model.run {
                     _ = try await model.taskRepository.create(
@@ -130,7 +130,7 @@ private struct IOSCompanyTasksList: View {
         }
         .sheet(item: $editingTask) { task in
             IOSTaskForm(
-                title: "Edit Company Task",
+                title: "编辑公司待办",
                 projects: model.projects,
                 allowsProject: true,
                 initialDraft: TaskDraft(
@@ -200,7 +200,7 @@ private struct IOSCompanyProjectsList: View {
     var body: some View {
         List {
             if model.projects.isEmpty {
-                IOSUnavailableView(title: "No Projects", systemImage: "folder", message: "Projects are company-only in v1.")
+                IOSUnavailableView(title: "暂无项目", systemImage: "folder", message: "v1 中项目只属于公司空间。")
             } else {
                 ForEach(model.projects) { project in
                     NavigationLink {
@@ -209,7 +209,7 @@ private struct IOSCompanyProjectsList: View {
                         IOSProjectRow(project: project)
                     }
                     .contextMenu {
-                        Button("Edit") {
+                        Button("编辑") {
                             editingProject = project
                         }
                     }
@@ -217,21 +217,21 @@ private struct IOSCompanyProjectsList: View {
                         Button(role: .destructive) {
                             Task { await archive(project) }
                         } label: {
-                            Label("Archive", systemImage: "archivebox")
+                            Label("归档", systemImage: "archivebox")
                         }
                     }
                     .swipeActions(edge: .leading) {
                         Button {
                             editingProject = project
                         } label: {
-                            Label("Edit", systemImage: "pencil")
+                            Label("编辑", systemImage: "pencil")
                         }
                         .tint(.blue)
 
                         Button {
                             Task { await complete(project) }
                         } label: {
-                            Label("Complete", systemImage: "checkmark")
+                            Label("完成", systemImage: "checkmark")
                         }
                         .tint(.green)
                     }
@@ -319,12 +319,12 @@ private struct IOSProjectDetail: View {
 
     var body: some View {
         List {
-            Section("Project") {
+            Section("项目") {
                 IOSProjectRow(project: project)
             }
-            Section("Active Tasks") {
+            Section("进行中任务") {
                 if tasks.isEmpty {
-                    IOSUnavailableView(title: "No Tasks", systemImage: "checklist", message: "Project tasks will appear here.")
+                    IOSUnavailableView(title: "暂无任务", systemImage: "checklist", message: "项目任务会显示在这里。")
                 } else {
                     ForEach(tasks) { task in
                         IOSTaskRow(task: task, projectName: nil)
@@ -343,7 +343,7 @@ private struct IOSProjectDetail: View {
         }
         .sheet(isPresented: $showingNewTask) {
             IOSTaskForm(
-                title: "New Project Task",
+                title: "新建项目待办",
                 projects: [project],
                 allowsProject: false,
                 initialDraft: TaskDraft(projectId: project.id)

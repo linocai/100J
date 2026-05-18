@@ -13,19 +13,19 @@ struct FixedSchedulePanel: View {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Fixed Schedule")
+                        Text("固定日程")
                             .font(.headline.weight(.semibold))
-                        Text("Only appointments, anniversaries, expiries, deadlines, and reminders.")
+                        Text("这里只放约会、纪念日、订阅到期、截止日和提醒。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Calendar", action: showMore)
+                    Button("日程", action: showMore)
                         .font(.caption.weight(.semibold))
                 }
 
-                fixedGroup("Today", items: todayItems)
-                fixedGroup("Upcoming", items: Array(upcomingItems.prefix(6)))
+                fixedGroup("今天", items: todayItems)
+                fixedGroup("接下来", items: Array(upcomingItems.prefix(6)))
             }
         }
     }
@@ -38,7 +38,7 @@ struct FixedSchedulePanel: View {
                 .textCase(.uppercase)
 
             if items.isEmpty {
-                Text(title == "Today" ? "No fixed items today." : "No fixed items in the next week.")
+                Text(title == "今天" ? "今天没有固定日程。" : "未来一周没有固定日程。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)

@@ -70,7 +70,7 @@ struct CalendarEventCardView: View {
                         .frame(width: 26, height: 26)
                 }
                 .buttonStyle(.plain)
-                .help("Delete fixed calendar item")
+                .help("删除固定日程")
                 .opacity(isHovering || isSelected ? 1 : 0.58)
             }
             .padding(compact ? 10 : 12)
@@ -90,7 +90,7 @@ struct CalendarEventCardView: View {
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(item.title), fixed calendar item")
+        .accessibilityLabel("\(item.title)，固定日程")
     }
 
     private var accent: Color {
@@ -106,8 +106,8 @@ struct CalendarEventCardView: View {
 
     private var timeLabel: String {
         if item.allDay {
-            return item.startDate ?? "All day"
+            return item.startDate ?? "全天"
         }
-        return item.startAt?.shortDateTime ?? "Timed"
+        return item.startAt?.shortDateTime ?? "定时"
     }
 }

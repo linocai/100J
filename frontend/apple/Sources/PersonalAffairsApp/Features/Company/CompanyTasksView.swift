@@ -14,7 +14,7 @@ struct CompanyTasksView: View {
             header
             Divider()
             if model.companyTasks.isEmpty {
-                EmptyStateView(title: "No company tasks", message: "Project work and no-project company tasks share this entry.")
+                EmptyStateView(title: "暂无公司待办", message: "项目任务和无项目小任务都从这里进入。")
             } else {
                 List(groupedTasks, id: \.key) { group in
                     Section(group.key) {
@@ -32,7 +32,7 @@ struct CompanyTasksView: View {
             }
         }
         .sheet(isPresented: $showingNewTask) {
-            TaskFormView(title: "New Company Task", projects: model.projects, allowsProject: true) { draft in
+            TaskFormView(title: "新建公司待办", projects: model.projects, allowsProject: true) { draft in
                 guard let space = model.companySpace else { return }
                 await model.run {
                     _ = try await model.taskRepository.create(
@@ -54,9 +54,9 @@ struct CompanyTasksView: View {
 
     private var header: some View {
         HStack(spacing: 14) {
-            ToolbarTitle(title: "Company Tasks", subtitle: "All company work, including project and no-project tasks.")
+            ToolbarTitle(title: "公司待办", subtitle: "所有公司事项，包括项目任务和无项目任务。")
             Spacer()
-            Picker("Status", selection: $status) {
+            Picker("状态", selection: $status) {
                 ForEach(TaskStatus.allCases) { status in
                     Text(status.label).tag(status)
                 }
@@ -64,18 +64,18 @@ struct CompanyTasksView: View {
             .frame(width: 130)
             .onChange(of: status) { _ in Task { await reload() } }
 
-            Picker("Scope", selection: $scope) {
-                Text("All").tag("all")
-                Text("No Project").tag("no_project")
-                Text("With Project").tag("with_project")
-                Text("Project").tag("project")
+            Picker("范围", selection: $scope) {
+                Text("全部").tag("all")
+                Text("无项目").tag("no_project")
+                Text("有项目").tag("with_project")
+                Text("项目").tag("project")
             }
             .frame(width: 150)
             .onChange(of: scope) { _ in Task { await reload() } }
 
             if scope == "project" {
-                Picker("Project", selection: $selectedProjectId) {
-                    Text("Choose").tag(Optional<String>.none)
+                Picker("项目", selection: $selectedProjectId) {
+                    Text("选择").tag(Optional<String>.none)
                     ForEach(model.projects) { project in
                         Text(project.name).tag(Optional(project.id))
                     }
@@ -84,7 +84,7 @@ struct CompanyTasksView: View {
                 .onChange(of: selectedProjectId) { _ in Task { await reload() } }
             }
 
-            TextField("Search", text: $search)
+            TextField("搜索", text: $search)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 160)
                 .onSubmit { Task { await reload() } }
@@ -92,7 +92,7 @@ struct CompanyTasksView: View {
             Button {
                 showingNewTask = true
             } label: {
-                Label("New Task", systemImage: "plus")
+                Label("新建待办", systemImage: "plus")
             }
             .buttonStyle(.borderedProminent)
         }
@@ -138,4 +138,3 @@ struct CompanyTasksView: View {
         }
     }
 }
-

@@ -6,7 +6,7 @@ import SwiftUI
 struct AgentView: View {
     @EnvironmentObject private var model: AppModel
     @State private var command = "create_task"
-    @State private var argumentsText = "{\n  \"title\": \"Agent task\"\n}"
+    @State private var argumentsText = "{\n  \"title\": \"Agent 创建的任务\"\n}"
     @State private var dryRun = true
     @State private var responseText = ""
     @State private var confirmationToken = ""
@@ -35,10 +35,10 @@ struct AgentView: View {
 
                 SurfaceView {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                        Text("Recent Agent Logs")
+                        Text("最近 Agent 操作日志")
                             .font(.headline)
                         if model.agentLogs.isEmpty {
-                            EmptyStateInline(title: "No logs yet", message: "Dry runs and confirmed app-internal actions will appear here.")
+                            EmptyStateInline(title: "暂无日志", message: "Dry Run 和已确认的 App 内操作会出现在这里。")
                         } else {
                             LazyVStack(spacing: AppTheme.Spacing.sm) {
                                 ForEach(model.agentLogs) { log in
@@ -62,18 +62,18 @@ struct AgentView: View {
 
     private var header: some View {
         SectionHeaderView(
-            eyebrow: "System",
+            eyebrow: "系统",
             title: "Agent",
-            subtitle: "Let the app organize tasks, calendar items, notes, and projects with dry runs and confirmations.",
+            subtitle: "让 App 内 Agent 通过 Dry Run、确认和日志来整理待办、日程、备忘和项目。",
             systemImage: "sparkles"
         )
     }
 
     private var agentCommandPanel: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-            Text("Command Composer")
+            Text("指令编排")
                 .font(.headline.weight(.semibold))
-            Picker("Command", selection: $command) {
+            Picker("指令", selection: $command) {
                 ForEach(model.agentTools.map(\.name), id: \.self) { name in
                     Text(name).tag(name)
                 }
@@ -82,12 +82,12 @@ struct AgentView: View {
                 .font(.system(.body, design: .monospaced))
                 .lineLimit(7...12)
                 .textFieldStyle(.roundedBorder)
-            Toggle("Dry run", isOn: $dryRun)
+            Toggle("Dry Run 预演", isOn: $dryRun)
             HStack {
                 Button {
                     execute()
                 } label: {
-                    Label(dryRun ? "Run Dry" : "Run", systemImage: "paperplane")
+                    Label(dryRun ? "执行预演" : "执行", systemImage: "paperplane")
                 }
                 .buttonStyle(.borderedProminent)
 
@@ -98,7 +98,7 @@ struct AgentView: View {
                         }
                     }
                 } label: {
-                    Label("Refresh Logs", systemImage: "arrow.clockwise")
+                    Label("刷新日志", systemImage: "arrow.clockwise")
                 }
             }
             if !responseText.isEmpty {
@@ -114,28 +114,28 @@ struct AgentView: View {
 
     private var confirmationPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Action Review")
+            Text("操作确认")
                 .font(.headline.weight(.semibold))
             if confirmationToken.isEmpty {
-                Text("Dangerous or batch changes need confirmation before they touch app data.")
+                Text("高风险或批量修改在触碰 App 数据前都需要确认。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                Text("This command returned a confirmation token. Review the dry run summary before confirming.")
+                Text("这条指令返回了确认令牌。请先核对 Dry Run 摘要，再确认执行。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                TextField("Confirmation token", text: $confirmationToken)
+                TextField("确认令牌", text: $confirmationToken)
                     .textFieldStyle(.roundedBorder)
                 HStack {
                     Button {
                         confirmationToken = ""
                     } label: {
-                        Label("Cancel", systemImage: "xmark")
+                        Label("取消", systemImage: "xmark")
                     }
                     Button {
                         confirm()
                     } label: {
-                        Label("Confirm", systemImage: "checkmark.seal")
+                        Label("确认执行", systemImage: "checkmark.seal")
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(confirmationToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -155,24 +155,24 @@ struct AgentView: View {
                         .font(.headline.weight(.semibold))
                     Spacer()
                     if let key = model.llmKey, key.isActive {
-                        PillView(text: "Active", style: .success)
+                        PillView(text: "已启用", style: .success)
                     } else {
-                        PillView(text: "Missing", style: .warning)
+                        PillView(text: "未配置", style: .warning)
                     }
                 }
             if let key = model.llmKey, key.isActive {
-                Text("Current: \(key.provider) \(key.keyPreview ?? "")")
+                Text("当前：\(key.provider) \(key.keyPreview ?? "")")
                     .foregroundStyle(.secondary)
             } else {
-                Text("No key saved")
+                Text("尚未保存 LLM Key")
                     .foregroundStyle(.secondary)
             }
             HStack {
-                TextField("Provider", text: $provider)
+                TextField("服务商", text: $provider)
                     .textFieldStyle(.roundedBorder)
-                SecureField("API key", text: $apiKey)
+                SecureField("API Key", text: $apiKey)
                     .textFieldStyle(.roundedBorder)
-                Button("Save") {
+                Button("保存") {
                     Task {
                         await model.run {
                             model.llmKey = try await model.agentRepository.saveLLMKey(provider: provider, apiKey: apiKey)
@@ -189,10 +189,10 @@ struct AgentView: View {
     private var toolsPanel: some View {
         SurfaceView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                Text("Available Tools")
+                Text("可用工具")
                     .font(.headline.weight(.semibold))
                 if model.agentTools.isEmpty {
-                    Text("No tools loaded.")
+                    Text("尚未加载工具。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
@@ -217,7 +217,7 @@ struct AgentView: View {
 
     private var suggestionChips: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-            Text("Suggested Commands")
+            Text("建议指令")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(AppTheme.Colors.tertiaryText)
             HStack {
@@ -313,18 +313,18 @@ private func parseArguments(_ text: String) throws -> [String: JSONValue] {
 }
 
 private func render(_ response: AgentCommandResponse) -> String {
-    var lines = ["status: \(response.status)"]
+    var lines = ["状态: \(response.status)"]
     if let reason = response.reason {
-        lines.append("reason: \(reason)")
+        lines.append("原因: \(reason)")
     }
     if let token = response.confirmationToken {
         lines.append("confirmation_token: \(token)")
     }
     if let result = response.result {
-        lines.append("result: \(result)")
+        lines.append("结果: \(result)")
     }
     if let wouldExecute = response.wouldExecute {
-        lines.append("would_execute: \(wouldExecute)")
+        lines.append("将执行: \(wouldExecute)")
     }
     return lines.joined(separator: "\n")
 }

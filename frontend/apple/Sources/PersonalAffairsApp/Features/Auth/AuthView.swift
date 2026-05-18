@@ -16,33 +16,36 @@ struct AuthView: View {
                     .foregroundStyle(Color.accentColor)
                 Text("100J")
                     .font(.largeTitle.weight(.semibold))
-                Text("Sign in to your personal affairs workbench")
+                Text("登录你的个人事务工作台")
+                    .foregroundStyle(.secondary)
+                Text("登录状态会安全保存在 Apple 钥匙串中")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             VStack(spacing: 12) {
-                AuthField(label: "Email") {
+                AuthField(label: "邮箱") {
                     TextField("name@example.com", text: $email)
                         .textFieldStyle(.roundedBorder)
                 }
-                AuthField(label: "Password") {
-                    SecureField("Password", text: $password)
+                AuthField(label: "密码") {
+                    SecureField("密码", text: $password)
                         .textFieldStyle(.roundedBorder)
                 }
                 if isRegistering {
-                    AuthField(label: "Display name") {
-                        TextField("Optional", text: $displayName)
+                    AuthField(label: "显示名称") {
+                        TextField("可选", text: $displayName)
                             .textFieldStyle(.roundedBorder)
                     }
                 }
-                AuthField(label: "API base URL") {
+                AuthField(label: "API Base URL") {
                     TextField("http://127.0.0.1:8000/api/v1", text: $baseURL)
                         .textFieldStyle(.roundedBorder)
                         .font(.caption)
                 }
 
                 HStack {
-                    Button(isRegistering ? "Have an account?" : "Create account") {
+                    Button(isRegistering ? "已有账号？" : "创建账号") {
                         isRegistering.toggle()
                     }
                     #if os(macOS)
@@ -61,7 +64,7 @@ struct AuthView: View {
                             ProgressView()
                                 .controlSize(.small)
                         } else {
-                            Text(isRegistering ? "Register" : "Login")
+                            Text(isRegistering ? "注册" : "登录")
                         }
                     }
                     .buttonStyle(.borderedProminent)

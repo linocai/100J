@@ -17,8 +17,8 @@ struct PersonalTasksView: View {
                         filterBar
                         if model.personalTasks.isEmpty {
                             EmptyStateCardView(
-                                title: "No flexible personal tasks",
-                                message: "Tasks are things you can do when you choose.",
+                                title: "暂无个人待办",
+                                message: "待办是你可以自行安排时间处理的弹性事项。",
                                 systemImage: "checklist"
                             )
                         } else {
@@ -28,7 +28,7 @@ struct PersonalTasksView: View {
                                         task: task,
                                         projectName: nil,
                                         spaceStyle: .personal,
-                                        spaceLabel: "Personal",
+                                        spaceLabel: "个人",
                                         onSelect: { onSelectTask(task) },
                                         onComplete: { complete(task) },
                                         onReopen: { reopen(task) },
@@ -43,7 +43,7 @@ struct PersonalTasksView: View {
             .padding(AppTheme.Spacing.xl)
         }
         .sheet(isPresented: $showingNewTask) {
-            TaskFormView(title: "New Personal Task", projects: [], allowsProject: false) { draft in
+            TaskFormView(title: "新建个人待办", projects: [], allowsProject: false) { draft in
                 guard let space = model.personalSpace else { return }
                 await model.run {
                     _ = try await model.taskRepository.create(
@@ -70,15 +70,15 @@ struct PersonalTasksView: View {
 
     private var header: some View {
         SectionHeaderView(
-            eyebrow: "Personal",
-            title: "Personal Tasks",
-            subtitle: "Flexible personal work. Due dates stay in tasks.",
+            eyebrow: "个人",
+            title: "个人待办",
+            subtitle: "个人事项保持弹性；截止日期不会自动进入日程。",
             systemImage: "checklist"
         ) {
             Button {
                 showingNewTask = true
             } label: {
-                Label("New Task", systemImage: "plus")
+                Label("新建待办", systemImage: "plus")
             }
             .buttonStyle(.borderedProminent)
         }
@@ -86,7 +86,7 @@ struct PersonalTasksView: View {
 
     private var filterBar: some View {
         HStack(spacing: AppTheme.Spacing.md) {
-            Picker("Status", selection: $status) {
+            Picker("状态", selection: $status) {
                 ForEach(TaskStatus.allCases) { status in
                     Text(status.label).tag(status)
                 }
@@ -97,13 +97,13 @@ struct PersonalTasksView: View {
                 Task { await model.reloadPersonalTasks(status: newValue, search: search.trimmedOrNil) }
             }
 
-            TextField("Search", text: $search)
+            TextField("搜索", text: $search)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit {
                     Task { await model.reloadPersonalTasks(status: status, search: search.trimmedOrNil) }
                 }
             Spacer()
-            PillView(text: "Personal has no Project", style: .personal)
+            PillView(text: "个人不使用项目", style: .personal)
         }
     }
 
@@ -166,7 +166,7 @@ struct TaskRow: View {
                     BadgeText(text: task.priority.label, color: task.priority == .urgent ? .red : .secondary)
                     BadgeText(text: task.status.label)
                     if let dueDate = task.dueDate {
-                        BadgeText(text: "Due \(dueDate)", color: .orange)
+                        BadgeText(text: "截止 \(dueDate)", color: .orange)
                     }
                     if let projectName {
                         BadgeText(text: projectName, color: .blue)
@@ -181,7 +181,7 @@ struct TaskRow: View {
                 Image(systemName: "archivebox")
             }
             .buttonStyle(.borderless)
-            .help("Archive")
+            .help("归档")
         }
         .padding(.vertical, 6)
     }
@@ -206,19 +206,19 @@ struct TaskFormView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SectionHeaderView(title: title, subtitle: allowsProject ? "Company tasks can stay in No Project or attach to a project." : "Personal tasks do not use projects.")
+            SectionHeaderView(title: title, subtitle: allowsProject ? "公司待办可以留在无项目，也可以关联到项目。" : "个人待办不使用项目。")
             Form {
-                TextField("Title", text: $draft.title)
-                TextField("Description", text: $draft.description, axis: .vertical)
-                Picker("Priority", selection: $draft.priority) {
+                TextField("标题", text: $draft.title)
+                TextField("描述", text: $draft.description, axis: .vertical)
+                Picker("优先级", selection: $draft.priority) {
                     ForEach(TaskPriority.allCases) { priority in
                         Text(priority.label).tag(priority)
                     }
                 }
-                TextField("Due date (YYYY-MM-DD)", text: $draft.dueDate)
+                TextField("截止日期 (YYYY-MM-DD)", text: $draft.dueDate)
                 if allowsProject {
-                    Picker("Project", selection: $draft.projectId) {
-                        Text("No Project").tag(Optional<String>.none)
+                    Picker("项目", selection: $draft.projectId) {
+                        Text("无项目").tag(Optional<String>.none)
                         ForEach(projects) { project in
                             Text(project.name).tag(Optional(project.id))
                         }
@@ -227,8 +227,8 @@ struct TaskFormView: View {
             }
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }
-                Button("Save") {
+                Button("取消") { dismiss() }
+                Button("保存") {
                     Task {
                         await save(draft)
                         dismiss()

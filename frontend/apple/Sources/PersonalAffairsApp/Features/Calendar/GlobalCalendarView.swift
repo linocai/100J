@@ -20,15 +20,15 @@ struct GlobalCalendarView: View {
                             .foregroundStyle(.secondary)
                         if model.calendarItems.isEmpty {
                             EmptyStateCardView(
-                                title: "No fixed items",
-                                message: "Appointments, anniversaries, and expiries belong here.",
+                                title: "暂无固定日程",
+                                message: "约会、纪念日、订阅到期和提醒都放在这里。",
                                 systemImage: "calendar"
                             )
                         } else {
-                            agendaGroup("Today", items: todayItems)
-                            agendaGroup("Tomorrow", items: tomorrowItems)
-                            agendaGroup("This Week", items: weekItems)
-                            agendaGroup("Later", items: laterItems)
+                            agendaGroup("今天", items: todayItems)
+                            agendaGroup("明天", items: tomorrowItems)
+                            agendaGroup("本周", items: weekItems)
+                            agendaGroup("更晚", items: laterItems)
                         }
                     }
                 }
@@ -63,15 +63,15 @@ struct GlobalCalendarView: View {
 
     private var header: some View {
         SectionHeaderView(
-            eyebrow: "System",
-            title: "Fixed Calendar",
-            subtitle: "Only fixed dates, appointments, anniversaries, and expiries.",
+            eyebrow: "系统",
+            title: "固定日程",
+            subtitle: "这里只承载固定日期、固定时间、纪念日和订阅到期。",
             systemImage: "calendar"
         ) {
             Button {
                 showingNewItem = true
             } label: {
-                Label("New Item", systemImage: "plus")
+                Label("新建日程", systemImage: "plus")
             }
             .buttonStyle(.borderedProminent)
         }
@@ -79,19 +79,19 @@ struct GlobalCalendarView: View {
 
     private var filterBar: some View {
         HStack(spacing: AppTheme.Spacing.md) {
-            Picker("Filter", selection: $filter) {
-                Text("All").tag("all")
-                Text("Personal").tag("personal")
-                Text("Company").tag("company")
-                Text("Project").tag("project")
+            Picker("筛选", selection: $filter) {
+                Text("全部").tag("all")
+                Text("个人").tag("personal")
+                Text("公司").tag("company")
+                Text("项目").tag("project")
             }
             .pickerStyle(.segmented)
             .frame(width: 320)
             .onChange(of: filter) { _ in Task { await reload() } }
 
             if filter == "project" {
-                Picker("Project", selection: $selectedProjectId) {
-                    Text("Choose").tag(Optional<String>.none)
+                Picker("项目", selection: $selectedProjectId) {
+                    Text("选择").tag(Optional<String>.none)
                     ForEach(model.projects) { project in
                         Text(project.name).tag(Optional(project.id))
                     }
@@ -100,7 +100,7 @@ struct GlobalCalendarView: View {
                 .onChange(of: selectedProjectId) { _ in Task { await reload() } }
             }
             Spacer()
-            PillView(text: "Tasks do not auto-enter Calendar", style: .warningSubtle)
+            PillView(text: "待办不会自动进入日程", style: .warningSubtle)
         }
     }
 
@@ -111,7 +111,7 @@ struct GlobalCalendarView: View {
                 .foregroundStyle(AppTheme.Colors.tertiaryText)
                 .textCase(.uppercase)
             if items.isEmpty {
-                Text("No fixed items.")
+                Text("没有固定日程。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(AppTheme.Spacing.md)
@@ -221,9 +221,9 @@ private struct CalendarItemRow: View {
                         .lineLimit(2)
                 }
                 HStack {
-                    BadgeText(text: space, color: space == "Personal" ? .green : .blue)
+                    BadgeText(text: space, color: space == "个人" ? .green : .blue)
                     BadgeText(text: item.type.label)
-                    BadgeText(text: item.allDay ? (item.startDate ?? "All day") : (item.startAt?.shortDateTime ?? "Timed"))
+                    BadgeText(text: item.allDay ? (item.startDate ?? "全天") : (item.startAt?.shortDateTime ?? "定时"))
                     if item.projectId != nil {
                         BadgeText(text: project, color: .blue)
                     }
@@ -237,7 +237,7 @@ private struct CalendarItemRow: View {
                 Image(systemName: "trash")
             }
             .buttonStyle(.borderless)
-            .help("Delete")
+            .help("删除")
         }
         .padding(.vertical, 6)
     }
@@ -274,34 +274,34 @@ private struct CalendarItemFormView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SectionHeaderView(title: "New Fixed Calendar Item", subtitle: "Only fixed dates, appointments, anniversaries, expiries, deadlines, and reminders.")
+            SectionHeaderView(title: "新建固定日程", subtitle: "这里只放固定日期、约会、纪念日、订阅到期、截止日和提醒。")
             Form {
-                Picker("Space", selection: $draft.spaceType) {
+                Picker("空间", selection: $draft.spaceType) {
                     ForEach(SpaceType.allCases) { space in
                         Text(space.label).tag(space)
                     }
                 }
-                TextField("Title", text: $draft.title)
-                TextField("Description", text: $draft.description, axis: .vertical)
-                Picker("Type", selection: $draft.type) {
+                TextField("标题", text: $draft.title)
+                TextField("描述", text: $draft.description, axis: .vertical)
+                Picker("类型", selection: $draft.type) {
                     ForEach(CalendarItemType.allCases) { type in
                         Text(type.label).tag(type)
                     }
                 }
-                Toggle("All day", isOn: $draft.allDay)
+                Toggle("全天", isOn: $draft.allDay)
                 if draft.allDay {
-                    TextField("Start date (YYYY-MM-DD)", text: $draft.startDate)
+                    TextField("开始日期 (YYYY-MM-DD)", text: $draft.startDate)
                 } else {
-                    DatePicker("Start time", selection: $draft.startAt)
+                    DatePicker("开始时间", selection: $draft.startAt)
                 }
-                Picker("Recurrence", selection: $draft.recurrence) {
+                Picker("重复", selection: $draft.recurrence) {
                     ForEach(Recurrence.allCases) { recurrence in
                         Text(recurrence.label).tag(recurrence)
                     }
                 }
                 if draft.spaceType == .company {
-                    Picker("Project", selection: $draft.projectId) {
-                        Text("No Project").tag(Optional<String>.none)
+                    Picker("项目", selection: $draft.projectId) {
+                        Text("无项目").tag(Optional<String>.none)
                         ForEach(projects) { project in
                             Text(project.name).tag(Optional(project.id))
                         }
@@ -310,8 +310,8 @@ private struct CalendarItemFormView: View {
             }
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }
-                Button("Save") {
+                Button("取消") { dismiss() }
+                Button("保存") {
                     Task {
                         await save(draft)
                         dismiss()

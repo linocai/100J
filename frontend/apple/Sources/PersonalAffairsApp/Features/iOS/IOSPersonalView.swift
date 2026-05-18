@@ -4,8 +4,8 @@ import SwiftUI
 
 struct IOSPersonalView: View {
     enum Segment: String, CaseIterable, Identifiable {
-        case tasks = "Tasks"
-        case notes = "Notes"
+        case tasks = "待办"
+        case notes = "备忘"
         var id: String { rawValue }
     }
 
@@ -14,8 +14,8 @@ struct IOSPersonalView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                IOSScreenHeader(title: "Personal", subtitle: "Tasks and notes only. Personal projects do not exist in v1.")
-                Picker("Personal view", selection: $segment) {
+                IOSScreenHeader(title: "个人", subtitle: "这里只放待办和备忘；v1 中个人没有项目。")
+                Picker("个人视图", selection: $segment) {
                     ForEach(Segment.allCases) { segment in
                         Text(segment.rawValue).tag(segment)
                     }
@@ -30,7 +30,7 @@ struct IOSPersonalView: View {
                     IOSPersonalNotesList()
                 }
             }
-            .navigationTitle("Personal")
+            .navigationTitle("个人")
             .navigationBarTitleDisplayMode(.inline)
             .overlay { IOSLoadingOverlay() }
             .iosErrorAlert()
@@ -46,7 +46,7 @@ private struct IOSPersonalTasksList: View {
 
     var body: some View {
         List {
-            Picker("Status", selection: $status) {
+            Picker("状态", selection: $status) {
                 ForEach(TaskStatus.allCases) { status in
                     Text(status.label).tag(status)
                 }
@@ -57,7 +57,7 @@ private struct IOSPersonalTasksList: View {
             }
 
             if model.personalTasks.isEmpty {
-                IOSUnavailableView(title: "No Tasks", systemImage: "checklist", message: "Flexible personal work will appear here.")
+                IOSUnavailableView(title: "暂无待办", systemImage: "checklist", message: "个人弹性事项会显示在这里。")
             } else {
                 ForEach(model.personalTasks) { task in
                     IOSTaskRow(task: task, projectName: nil)
@@ -69,14 +69,14 @@ private struct IOSPersonalTasksList: View {
                             Button(role: .destructive) {
                                 Task { await archive(task) }
                             } label: {
-                                Label("Archive", systemImage: "archivebox")
+                                Label("归档", systemImage: "archivebox")
                             }
                         }
                         .swipeActions(edge: .leading) {
                             Button {
                                 Task { await toggleDone(task) }
                             } label: {
-                                Label(task.status == .done ? "Reopen" : "Done", systemImage: task.status == .done ? "arrow.uturn.left" : "checkmark")
+                                Label(task.status == .done ? "重新打开" : "完成", systemImage: task.status == .done ? "arrow.uturn.left" : "checkmark")
                             }
                             .tint(.green)
                         }
@@ -91,7 +91,7 @@ private struct IOSPersonalTasksList: View {
             }
         }
         .sheet(isPresented: $showingNewTask) {
-            IOSTaskForm(title: "New Personal Task", projects: [], allowsProject: false) { draft in
+            IOSTaskForm(title: "新建个人待办", projects: [], allowsProject: false) { draft in
                 guard let space = model.personalSpace else { return }
                 await model.run {
                     _ = try await model.taskRepository.create(
@@ -109,7 +109,7 @@ private struct IOSPersonalTasksList: View {
         }
         .sheet(item: $editingTask) { task in
             IOSTaskForm(
-                title: "Edit Personal Task",
+                title: "编辑个人待办",
                 projects: [],
                 allowsProject: false,
                 initialDraft: TaskDraft(
@@ -172,7 +172,7 @@ private struct IOSPersonalNotesList: View {
     var body: some View {
         List {
             if model.notes.isEmpty {
-                IOSUnavailableView(title: "No Notes", systemImage: "note.text", message: "Personal ideas and memos will appear here.")
+                IOSUnavailableView(title: "暂无备忘", systemImage: "note.text", message: "个人灵感和备忘会显示在这里。")
             } else {
                 ForEach(model.notes) { note in
                     IOSNoteRow(note: note)
@@ -184,14 +184,14 @@ private struct IOSPersonalNotesList: View {
                             Button(role: .destructive) {
                                 Task { await archive(note) }
                             } label: {
-                                Label("Archive", systemImage: "archivebox")
+                                Label("归档", systemImage: "archivebox")
                             }
                         }
                         .swipeActions(edge: .leading) {
                             Button {
                                 Task { await convert(note) }
                             } label: {
-                                Label("Task", systemImage: "arrow.triangle.branch")
+                                Label("转待办", systemImage: "arrow.triangle.branch")
                             }
                             .tint(.green)
                         }

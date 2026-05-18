@@ -18,8 +18,8 @@ struct PersonalNotesView: View {
                         filterBar
                         if model.notes.isEmpty {
                             EmptyStateCardView(
-                                title: "No ideas yet",
-                                message: "Capture thoughts here before they become tasks.",
+                                title: "暂无灵感",
+                                message: "想法先放在这里，确认要做时再转成待办。",
                                 systemImage: "lightbulb"
                             )
                         } else {
@@ -62,15 +62,15 @@ struct PersonalNotesView: View {
 
     private var header: some View {
         SectionHeaderView(
-            eyebrow: "Personal",
-            title: "Ideas / Notes",
-            subtitle: "Notes are thoughts, not tasks. Convert only when they become work.",
+            eyebrow: "个人",
+            title: "灵感 / 备忘",
+            subtitle: "备忘是想法，不是任务；只有确认要做时才转成待办。",
             systemImage: "note.text"
         ) {
             Button {
                 showingNewNote = true
             } label: {
-                Label("New Idea", systemImage: "plus")
+                Label("新建灵感", systemImage: "plus")
             }
             .buttonStyle(.borderedProminent)
         }
@@ -78,7 +78,7 @@ struct PersonalNotesView: View {
 
     private var filterBar: some View {
         HStack(spacing: AppTheme.Spacing.md) {
-            Picker("Status", selection: $status) {
+            Picker("状态", selection: $status) {
                 ForEach(NoteStatus.allCases) { status in
                     Text(status.label).tag(status)
                 }
@@ -89,8 +89,8 @@ struct PersonalNotesView: View {
                 Task { await model.reloadNotes(status: newValue, type: type, search: search.trimmedOrNil) }
             }
 
-            Picker("Type", selection: $type) {
-                Text("All").tag(Optional<NoteType>.none)
+            Picker("类型", selection: $type) {
+                Text("全部").tag(Optional<NoteType>.none)
                 ForEach(NoteType.allCases) { type in
                     Text(type.label).tag(Optional(type))
                 }
@@ -100,13 +100,13 @@ struct PersonalNotesView: View {
                 Task { await model.reloadNotes(status: status, type: newValue, search: search.trimmedOrNil) }
             }
 
-            TextField("Search", text: $search)
+            TextField("搜索", text: $search)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit {
                     Task { await model.reloadNotes(status: status, type: type, search: search.trimmedOrNil) }
                 }
             Spacer()
-            PillView(text: "Personal notes only", style: .personal)
+            PillView(text: "仅个人备忘", style: .personal)
         }
     }
 
@@ -144,7 +144,7 @@ private struct NoteRow: View {
                 .foregroundStyle(note.type == .idea ? .yellow : .secondary)
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 6) {
-                Text(note.title?.trimmedOrNil ?? "Untitled")
+                Text(note.title?.trimmedOrNil ?? "未命名")
                     .font(.headline)
                 Text(note.body)
                     .foregroundStyle(.secondary)
@@ -153,7 +153,7 @@ private struct NoteRow: View {
                     BadgeText(text: note.type.label)
                     BadgeText(text: note.status.label)
                     if note.linkedTaskId != nil {
-                        BadgeText(text: "Linked Task", color: .green)
+                        BadgeText(text: "已转待办", color: .green)
                     }
                     if note.source == "agent" {
                         BadgeText(text: "Agent", color: .indigo)
@@ -165,12 +165,12 @@ private struct NoteRow: View {
                 Image(systemName: "arrow.triangle.branch")
             }
             .buttonStyle(.borderless)
-            .help("Convert to Task")
+            .help("转为待办")
             Button(action: archive) {
                 Image(systemName: "archivebox")
             }
             .buttonStyle(.borderless)
-            .help("Archive")
+            .help("归档")
         }
         .padding(.vertical, 6)
     }
@@ -190,21 +190,21 @@ private struct NoteFormView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SectionHeaderView(title: "New Personal Note", subtitle: "Capture ideas and memos before they become tasks.")
+            SectionHeaderView(title: "新建个人备忘", subtitle: "先记录灵感和备忘，等它变成行动再转为待办。")
             Form {
-                TextField("Title", text: $draft.title)
-                Picker("Type", selection: $draft.type) {
+                TextField("标题", text: $draft.title)
+                Picker("类型", selection: $draft.type) {
                     ForEach(NoteType.allCases) { type in
                         Text(type.label).tag(type)
                     }
                 }
-                TextField("Body", text: $draft.body, axis: .vertical)
+                TextField("正文", text: $draft.body, axis: .vertical)
                     .lineLimit(6...10)
             }
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }
-                Button("Save") {
+                Button("取消") { dismiss() }
+                Button("保存") {
                     Task {
                         await save(draft)
                         dismiss()

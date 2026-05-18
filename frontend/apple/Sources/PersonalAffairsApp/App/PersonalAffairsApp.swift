@@ -16,9 +16,10 @@ struct PersonalAffairsApp: App {
                 }
         }
         #if os(macOS)
+        .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(after: .newItem) {
-                Button("Refresh") {
+                Button("刷新") {
                     Task { await model.refreshAll() }
                 }
                 .keyboardShortcut("r")

@@ -12,23 +12,23 @@ struct IOSCalendarView: View {
     var body: some View {
         NavigationStack {
             List {
-                IOSScreenHeader(title: "Calendar", subtitle: "A single agenda for Personal and Company fixed-time items.")
+                IOSScreenHeader(title: "日程", subtitle: "个人和公司的固定时间事项统一放在这里。")
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
 
                 Section {
-                    Picker("Filter", selection: $filter) {
-                        Text("All").tag("all")
-                        Text("Personal").tag("personal")
-                        Text("Company").tag("company")
-                        Text("Project").tag("project")
+                    Picker("筛选", selection: $filter) {
+                        Text("全部").tag("all")
+                        Text("个人").tag("personal")
+                        Text("公司").tag("company")
+                        Text("项目").tag("project")
                     }
                     .pickerStyle(.segmented)
                     .onChange(of: filter) { _ in Task { await reload() } }
 
                     if filter == "project" {
-                        Picker("Project", selection: $selectedProjectId) {
-                            Text("Choose").tag(Optional<String>.none)
+                        Picker("项目", selection: $selectedProjectId) {
+                            Text("选择").tag(Optional<String>.none)
                             ForEach(model.projects) { project in
                                 Text(project.name).tag(Optional(project.id))
                             }
@@ -37,9 +37,9 @@ struct IOSCalendarView: View {
                     }
                 }
 
-                Section("Agenda") {
+                Section("日程") {
                     if model.calendarItems.isEmpty {
-                        IOSUnavailableView(title: "No Items", systemImage: "calendar", message: "Fixed dates and appointments will appear here.")
+                        IOSUnavailableView(title: "暂无日程", systemImage: "calendar", message: "固定日期和约会会显示在这里。")
                     } else {
                         ForEach(model.calendarItems) { item in
                             IOSCalendarRow(
@@ -55,14 +55,14 @@ struct IOSCalendarView: View {
                                 Button(role: .destructive) {
                                     Task { await delete(item) }
                                 } label: {
-                                    Label("Delete", systemImage: "trash")
+                                    Label("删除", systemImage: "trash")
                                 }
                             }
                         }
                     }
                 }
             }
-            .navigationTitle("Calendar")
+            .navigationTitle("日程")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 Button {
@@ -73,7 +73,7 @@ struct IOSCalendarView: View {
             }
             .sheet(item: $editingItem) { item in
                 IOSCalendarItemForm(
-                    title: "Edit Calendar Item",
+                    title: "编辑固定日程",
                     projects: model.projects,
                     initialDraft: draft(from: item),
                     allowsOwnershipChange: false
@@ -190,7 +190,7 @@ private struct IOSCalendarItemForm: View {
     @State private var draft: IOSCalendarDraft
 
     init(
-        title: String = "New Calendar Item",
+        title: String = "新建固定日程",
         projects: [Project],
         initialDraft: IOSCalendarDraft = IOSCalendarDraft(),
         allowsOwnershipChange: Bool = true,
@@ -206,19 +206,19 @@ private struct IOSCalendarItemForm: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Ownership") {
+                Section("归属") {
                     if allowsOwnershipChange {
-                        Picker("Space", selection: $draft.spaceType) {
+                        Picker("空间", selection: $draft.spaceType) {
                             ForEach(SpaceType.allCases) { space in
                                 Text(space.label).tag(space)
                             }
                         }
                     } else {
-                        LabeledContent("Space", value: draft.spaceType.label)
+                        LabeledContent("空间", value: draft.spaceType.label)
                     }
                     if draft.spaceType == .company {
-                        Picker("Project", selection: $draft.projectId) {
-                            Text("No Project").tag(Optional<String>.none)
+                        Picker("项目", selection: $draft.projectId) {
+                            Text("无项目").tag(Optional<String>.none)
                             ForEach(projects) { project in
                                 Text(project.name).tag(Optional(project.id))
                             }
@@ -226,21 +226,21 @@ private struct IOSCalendarItemForm: View {
                     }
                 }
 
-                Section("Item") {
-                    TextField("Title", text: $draft.title)
-                    TextField("Description", text: $draft.description, axis: .vertical)
-                    Picker("Type", selection: $draft.type) {
+                Section("日程") {
+                    TextField("标题", text: $draft.title)
+                    TextField("描述", text: $draft.description, axis: .vertical)
+                    Picker("类型", selection: $draft.type) {
                         ForEach(CalendarItemType.allCases) { type in
                             Text(type.label).tag(type)
                         }
                     }
-                    Toggle("All day", isOn: $draft.allDay)
+                    Toggle("全天", isOn: $draft.allDay)
                     if draft.allDay {
-                        TextField("Start date (YYYY-MM-DD)", text: $draft.startDate)
+                        TextField("开始日期 (YYYY-MM-DD)", text: $draft.startDate)
                     } else {
-                        DatePicker("Start time", selection: $draft.startAt)
+                        DatePicker("开始时间", selection: $draft.startAt)
                     }
-                    Picker("Recurrence", selection: $draft.recurrence) {
+                    Picker("重复", selection: $draft.recurrence) {
                         ForEach(Recurrence.allCases) { recurrence in
                             Text(recurrence.label).tag(recurrence)
                         }
@@ -250,10 +250,10 @@ private struct IOSCalendarItemForm: View {
             .navigationTitle(title)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button("保存") {
                         Task {
                             await save(draft)
                             dismiss()

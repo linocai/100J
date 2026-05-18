@@ -16,16 +16,16 @@ struct CommandTopBar: View {
                     if model.isLoading {
                         ProgressView()
                             .controlSize(.small)
-                        Text("Syncing")
+                        Text("同步中")
                     } else {
                         Image(systemName: "checkmark.icloud")
-                        Text("Ready")
+                        Text("已同步")
                     }
                 }
                 .font(.caption)
                 .foregroundStyle(AppTheme.Colors.secondaryText)
             }
-            .frame(width: 190, alignment: .leading)
+            .frame(width: 184, alignment: .leading)
 
             QuickCaptureBar(text: $quickCaptureText, isFocused: $isQuickCaptureFocused, submit: onSubmitQuickCapture)
                 .frame(maxWidth: 680)
@@ -35,19 +35,21 @@ struct CommandTopBar: View {
             Button {
                 Task { await model.refreshAll() }
             } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
+                Label("刷新", systemImage: "arrow.clockwise")
             }
             .keyboardShortcut("r", modifiers: .command)
-            .help("Refresh data")
+            .help("刷新数据")
 
             Button(action: onNew) {
-                Label("New", systemImage: "plus")
+                Label("新建", systemImage: "plus")
             }
             .keyboardShortcut("n", modifiers: .command)
             .buttonStyle(.borderedProminent)
         }
-        .padding(.horizontal, AppTheme.Spacing.xl)
-        .padding(.vertical, 10)
+        .padding(.leading, 104)
+        .padding(.trailing, AppTheme.Spacing.xl)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
         .background(.thinMaterial)
     }
 }

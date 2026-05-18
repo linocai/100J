@@ -6,7 +6,7 @@ import SwiftUI
 struct IOSAgentView: View {
     @EnvironmentObject private var model: AppModel
     @State private var command = "create_task"
-    @State private var argumentsText = "{\n  \"title\": \"Agent task\"\n}"
+    @State private var argumentsText = "{\n  \"title\": \"Agent 创建的任务\"\n}"
     @State private var dryRun = true
     @State private var responseText = ""
     @State private var confirmationToken = ""
@@ -18,13 +18,13 @@ struct IOSAgentView: View {
         NavigationStack {
             Form {
                 Section {
-                    IOSScreenHeader(title: "Agent", subtitle: "App-internal commands with dry run, confirmation, and action logs.")
+                    IOSScreenHeader(title: "Agent", subtitle: "App 内指令支持 Dry Run、确认和操作日志。")
                         .listRowInsets(EdgeInsets())
                         .listRowSeparator(.hidden)
                 }
 
-                Section("Command") {
-                    Picker("Command", selection: $command) {
+                Section("指令") {
+                    Picker("指令", selection: $command) {
                         ForEach(model.agentTools.map(\.name), id: \.self) { name in
                             Text(name).tag(name)
                         }
@@ -32,22 +32,22 @@ struct IOSAgentView: View {
                     TextField("Arguments JSON", text: $argumentsText, axis: .vertical)
                         .font(.system(.body, design: .monospaced))
                         .lineLimit(6...12)
-                    Toggle("Dry run", isOn: $dryRun)
-                    Button("Execute") {
+                    Toggle("Dry Run 预演", isOn: $dryRun)
+                    Button("执行") {
                         execute()
                     }
                 }
 
                 if !responseText.isEmpty {
-                    Section("Response") {
+                    Section("响应") {
                         Text(responseText)
                             .font(.system(.caption, design: .monospaced))
                     }
                 }
 
-                Section("Confirmation") {
-                    TextField("Confirmation token", text: $confirmationToken)
-                    Button("Confirm") {
+                Section("确认") {
+                    TextField("确认令牌", text: $confirmationToken)
+                    Button("确认执行") {
                         confirm()
                     }
                     .disabled(confirmationToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -55,14 +55,14 @@ struct IOSAgentView: View {
 
                 Section("LLM Key") {
                     if let key = model.llmKey, key.isActive {
-                        LabeledContent("Current", value: "\(key.provider) \(key.keyPreview ?? "")")
+                        LabeledContent("当前", value: "\(key.provider) \(key.keyPreview ?? "")")
                     } else {
-                        Text("No key saved")
+                        Text("尚未保存 LLM Key")
                             .foregroundStyle(.secondary)
                     }
-                    TextField("Provider", text: $provider)
-                    SecureField("API key", text: $apiKey)
-                    Button("Save Key") {
+                    TextField("服务商", text: $provider)
+                    SecureField("API Key", text: $apiKey)
+                    Button("保存 Key") {
                         Task {
                             await model.run {
                                 model.llmKey = try await model.agentRepository.saveLLMKey(provider: provider, apiKey: apiKey)
@@ -73,7 +73,7 @@ struct IOSAgentView: View {
                     .disabled(provider.isEmpty || apiKey.isEmpty)
                 }
 
-                Section("Action Logs") {
+                Section("操作日志") {
                     ForEach(model.agentLogs) { log in
                         VStack(alignment: .leading, spacing: 6) {
                             Text(log.actionType)
@@ -143,20 +143,19 @@ private func parseIOSArguments(_ text: String) throws -> [String: JSONValue] {
 }
 
 private func renderIOSAgentResponse(_ response: AgentCommandResponse) -> String {
-    var lines = ["status: \(response.status)"]
+    var lines = ["状态: \(response.status)"]
     if let reason = response.reason {
-        lines.append("reason: \(reason)")
+        lines.append("原因: \(reason)")
     }
     if let token = response.confirmationToken {
         lines.append("confirmation_token: \(token)")
     }
     if let result = response.result {
-        lines.append("result: \(result)")
+        lines.append("结果: \(result)")
     }
     if let wouldExecute = response.wouldExecute {
-        lines.append("would_execute: \(wouldExecute)")
+        lines.append("将执行: \(wouldExecute)")
     }
     return lines.joined(separator: "\n")
 }
 #endif
-

@@ -23,14 +23,14 @@ struct FocusStackPanel: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("View all", action: showMore)
+                    Button("查看全部", action: showMore)
                         .font(.caption.weight(.semibold))
                 }
 
                 if tasks.isEmpty {
                     EmptyStateInline(
-                        title: "Nothing pressing here",
-                        message: "Capture a task when flexible work appears."
+                        title: "这里暂时不急",
+                        message: "出现弹性事项时，用 Quick Capture 记录为待办。"
                     )
                 } else {
                     TaskCardList {

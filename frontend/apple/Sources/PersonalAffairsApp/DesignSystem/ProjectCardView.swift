@@ -30,12 +30,12 @@ struct ProjectCardView: View {
                 }
 
                 HStack(spacing: 6) {
-                    PillView(text: "\(activeTaskCount) active", style: .company)
+                    PillView(text: "\(activeTaskCount) 个进行中", style: .company)
                     if completedTaskCount > 0 {
-                        PillView(text: "\(completedTaskCount) done", style: .success)
+                        PillView(text: "\(completedTaskCount) 个完成", style: .success)
                     }
                     if let targetDate = project.targetDate {
-                        PillView(text: "Target \(targetDate)", style: .warningSubtle)
+                        PillView(text: "目标 \(targetDate)", style: .warningSubtle)
                     }
                 }
 
@@ -55,7 +55,7 @@ struct ProjectCardView: View {
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(project.name), \(activeTaskCount) active tasks")
+        .accessibilityLabel("\(project.name)，\(activeTaskCount) 个进行中任务")
     }
 
     private var progress: Double {

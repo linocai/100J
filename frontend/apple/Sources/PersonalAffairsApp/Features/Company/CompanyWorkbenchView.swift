@@ -14,21 +14,21 @@ struct CompanyWorkbenchView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
                 SectionHeaderView(
-                    eyebrow: "Company",
-                    title: "Company Workbench",
-                    subtitle: "Project work and no-project tasks share one command surface.",
+                    eyebrow: "公司",
+                    title: "公司工作台",
+                    subtitle: "项目任务和无项目小任务都在同一个公司界面处理。",
                     systemImage: "rectangle.3.group"
                 ) {
                     HStack {
                         Button {
                             showingNewProject = true
                         } label: {
-                            Label("New Project", systemImage: "folder.badge.plus")
+                            Label("新建项目", systemImage: "folder.badge.plus")
                         }
                         Button {
                             showingNewTask = true
                         } label: {
-                            Label("New Task", systemImage: "plus")
+                            Label("新建待办", systemImage: "plus")
                         }
                         .buttonStyle(.borderedProminent)
                     }
@@ -48,20 +48,20 @@ struct CompanyWorkbenchView: View {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("Task Board")
+                                Text("任务看板")
                                     .font(.headline.weight(.semibold))
-                                Text("No Project Inbox is a company task grouping, not a fourth task status.")
+                                Text("无项目收件箱是公司任务分组，不是第四种任务状态。")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
-                            PillView(text: "Active / Done / Archived only", style: .neutralSubtle)
+                            PillView(text: "仅进行中 / 已完成 / 已归档", style: .neutralSubtle)
                         }
 
                         ScrollView(.horizontal) {
                             HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
                                 CompanyTaskLane(
-                                    title: "No Project Inbox",
+                                    title: "无项目收件箱",
                                     subtitle: "project_id = nil",
                                     tasks: sortedForFocus(model.noProjectCompanyTasks),
                                     projectName: nil,
@@ -70,7 +70,7 @@ struct CompanyWorkbenchView: View {
                                 ForEach(sortedProjects) { project in
                                     CompanyTaskLane(
                                         title: project.name,
-                                        subtitle: project.targetDate.map { "Target \($0)" } ?? "Project tasks",
+                                        subtitle: project.targetDate.map { "目标 \($0)" } ?? "项目任务",
                                         tasks: sortedForFocus(projectTasks(project.id)),
                                         projectName: project.name,
                                         selectTask: selectTask
@@ -85,7 +85,7 @@ struct CompanyWorkbenchView: View {
             .padding(AppTheme.Spacing.xl)
         }
         .sheet(isPresented: $showingNewTask) {
-            TaskFormView(title: "New Company Task", projects: model.projects, allowsProject: true) { draft in
+            TaskFormView(title: "新建公司待办", projects: model.projects, allowsProject: true) { draft in
                 guard let space = model.companySpace else { return }
                 await model.run {
                     _ = try await model.taskRepository.create(
@@ -160,16 +160,16 @@ private struct ProjectOverviewStrip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
             HStack {
-                Text("Project Overview")
+                Text("项目概览")
                     .font(.headline.weight(.semibold))
                 Spacer()
-                PillView(text: "\(projects.count) active projects", style: .company)
+                PillView(text: "\(projects.count) 个进行中项目", style: .company)
             }
 
             if projects.isEmpty {
                 EmptyStateCardView(
-                    title: "No company projects yet",
-                    message: "Create a project for larger company work, or keep small tasks in No Project Inbox.",
+                    title: "暂无公司项目",
+                    message: "较大的公司事项可以建项目，小任务可以留在无项目收件箱。",
                     systemImage: "folder"
                 )
             } else {
@@ -228,8 +228,8 @@ private struct CompanyTaskLane: View {
 
             if tasks.isEmpty {
                 EmptyStateInline(
-                    title: "Empty",
-                    message: projectName == nil ? "No loose company tasks." : "No active tasks in this project."
+                    title: "暂无任务",
+                    message: projectName == nil ? "没有无项目公司任务。" : "这个项目暂无进行中任务。"
                 )
             } else {
                 TaskCardList {
@@ -238,7 +238,7 @@ private struct CompanyTaskLane: View {
                             task: task,
                             projectName: projectName,
                             spaceStyle: .company,
-                            spaceLabel: "Company",
+                            spaceLabel: "公司",
                             compact: true,
                             onSelect: { selectTask(task) },
                             onComplete: { mutateTask(.complete, task) },
@@ -293,20 +293,20 @@ private struct WorkbenchProjectFormView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
             SectionHeaderView(
-                eyebrow: "Company",
-                title: "New Project",
-                subtitle: "Projects are company-only in 100J v1."
+                eyebrow: "公司",
+                title: "新建项目",
+                subtitle: "100J v1 中项目只属于公司空间。"
             )
             Form {
-                TextField("Name", text: $draft.name)
-                TextField("Description", text: $draft.description, axis: .vertical)
-                TextField("Start date (YYYY-MM-DD)", text: $draft.startDate)
-                TextField("Target date (YYYY-MM-DD)", text: $draft.targetDate)
+                TextField("名称", text: $draft.name)
+                TextField("描述", text: $draft.description, axis: .vertical)
+                TextField("开始日期 (YYYY-MM-DD)", text: $draft.startDate)
+                TextField("目标日期 (YYYY-MM-DD)", text: $draft.targetDate)
             }
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }
-                Button("Save") {
+                Button("取消") { dismiss() }
+                Button("保存") {
                     Task {
                         await save(draft)
                         dismiss()

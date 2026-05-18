@@ -80,13 +80,13 @@ struct IOSErrorAlert: ViewModifier {
 
     func body(content: Content) -> some View {
         content.alert(
-            "Something went wrong",
+            "出现问题",
             isPresented: Binding(
                 get: { model.errorMessage != nil },
                 set: { if !$0 { model.errorMessage = nil } }
             )
         ) {
-            Button("OK") {
+            Button("好") {
                 model.errorMessage = nil
             }
         } message: {
@@ -121,7 +121,7 @@ struct IOSTaskRow: View {
                 IOSBadge(text: task.priority.label, color: task.priority == .urgent ? .red : .secondary)
                 IOSBadge(text: task.status.label)
                 if let dueDate = task.dueDate {
-                    IOSBadge(text: "Due \(dueDate)", color: .orange)
+                    IOSBadge(text: "截止 \(dueDate)", color: .orange)
                 }
                 if let projectName {
                     IOSBadge(text: projectName, color: .blue)
@@ -138,7 +138,7 @@ struct IOSNoteRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
-                Text(note.title?.trimmedOrNil ?? "Untitled")
+                Text(note.title?.trimmedOrNil ?? "未命名")
                     .font(.headline)
                     .lineLimit(1)
                 Spacer()
@@ -149,7 +149,7 @@ struct IOSNoteRow: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(3)
             if note.linkedTaskId != nil {
-                IOSBadge(text: "Linked Task", color: .green)
+                IOSBadge(text: "已转待办", color: .green)
             }
         }
         .padding(.vertical, 4)
@@ -173,7 +173,7 @@ struct IOSProjectRow: View {
             HStack {
                 IOSBadge(text: project.status.label, color: .blue)
                 if let targetDate = project.targetDate {
-                    IOSBadge(text: "Target \(targetDate)", color: .orange)
+                    IOSBadge(text: "目标 \(targetDate)", color: .orange)
                 }
             }
         }
@@ -193,7 +193,7 @@ struct IOSCalendarRow: View {
                     .font(.headline)
                     .lineLimit(2)
                 Spacer()
-                IOSBadge(text: space, color: space == "Personal" ? .green : .blue)
+                IOSBadge(text: space, color: space == "个人" ? .green : .blue)
             }
             if let description = item.description, !description.isEmpty {
                 Text(description)
@@ -203,7 +203,7 @@ struct IOSCalendarRow: View {
             }
             HStack {
                 IOSBadge(text: item.type.label)
-                IOSBadge(text: item.allDay ? (item.startDate ?? "All day") : (item.startAt?.shortDateTime ?? "Timed"))
+                IOSBadge(text: item.allDay ? (item.startDate ?? "全天") : (item.startAt?.shortDateTime ?? "定时"))
                 if item.projectId != nil {
                     IOSBadge(text: project, color: .blue)
                 }

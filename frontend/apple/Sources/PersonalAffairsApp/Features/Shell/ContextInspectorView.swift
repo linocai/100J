@@ -52,36 +52,36 @@ struct ContextInspectorView: View {
         Group {
             SurfaceView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                    Text("Today Summary")
+                    Text("今日概览")
                         .font(.headline.weight(.semibold))
-                    Text("Flexible work and fixed time are shown together here, but they remain separate objects.")
+                    Text("弹性任务和固定时间会一起被看见，但它们仍然是两类对象。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: AppTheme.Spacing.sm) {
-                        miniStat("\(model.activePersonalTasks.count)", "personal")
-                        miniStat("\(model.activeCompanyTasks.count)", "company")
-                        miniStat("\(model.calendarItems.count)", "fixed")
-                        miniStat("\(model.noProjectCompanyTasks.count)", "inbox")
+                        miniStat("\(model.activePersonalTasks.count)", "个人")
+                        miniStat("\(model.activeCompanyTasks.count)", "公司")
+                        miniStat("\(model.calendarItems.count)", "固定")
+                        miniStat("\(model.noProjectCompanyTasks.count)", "收件箱")
                     }
                 }
             }
 
             SurfaceView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                    Label("Agent Suggestions", systemImage: "sparkles")
+                    Label("Agent 建议", systemImage: "sparkles")
                         .font(.headline.weight(.semibold))
-                    suggestionRow("\(model.noProjectCompanyTasks.count) company tasks are not assigned to any project.", style: .warning)
-                    suggestionRow("\(upcomingItems.count) fixed items are upcoming this week.", style: .company)
-                    suggestionRow("\(model.notes.filter { $0.linkedTaskId == nil }.count) notes might become tasks later.", style: .agent)
+                    suggestionRow("\(model.noProjectCompanyTasks.count) 个公司任务还没有归入项目。", style: .warning)
+                    suggestionRow("本周还有 \(upcomingItems.count) 个固定日程。", style: .company)
+                    suggestionRow("\(model.notes.filter { $0.linkedTaskId == nil }.count) 条备忘之后可能会变成待办。", style: .agent)
                 }
             }
 
             SurfaceView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                    Text("Upcoming Fixed Items")
+                    Text("即将到来的固定日程")
                         .font(.headline.weight(.semibold))
                     if upcomingItems.isEmpty {
-                        Text("No fixed items in the near future.")
+                        Text("近期没有固定日程。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
@@ -94,10 +94,10 @@ struct ContextInspectorView: View {
 
             SurfaceView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                    Text("Loose Company Tasks")
+                    Text("无项目公司任务")
                         .font(.headline.weight(.semibold))
                     if model.noProjectCompanyTasks.isEmpty {
-                        Text("No Project Inbox is clear.")
+                        Text("无项目收件箱已清空。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
@@ -114,8 +114,8 @@ struct ContextInspectorView: View {
 
     private var unavailableCard: some View {
         EmptyStateCardView(
-            title: "Item no longer available",
-            message: "Refresh data or select another item.",
+            title: "项目已不可用",
+            message: "请刷新数据，或选择另一个项目。",
             systemImage: "questionmark.folder"
         )
     }
@@ -123,7 +123,7 @@ struct ContextInspectorView: View {
     private func taskDetail(_ task: TaskItem) -> some View {
         SurfaceView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                Label("Task", systemImage: "checklist")
+                Label("待办", systemImage: "checklist")
                     .font(.headline.weight(.semibold))
                 Text(task.title)
                     .font(.title3.weight(.semibold))
@@ -136,20 +136,20 @@ struct ContextInspectorView: View {
                 FlowPills {
                     PillView(text: task.priority.label, style: task.priority.pillStyle)
                     PillView(text: task.status.label, style: task.status == .done ? .success : .neutral)
-                    PillView(text: spaceStyle(task.spaceId) == .personal ? "Personal" : "Company", style: spaceStyle(task.spaceId))
+                    PillView(text: spaceStyle(task.spaceId) == .personal ? "个人" : "公司", style: spaceStyle(task.spaceId))
                     if let dueDate = task.dueDate {
-                        PillView(text: "Due \(dueDate)", style: .warningSubtle)
+                        PillView(text: "截止 \(dueDate)", style: .warningSubtle)
                     }
                     if let project = model.projectName(for: task.projectId) {
                         PillView(text: project, style: .company)
                     }
                 }
                 HStack {
-                    Button(task.status == .done ? "Reopen" : "Complete") {
+                    Button(task.status == .done ? "重新打开" : "完成") {
                         mutateTask(task.status == .done ? .reopen : .complete, task)
                     }
                     .buttonStyle(.borderedProminent)
-                    Button("Archive") {
+                    Button("归档") {
                         mutateTask(.archive, task)
                     }
                 }
@@ -160,7 +160,7 @@ struct ContextInspectorView: View {
     private func calendarDetail(_ item: CalendarItem) -> some View {
         SurfaceView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                Label("Fixed Calendar", systemImage: item.type.systemImage)
+                Label("固定日程", systemImage: item.type.systemImage)
                     .font(.headline.weight(.semibold))
                 Text(item.title)
                     .font(.title3.weight(.semibold))
@@ -172,7 +172,7 @@ struct ContextInspectorView: View {
                 FlowPills {
                     PillView(text: model.spaceLabel(for: item.spaceId), style: spaceStyle(item.spaceId))
                     PillView(text: item.type.label, style: item.type.pillStyle)
-                    PillView(text: item.allDay ? (item.startDate ?? "All day") : (item.startAt?.shortDateTime ?? "Timed"), style: .neutral)
+                    PillView(text: item.allDay ? (item.startDate ?? "全天") : (item.startAt?.shortDateTime ?? "定时"), style: .neutral)
                     if let recurrence = item.recurrence, recurrence != .none {
                         PillView(text: recurrence.label, style: .agent, systemImage: "repeat")
                     }
@@ -183,7 +183,7 @@ struct ContextInspectorView: View {
                 Button(role: .destructive) {
                     deleteCalendarItem(item)
                 } label: {
-                    Label("Delete Fixed Item", systemImage: "trash")
+                    Label("删除固定日程", systemImage: "trash")
                 }
             }
         }
@@ -192,9 +192,9 @@ struct ContextInspectorView: View {
     private func noteDetail(_ note: Note) -> some View {
         SurfaceView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                Label("Idea / Note", systemImage: note.type.systemImage)
+                Label("灵感 / 备忘", systemImage: note.type.systemImage)
                     .font(.headline.weight(.semibold))
-                Text(note.title?.trimmedOrNil ?? "Untitled")
+                Text(note.title?.trimmedOrNil ?? "未命名")
                     .font(.title3.weight(.semibold))
                 Text(note.body)
                     .font(.callout)
@@ -203,18 +203,18 @@ struct ContextInspectorView: View {
                 FlowPills {
                     PillView(text: note.type.label, style: note.type.pillStyle)
                     if note.linkedTaskId != nil {
-                        PillView(text: "Linked Task", style: .success)
+                        PillView(text: "已转待办", style: .success)
                     }
                     if note.source == "agent" {
                         PillView(text: "Agent", style: .agent, systemImage: "sparkles")
                     }
                 }
                 HStack {
-                    Button("Convert to Task") {
+                    Button("转为待办") {
                         convert(note)
                     }
                     .buttonStyle(.borderedProminent)
-                    Button("Archive") {
+                    Button("归档") {
                         archive(note)
                     }
                 }
@@ -225,7 +225,7 @@ struct ContextInspectorView: View {
     private func projectDetail(_ project: Project) -> some View {
         SurfaceView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                Label("Company Project", systemImage: "folder")
+                Label("公司项目", systemImage: "folder")
                     .font(.headline.weight(.semibold))
                 Text(project.name)
                     .font(.title3.weight(.semibold))
@@ -236,13 +236,13 @@ struct ContextInspectorView: View {
                 }
                 FlowPills {
                     PillView(text: project.status.label, style: project.status.pillStyle)
-                    PillView(text: "\(projectTasks(project.id).count) active tasks", style: .company)
+                    PillView(text: "\(projectTasks(project.id).count) 个进行中任务", style: .company)
                     if let targetDate = project.targetDate {
-                        PillView(text: "Target \(targetDate)", style: .warningSubtle)
+                        PillView(text: "目标 \(targetDate)", style: .warningSubtle)
                     }
                 }
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-                    Text("Task Preview")
+                    Text("任务预览")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(AppTheme.Colors.tertiaryText)
                     ForEach(sortedForFocus(projectTasks(project.id)).prefix(4)) { task in
@@ -258,7 +258,7 @@ struct ContextInspectorView: View {
     private func agentLogDetail(_ log: AgentActionLog) -> some View {
         SurfaceView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                Label("Agent Action", systemImage: "sparkles")
+                Label("Agent 操作", systemImage: "sparkles")
                     .font(.headline.weight(.semibold))
                 Text(log.actionType)
                     .font(.title3.weight(.semibold))
@@ -315,7 +315,7 @@ struct ContextInspectorView: View {
                 Text(item.title)
                     .font(.caption.weight(.semibold))
                     .lineLimit(2)
-                Text(item.allDay ? (item.startDate ?? "All day") : (item.startAt?.shortDateTime ?? "Timed"))
+                Text(item.allDay ? (item.startDate ?? "全天") : (item.startAt?.shortDateTime ?? "定时"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }

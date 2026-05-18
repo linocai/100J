@@ -12,20 +12,20 @@ struct TodayCommandView: View {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
                 SectionHeaderView(
                     eyebrow: todayEyebrow,
-                    title: "Today Command",
-                    subtitle: "Flexible tasks stay flexible. Fixed time stays fixed.",
+                    title: "今日指挥台",
+                    subtitle: "弹性事项留在待办，固定时间进入日程。",
                     systemImage: "sparkle.magnifyingglass"
                 ) {
                     HStack {
                         Button {
                             jumpToSection(.agent)
                         } label: {
-                            Label("Ask Agent", systemImage: "sparkles")
+                            Label("问 Agent", systemImage: "sparkles")
                         }
                         Button {
                             jumpToSection(.calendar)
                         } label: {
-                            Label("New Fixed Item", systemImage: "calendar.badge.plus")
+                            Label("新建固定日程", systemImage: "calendar.badge.plus")
                         }
                         .buttonStyle(.borderedProminent)
                     }
@@ -61,20 +61,20 @@ struct TodayCommandView: View {
     private var focusColumn: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
             FocusStackPanel(
-                title: "Personal Focus",
-                subtitle: "Flexible personal tasks. Due dates stay in task cards.",
+                title: "个人焦点",
+                subtitle: "个人待办保持弹性，截止日期只显示在任务卡片里。",
                 tasks: Array(sortedForFocus(model.activePersonalTasks).prefix(4)),
-                spaceLabel: "Personal",
+                spaceLabel: "个人",
                 spaceStyle: .personal,
                 selectTask: selectTask,
                 showMore: { jumpToSection(.personalTasks) }
             )
 
             FocusStackPanel(
-                title: "Company Focus",
-                subtitle: "Project work and no-project tasks stay in one company surface.",
+                title: "公司焦点",
+                subtitle: "项目任务和无项目小任务都留在公司工作台。",
                 tasks: Array(sortedForFocus(model.activeCompanyTasks).prefix(4)),
-                spaceLabel: "Company",
+                spaceLabel: "公司",
                 spaceStyle: .company,
                 selectTask: selectTask,
                 showMore: { jumpToSection(.companyTasks) }
@@ -124,7 +124,8 @@ struct TodayCommandView: View {
 
     private var todayEyebrow: String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE · MMM d"
+        formatter.locale = Locale(identifier: "zh_Hans_CN")
+        formatter.dateFormat = "EEEE · M月d日"
         return formatter.string(from: Date())
     }
 }

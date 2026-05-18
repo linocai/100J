@@ -12,21 +12,21 @@ struct LooseEndsPanel: View {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("No Project Inbox")
+                        Text("无项目收件箱")
                             .font(.headline.weight(.semibold))
-                        Text("Company tasks without project_id are still company tasks, not a new status.")
+                        Text("无项目公司任务仍然是公司任务，不是第四种任务状态。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Sort", action: showMore)
+                    Button("整理", action: showMore)
                         .font(.caption.weight(.semibold))
                 }
 
                 if tasks.isEmpty {
                     EmptyStateInline(
-                        title: "Inbox is clear",
-                        message: "No loose company tasks need project triage."
+                        title: "收件箱已清空",
+                        message: "没有需要归类项目的公司任务。"
                     )
                 } else {
                     TaskCardList {
@@ -35,7 +35,7 @@ struct LooseEndsPanel: View {
                                 task: task,
                                 projectName: nil,
                                 spaceStyle: .company,
-                                spaceLabel: "Company",
+                                spaceLabel: "公司",
                                 compact: true,
                                 onSelect: { selectTask(task) },
                                 onComplete: { mutateTask(.complete, task) },

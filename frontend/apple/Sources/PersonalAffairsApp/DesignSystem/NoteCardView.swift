@@ -27,20 +27,20 @@ struct NoteCardView: View {
                                 .frame(width: 24, height: 24)
                         }
                         .buttonStyle(.plain)
-                        .help("Convert to Task")
+                        .help("转为待办")
                         Button(action: onArchive) {
                             Image(systemName: "archivebox")
                                 .frame(width: 24, height: 24)
                         }
                         .buttonStyle(.plain)
-                        .help("Archive")
+                        .help("归档")
                     }
                     .foregroundStyle(AppTheme.Colors.tertiaryText)
                     .opacity(isHovering || isSelected ? 1 : 0.58)
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(note.title?.trimmedOrNil ?? "Untitled")
+                    Text(note.title?.trimmedOrNil ?? "未命名")
                         .font(.callout.weight(.semibold))
                         .lineLimit(2)
                     Text(note.body)
@@ -52,7 +52,7 @@ struct NoteCardView: View {
                 HStack(spacing: 6) {
                     PillView(text: note.type.label, style: note.type.pillStyle)
                     if note.linkedTaskId != nil {
-                        PillView(text: "Linked Task", style: .success)
+                        PillView(text: "已转待办", style: .success)
                     }
                     if note.source == "agent" {
                         PillView(text: "Agent", style: .agent, systemImage: "sparkles")
@@ -71,6 +71,6 @@ struct NoteCardView: View {
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(note.title?.trimmedOrNil ?? "Untitled note"), \(note.type.label)")
+        .accessibilityLabel("\(note.title?.trimmedOrNil ?? "未命名备忘")，\(note.type.label)")
     }
 }

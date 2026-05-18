@@ -9,30 +9,30 @@ struct TodayMetricsPanel: View {
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: AppTheme.Spacing.md)], spacing: AppTheme.Spacing.md) {
             MetricCardView(
-                title: "Personal active",
+                title: "个人进行中",
                 value: "\(personalCount)",
-                caption: "Flexible tasks",
+                caption: "弹性待办",
                 style: .personal,
                 systemImage: "checklist"
             )
             MetricCardView(
-                title: "Company active",
+                title: "公司进行中",
                 value: "\(companyCount)",
-                caption: "Project and inbox",
+                caption: "项目与收件箱",
                 style: .company,
                 systemImage: "rectangle.3.group"
             )
             MetricCardView(
-                title: "Fixed schedule",
+                title: "固定日程",
                 value: "\(fixedCount)",
-                caption: "Today + 7 days",
+                caption: "今天 + 7 天",
                 style: .warning,
                 systemImage: "calendar"
             )
             MetricCardView(
-                title: "No Project Inbox",
+                title: "无项目收件箱",
                 value: "\(looseCount)",
-                caption: "Company loose ends",
+                caption: "公司散项",
                 style: .agent,
                 systemImage: "tray"
             )

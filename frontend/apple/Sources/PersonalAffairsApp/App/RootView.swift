@@ -23,6 +23,9 @@ struct RootView: View {
                 .padding()
             }
         }
+        #if os(macOS)
+        .background(MacWindowChromeConfigurator())
+        #endif
     }
 }
 
@@ -33,29 +36,29 @@ struct MainShellView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $model.selectedSection) {
-                Section("Focus") {
+                Section("焦点") {
                     SidebarRow(section: .today)
                     SidebarRow(section: .calendar)
                 }
-                Section("Personal") {
+                Section("个人") {
                     SidebarRow(section: .personalTasks)
                     SidebarRow(section: .personalNotes)
                 }
-                Section("Company") {
+                Section("公司") {
                     SidebarRow(section: .companyTasks)
                     SidebarRow(section: .companyProjects)
                 }
-                Section("System") {
+                Section("系统") {
                     SidebarRow(section: .agent)
                     SidebarRow(section: .settings)
                 }
             }
-            .navigationTitle("Affairs")
+            .navigationTitle("事务")
             .toolbar {
                 Button {
                     Task { await model.refreshAll() }
                 } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                    Label("刷新", systemImage: "arrow.clockwise")
                 }
             }
         } detail: {

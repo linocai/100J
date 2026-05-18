@@ -9,7 +9,7 @@ struct IOSSettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    IOSScreenHeader(title: "Settings", subtitle: "Local and future cloud API configuration.")
+                    IOSScreenHeader(title: "设置", subtitle: "本地 API、未来云端 API 和钥匙串会话配置。")
                         .listRowInsets(EdgeInsets())
                         .listRowSeparator(.hidden)
                 }
@@ -18,34 +18,37 @@ struct IOSSettingsView: View {
                     TextField("Base URL", text: $baseURL)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
-                    Button("Save API URL") {
+                    Button("保存 API URL") {
                         model.updateBaseURL(baseURL)
                     }
-                    Button("Refresh Data") {
+                    Button("刷新数据") {
                         Task { await model.refreshAll() }
                     }
                 }
 
-                Section("Account") {
+                Section("账号") {
+                    Text("登录 token 保存在 Apple 钥匙串；退出登录会清理本机会话。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                     if let user = model.currentUser {
-                        LabeledContent("User", value: user.email ?? user.id)
-                        LabeledContent("Timezone", value: user.timezone)
+                        LabeledContent("用户", value: user.email ?? user.id)
+                        LabeledContent("时区", value: user.timezone)
                     }
-                    Button("Logout", role: .destructive) {
+                    Button("退出登录", role: .destructive) {
                         Task { await model.logout() }
                     }
                 }
 
-                Section("Spaces") {
+                Section("空间") {
                     if let personal = model.personalSpace {
-                        LabeledContent("Personal", value: personal.id)
+                        LabeledContent("个人", value: personal.id)
                     }
                     if let company = model.companySpace {
-                        LabeledContent("Company", value: company.id)
+                        LabeledContent("公司", value: company.id)
                     }
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.inline)
             .overlay { IOSLoadingOverlay() }
             .iosErrorAlert()
@@ -53,4 +56,3 @@ struct IOSSettingsView: View {
     }
 }
 #endif
-

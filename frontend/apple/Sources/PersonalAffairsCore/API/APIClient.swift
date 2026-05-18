@@ -9,9 +9,9 @@ public enum APIClientError: Error, LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case .invalidURL:
-            return "Invalid API URL."
+            return "API 地址无效。"
         case .unauthorized:
-            return "Authentication expired. Please sign in again."
+            return "登录已过期，请重新登录。"
         case .server(_, let message):
             return message
         case .transport(let message):
@@ -101,7 +101,7 @@ public final class APIClient {
         }
 
         guard let http = urlResponse as? HTTPURLResponse else {
-            throw APIClientError.transport("Invalid HTTP response.")
+            throw APIClientError.transport("HTTP 响应无效。")
         }
 
         if http.statusCode == 401, allowRefresh, try await refreshTokensIfPossible() {

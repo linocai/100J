@@ -8,17 +8,17 @@ struct IOSMainShellView: View {
         TabView {
             IOSPersonalView()
                 .tabItem {
-                    Label("Personal", systemImage: "person")
+                    Label("个人", systemImage: "person")
                 }
 
             IOSCompanyView()
                 .tabItem {
-                    Label("Company", systemImage: "briefcase")
+                    Label("公司", systemImage: "briefcase")
                 }
 
             IOSCalendarView()
                 .tabItem {
-                    Label("Calendar", systemImage: "calendar")
+                    Label("日程", systemImage: "calendar")
                 }
 
             IOSAgentView()
@@ -28,10 +28,9 @@ struct IOSMainShellView: View {
 
             IOSSettingsView()
                 .tabItem {
-                    Label("Settings", systemImage: "gearshape")
+                    Label("设置", systemImage: "gearshape")
                 }
         }
     }
 }
 #endif
-

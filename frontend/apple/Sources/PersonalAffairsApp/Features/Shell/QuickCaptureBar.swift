@@ -30,7 +30,7 @@ struct QuickCaptureBar: View {
                 .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         }
         .overlay(alignment: .trailing) {
-            Button("Focus Quick Capture") {
+            Button("聚焦 Quick Capture") {
                 isFocused = true
             }
             .keyboardShortcut("k", modifiers: .command)
@@ -38,6 +38,6 @@ struct QuickCaptureBar: View {
             .opacity(0.01)
             .accessibilityHidden(true)
         }
-        .accessibilityLabel("Quick capture")
+        .accessibilityLabel("快速记录")
     }
 }

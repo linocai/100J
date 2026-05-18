@@ -14,14 +14,14 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
 
     var title: String {
         switch self {
-        case .today: return "Today Command"
-        case .personalTasks: return "Personal Tasks"
-        case .personalNotes: return "Ideas / Notes"
-        case .companyTasks: return "Company Workbench"
-        case .companyProjects: return "Projects"
-        case .calendar: return "Fixed Calendar"
+        case .today: return "今日指挥台"
+        case .personalTasks: return "个人待办"
+        case .personalNotes: return "灵感 / 备忘"
+        case .companyTasks: return "公司工作台"
+        case .companyProjects: return "项目"
+        case .calendar: return "固定日程"
         case .agent: return "Agent"
-        case .settings: return "Settings"
+        case .settings: return "设置"
         }
     }
 

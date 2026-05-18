@@ -9,19 +9,19 @@ struct MacSidebarView: View {
             brand
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
-                    sidebarGroup("Focus") {
+                    sidebarGroup("焦点") {
                         SidebarButton(section: .today, count: todayCount, selection: $selection)
                         SidebarButton(section: .calendar, count: fixedCount, selection: $selection)
                     }
-                    sidebarGroup("Personal") {
+                    sidebarGroup("个人") {
                         SidebarButton(section: .personalTasks, count: model.activePersonalTasks.count, selection: $selection)
                         SidebarButton(section: .personalNotes, count: model.notes.count, selection: $selection)
                     }
-                    sidebarGroup("Company") {
+                    sidebarGroup("公司") {
                         SidebarButton(section: .companyTasks, count: model.activeCompanyTasks.count, selection: $selection)
                         SidebarButton(section: .companyProjects, count: model.projects.count, selection: $selection)
                     }
-                    sidebarGroup("System") {
+                    sidebarGroup("系统") {
                         SidebarButton(section: .agent, count: model.agentLogs.count, selection: $selection)
                         SidebarButton(section: .settings, count: nil, selection: $selection)
                     }
@@ -52,7 +52,7 @@ struct MacSidebarView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("100J")
                     .font(.headline.weight(.semibold))
-                Text("Personal Affairs OS")
+                Text("个人事务操作台")
                     .font(.caption)
                     .foregroundStyle(AppTheme.Colors.tertiaryText)
             }
@@ -64,10 +64,10 @@ struct MacSidebarView: View {
     private var principleCard: some View {
         SurfaceView(cornerRadius: AppTheme.Radius.md, padding: AppTheme.Spacing.md) {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-                Text("Core Rule")
+                Text("核心规则")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(AppTheme.Colors.tertiaryText)
-                Text("Tasks stay flexible. Fixed dates live in Calendar. Notes stay ideas until you convert them.")
+                Text("待办保持弹性；固定时间进入日程；灵感先留在备忘，确认后再转成任务。")
                     .font(.caption)
                     .foregroundStyle(AppTheme.Colors.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)

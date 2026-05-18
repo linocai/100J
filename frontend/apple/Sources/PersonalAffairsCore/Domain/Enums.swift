@@ -5,7 +5,12 @@ public enum SpaceType: String, Codable, CaseIterable, Identifiable {
     case company
 
     public var id: String { rawValue }
-    public var label: String { rawValue.capitalized }
+    public var label: String {
+        switch self {
+        case .personal: return "个人"
+        case .company: return "公司"
+        }
+    }
 }
 
 public enum TaskStatus: String, Codable, CaseIterable, Identifiable {
@@ -14,7 +19,13 @@ public enum TaskStatus: String, Codable, CaseIterable, Identifiable {
     case archived
 
     public var id: String { rawValue }
-    public var label: String { rawValue.capitalized }
+    public var label: String {
+        switch self {
+        case .active: return "进行中"
+        case .done: return "已完成"
+        case .archived: return "已归档"
+        }
+    }
 }
 
 public enum TaskPriority: String, Codable, CaseIterable, Identifiable {
@@ -24,7 +35,14 @@ public enum TaskPriority: String, Codable, CaseIterable, Identifiable {
     case urgent
 
     public var id: String { rawValue }
-    public var label: String { rawValue.capitalized }
+    public var label: String {
+        switch self {
+        case .low: return "低"
+        case .medium: return "中"
+        case .high: return "高"
+        case .urgent: return "紧急"
+        }
+    }
 }
 
 public enum ProjectStatus: String, Codable, CaseIterable, Identifiable {
@@ -33,7 +51,13 @@ public enum ProjectStatus: String, Codable, CaseIterable, Identifiable {
     case archived
 
     public var id: String { rawValue }
-    public var label: String { rawValue.capitalized }
+    public var label: String {
+        switch self {
+        case .active: return "进行中"
+        case .completed: return "已完成"
+        case .archived: return "已归档"
+        }
+    }
 }
 
 public enum CalendarItemType: String, Codable, CaseIterable, Identifiable {
@@ -47,11 +71,11 @@ public enum CalendarItemType: String, Codable, CaseIterable, Identifiable {
 
     public var label: String {
         switch self {
-        case .appointment: return "Appointment"
-        case .anniversary: return "Anniversary"
-        case .subscriptionExpiry: return "Subscription"
-        case .deadline: return "Deadline"
-        case .reminder: return "Reminder"
+        case .appointment: return "约会"
+        case .anniversary: return "纪念日"
+        case .subscriptionExpiry: return "订阅"
+        case .deadline: return "截止日"
+        case .reminder: return "提醒"
         }
     }
 }
@@ -62,7 +86,13 @@ public enum Recurrence: String, Codable, CaseIterable, Identifiable {
     case yearly
 
     public var id: String { rawValue }
-    public var label: String { rawValue.capitalized }
+    public var label: String {
+        switch self {
+        case .none: return "不重复"
+        case .monthly: return "每月"
+        case .yearly: return "每年"
+        }
+    }
 }
 
 public enum NoteType: String, Codable, CaseIterable, Identifiable {
@@ -70,7 +100,12 @@ public enum NoteType: String, Codable, CaseIterable, Identifiable {
     case memo
 
     public var id: String { rawValue }
-    public var label: String { rawValue.capitalized }
+    public var label: String {
+        switch self {
+        case .idea: return "灵感"
+        case .memo: return "备忘"
+        }
+    }
 }
 
 public enum NoteStatus: String, Codable, CaseIterable, Identifiable {
@@ -78,6 +113,10 @@ public enum NoteStatus: String, Codable, CaseIterable, Identifiable {
     case archived
 
     public var id: String { rawValue }
-    public var label: String { rawValue.capitalized }
+    public var label: String {
+        switch self {
+        case .active: return "活跃"
+        case .archived: return "已归档"
+        }
+    }
 }
-

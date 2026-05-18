@@ -28,20 +28,20 @@ struct IOSTaskForm: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Task") {
-                    TextField("Title", text: $draft.title)
-                    TextField("Description", text: $draft.description, axis: .vertical)
-                    Picker("Priority", selection: $draft.priority) {
+                Section("待办") {
+                    TextField("标题", text: $draft.title)
+                    TextField("描述", text: $draft.description, axis: .vertical)
+                    Picker("优先级", selection: $draft.priority) {
                         ForEach(TaskPriority.allCases) { priority in
                             Text(priority.label).tag(priority)
                         }
                     }
-                    TextField("Due date (YYYY-MM-DD)", text: $draft.dueDate)
+                    TextField("截止日期 (YYYY-MM-DD)", text: $draft.dueDate)
                 }
                 if allowsProject {
-                    Section("Company Project") {
-                        Picker("Project", selection: $draft.projectId) {
-                            Text("No Project").tag(Optional<String>.none)
+                    Section("公司项目") {
+                        Picker("项目", selection: $draft.projectId) {
+                            Text("无项目").tag(Optional<String>.none)
                             ForEach(projects) { project in
                                 Text(project.name).tag(Optional(project.id))
                             }
@@ -52,10 +52,10 @@ struct IOSTaskForm: View {
             .navigationTitle(title)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button("保存") {
                         Task {
                             await save(draft)
                             dismiss()
@@ -82,22 +82,22 @@ struct IOSNoteForm: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField("Title", text: $draft.title)
-                Picker("Type", selection: $draft.type) {
+                TextField("标题", text: $draft.title)
+                Picker("类型", selection: $draft.type) {
                     ForEach(NoteType.allCases) { type in
                         Text(type.label).tag(type)
                     }
                 }
-                TextField("Body", text: $draft.body, axis: .vertical)
+                TextField("正文", text: $draft.body, axis: .vertical)
                     .lineLimit(6...10)
             }
-            .navigationTitle("New Note")
+            .navigationTitle("新建备忘")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button("保存") {
                         Task {
                             await save(draft)
                             dismiss()
@@ -124,18 +124,18 @@ struct IOSProjectForm: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField("Name", text: $draft.name)
-                TextField("Description", text: $draft.description, axis: .vertical)
-                TextField("Start date (YYYY-MM-DD)", text: $draft.startDate)
-                TextField("Target date (YYYY-MM-DD)", text: $draft.targetDate)
+                TextField("名称", text: $draft.name)
+                TextField("描述", text: $draft.description, axis: .vertical)
+                TextField("开始日期 (YYYY-MM-DD)", text: $draft.startDate)
+                TextField("目标日期 (YYYY-MM-DD)", text: $draft.targetDate)
             }
-            .navigationTitle("New Project")
+            .navigationTitle("新建项目")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button("保存") {
                         Task {
                             await save(draft)
                             dismiss()

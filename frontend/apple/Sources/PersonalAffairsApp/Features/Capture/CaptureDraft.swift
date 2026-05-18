@@ -11,10 +11,10 @@ enum CaptureTarget: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .personalTask: return "Task"
-        case .companyTask: return "Company Task"
-        case .fixedCalendar: return "Fixed Calendar"
-        case .personalNote: return "Idea / Note"
+        case .personalTask: return "个人待办"
+        case .companyTask: return "公司待办"
+        case .fixedCalendar: return "固定日程"
+        case .personalNote: return "个人备忘"
         }
     }
 }

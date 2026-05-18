@@ -29,28 +29,78 @@ public final class InMemoryTokenStore: TokenStore {
 }
 
 public final class KeychainTokenStore: TokenStore {
+    public static let defaultService = "com.lino.100j.auth"
+    public static let legacyService = "PersonalAffairsApp"
+
     private let service: String
+    private let legacyServices: [String]
     private let accessAccount = "access_token"
     private let refreshAccount = "refresh_token"
 
-    public init(service: String = "PersonalAffairsApp") {
+    public init(
+        service: String = KeychainTokenStore.defaultService,
+        legacyServices: [String] = [KeychainTokenStore.legacyService]
+    ) {
         self.service = service
+        self.legacyServices = legacyServices.filter { $0 != service }
     }
 
-    public var accessToken: String? { read(account: accessAccount) }
-    public var refreshToken: String? { read(account: refreshAccount) }
+    public var accessToken: String? { token(account: accessAccount) }
+    public var refreshToken: String? { token(account: refreshAccount) }
 
     public func save(accessToken: String, refreshToken: String) throws {
-        try save(value: accessToken, account: accessAccount)
-        try save(value: refreshToken, account: refreshAccount)
+        try save(value: accessToken, account: accessAccount, service: service)
+        try save(value: refreshToken, account: refreshAccount, service: service)
+        legacyServices.forEach { legacyService in
+            delete(account: accessAccount, service: legacyService)
+            delete(account: refreshAccount, service: legacyService)
+        }
     }
 
     public func clear() throws {
-        delete(account: accessAccount)
-        delete(account: refreshAccount)
+        delete(account: accessAccount, service: service)
+        delete(account: refreshAccount, service: service)
+        legacyServices.forEach { legacyService in
+            delete(account: accessAccount, service: legacyService)
+            delete(account: refreshAccount, service: legacyService)
+        }
     }
 
-    private func read(account: String) -> String? {
+    private func token(account: String) -> String? {
+        if let current = read(account: account, service: service) {
+            return current
+        }
+        migrateLegacyPairIfNeeded()
+        if let migrated = read(account: account, service: service) {
+            return migrated
+        }
+        return legacyServices.compactMap { read(account: account, service: $0) }.first
+    }
+
+    private func migrateLegacyPairIfNeeded() {
+        guard read(account: accessAccount, service: service) == nil || read(account: refreshAccount, service: service) == nil else { return }
+
+        for legacyService in legacyServices {
+            guard
+                let legacyAccess = read(account: accessAccount, service: legacyService),
+                let legacyRefresh = read(account: refreshAccount, service: legacyService)
+            else {
+                continue
+            }
+
+            do {
+                try save(value: legacyAccess, account: accessAccount, service: service)
+                try save(value: legacyRefresh, account: refreshAccount, service: service)
+                delete(account: accessAccount, service: legacyService)
+                delete(account: refreshAccount, service: legacyService)
+            } catch {
+                return
+            }
+            return
+        }
+    }
+
+    private func read(account: String, service: String) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -64,7 +114,7 @@ public final class KeychainTokenStore: TokenStore {
         return String(data: data, encoding: .utf8)
     }
 
-    private func save(value: String, account: String) throws {
+    private func save(value: String, account: String, service: String) throws {
         let data = Data(value.utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -83,7 +133,7 @@ public final class KeychainTokenStore: TokenStore {
         }
     }
 
-    private func delete(account: String) {
+    private func delete(account: String, service: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -99,8 +149,7 @@ public enum KeychainError: Error, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .status(let status):
-            return "Keychain operation failed with status \(status)."
+            return "钥匙串操作失败，状态码 \(status)。"
         }
     }
 }
-

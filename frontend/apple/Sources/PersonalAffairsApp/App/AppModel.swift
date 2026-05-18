@@ -65,16 +65,16 @@ final class AppModel: ObservableObject {
 
     func projectName(for projectId: String?) -> String? {
         guard let projectId else { return nil }
-        return projects.first { $0.id == projectId }?.name ?? "Unknown Project"
+        return projects.first { $0.id == projectId }?.name ?? "未知项目"
     }
 
     func spaceLabel(for spaceId: String) -> String {
-        spaces.first { $0.id == spaceId }?.type.label ?? "Unknown Space"
+        spaces.first { $0.id == spaceId }?.type.label ?? "未知空间"
     }
 
     func updateBaseURL(_ value: String) {
         guard let url = URL(string: value) else {
-            errorMessage = "Invalid API base URL."
+            errorMessage = "API Base URL 无效。"
             return
         }
         api.baseURL = url
