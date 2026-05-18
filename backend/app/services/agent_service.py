@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
 
 from cryptography.fernet import Fernet
@@ -10,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.errors import AppError
-from app.models import AgentActionLog, LLMProviderKey
+from app.models import AgentActionLog, AgentPendingConfirmation, LLMProviderKey
 from app.schemas.agent import AgentCommandRequest
 from app.schemas.calendar_item import CalendarItemCreate, CalendarItemUpdate
 from app.schemas.note import ConvertNoteToTaskRequest, NoteCreate, NoteUpdate
@@ -18,9 +19,6 @@ from app.schemas.project import ProjectCreate, ProjectUpdate
 from app.schemas.task import TaskCreate, TaskUpdate
 from app.services import calendar_service, note_service, project_service, task_service
 from app.services.pagination import paginate
-
-
-PENDING_CONFIRMATIONS: Dict[str, Dict[str, Any]] = {}
 
 
 TOOLS = [
@@ -171,11 +169,19 @@ def execute_command(db: Session, user_id: str, request: AgentCommandRequest) -> 
     confirmation_reason = _confirmation_reason(request.command, request.arguments)
     if confirmation_reason:
         token = str(uuid.uuid4())
-        PENDING_CONFIRMATIONS[token] = {
-            "user_id": user_id,
-            "command": request.command,
-            "arguments": request.arguments,
-        }
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            minutes=get_settings().pending_confirmation_expire_minutes
+        )
+        db.add(
+            AgentPendingConfirmation(
+                token=token,
+                user_id=user_id,
+                command=request.command,
+                arguments=request.arguments,
+                expires_at=expires_at,
+            )
+        )
+        db.commit()
         log_agent_action(
             db,
             user_id=user_id,
@@ -194,10 +200,29 @@ def execute_command(db: Session, user_id: str, request: AgentCommandRequest) -> 
 
 
 def confirm_command(db: Session, user_id: str, confirmation_token: str) -> Dict[str, Any]:
-    pending = PENDING_CONFIRMATIONS.pop(confirmation_token, None)
-    if not pending or pending["user_id"] != user_id:
+    pending = db.scalar(
+        select(AgentPendingConfirmation).where(
+            AgentPendingConfirmation.token == confirmation_token,
+            AgentPendingConfirmation.user_id == user_id,
+        )
+    )
+    if not pending:
         raise AppError(status_code=404, code="not_found", message="Confirmation token not found.")
-    return _execute_and_log(db, user_id, pending["command"], pending["arguments"])
+
+    now = datetime.now(timezone.utc)
+    expires_at = pending.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at <= now:
+        db.delete(pending)
+        db.commit()
+        raise AppError(status_code=404, code="not_found", message="Confirmation token expired.")
+
+    command = pending.command
+    arguments = dict(pending.arguments or {})
+    db.delete(pending)
+    db.commit()
+    return _execute_and_log(db, user_id, command, arguments)
 
 
 def _confirmation_reason(command: str, arguments: Dict[str, Any]) -> Optional[str]:

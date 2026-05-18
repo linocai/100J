@@ -1,5 +1,19 @@
 import Foundation
 
+public enum AppAuthMode: String, Codable, CaseIterable, Identifiable {
+    case localOwner
+    case cloudJWT
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .localOwner: return "本机 Owner"
+        case .cloudJWT: return "云端登录"
+        }
+    }
+}
+
 public enum SpaceType: String, Codable, CaseIterable, Identifiable {
     case personal
     case company

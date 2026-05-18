@@ -15,6 +15,10 @@ cp .env.example .env
 
 Edit `.env` if your local PostgreSQL URL differs from the default.
 
+The default auth mode is `AUTH_MODE=local_owner`. In this mode the API lazily creates one
+local owner user plus Personal / Company spaces, and the Apple app can call local APIs without
+JWT login. Set `AUTH_MODE=jwt` when testing the cloud-style login/register flow.
+
 ## Database
 
 Run migrations:
@@ -78,7 +82,7 @@ cd backend
 .venv/bin/python scripts/phase4_smoke.py --base-url http://127.0.0.1:8000
 ```
 
-The smoke test registers a disposable test user and verifies auth, spaces, tasks, projects, notes, calendar items, business-rule failures, Agent confirmation, action logs, and token refresh.
+The smoke test registers a disposable test user and verifies auth, spaces, tasks, projects, notes, calendar items, business-rule failures, Agent confirmation, action logs, and token refresh. This remains valid while the default local owner mode is enabled because valid bearer tokens still resolve to their token user.
 
 ## v1 API Areas
 

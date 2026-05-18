@@ -94,4 +94,106 @@ final class PersonalAffairsCoreTests: XCTestCase {
         XCTAssertEqual(object["count"], .number(2))
         XCTAssertEqual(object["dry"], .bool(true))
     }
+
+    func testLocalOwnerModeDoesNotSendAuthorizationHeader() async throws {
+        let store = InMemoryTokenStore(accessToken: "access-token", refreshToken: "refresh-token")
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .localOwner, tokenStore: store, session: Self.stubSession { request in
+            XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
+            return (200, "{}")
+        })
+
+        _ = try await client.send("/health", response: EmptyResponse.self)
+    }
+
+    func testCloudJWTModeSendsAuthorizationHeader() async throws {
+        let store = InMemoryTokenStore(accessToken: "access-token", refreshToken: "refresh-token")
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, session: Self.stubSession { request in
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
+            return (200, "{}")
+        })
+
+        _ = try await client.send("/health", response: EmptyResponse.self)
+    }
+
+    func testFetchAllFollowsPagination() async throws {
+        var seenCursors: [String?] = []
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .localOwner, tokenStore: InMemoryTokenStore(), session: Self.stubSession { request in
+            let cursor = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?
+                .queryItems?
+                .first { $0.name == "cursor" }?
+                .value
+            seenCursors.append(cursor)
+            if cursor == nil {
+                return (200, #"{"items":[{"id":"a","name":"A","type":"personal"}],"next_cursor":"1"}"#)
+            }
+            return (200, #"{"items":[{"id":"b","name":"B","type":"company"}],"next_cursor":null}"#)
+        })
+
+        let spaces: [Space] = try await client.fetchAll("/spaces")
+
+        XCTAssertEqual(spaces.map(\.id), ["a", "b"])
+        XCTAssertEqual(seenCursors.count, 2)
+        XCTAssertNil(seenCursors[0])
+        XCTAssertEqual(seenCursors[1], "1")
+    }
+
+    func testCaptureParserParsesChineseCalendarInput() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!
+        let now = Date(timeIntervalSince1970: 1_779_033_600) // 2026-05-18 00:00:00 +08
+
+        let intent = try XCTUnwrap(CaptureParser.parse("明天下午3点公司会议 对账", now: now, calendar: calendar))
+
+        XCTAssertEqual(intent.target, .fixedCalendar)
+        XCTAssertEqual(intent.calendarSpace, .company)
+        XCTAssertEqual(intent.allDay, false)
+        XCTAssertEqual(intent.title, "对账")
+        XCTAssertNotNil(intent.startAt)
+    }
+
+    func testCaptureParserParsesTaskNoteAndProject() throws {
+        XCTAssertEqual(CaptureParser.parse("公司待办 跟进发票")?.target, .companyTask)
+        XCTAssertEqual(CaptureParser.parse("灵感 旅行清单")?.target, .personalNote)
+        XCTAssertEqual(CaptureParser.parse("新建项目 100J 发布")?.target, .companyProject)
+    }
+
+    private static func stubSession(
+        handler: @escaping (URLRequest) throws -> (Int, String)
+    ) -> URLSession {
+        StubURLProtocol.handler = handler
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+}
+
+private final class StubURLProtocol: URLProtocol {
+    static var handler: ((URLRequest) throws -> (Int, String))?
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        do {
+            let (statusCode, body) = try Self.handler?(request) ?? (200, "{}")
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: statusCode,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data(body.utf8))
+            client?.urlProtocolDidFinishLoading(self)
+        } catch {
+            client?.urlProtocol(self, didFailWithError: error)
+        }
+    }
+
+    override func stopLoading() {}
 }

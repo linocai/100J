@@ -95,7 +95,7 @@ struct CompanyWorkbenchView: View {
                             title: draft.title,
                             description: draft.description.trimmedOrNil,
                             priority: draft.priority,
-                            dueDate: draft.dueDate.trimmedOrNil
+                            dueDate: draft.dueDateString
                         )
                     )
                     try await model.loadAllData()
@@ -111,8 +111,8 @@ struct CompanyWorkbenchView: View {
                             spaceId: space.id,
                             name: draft.name,
                             description: draft.description.trimmedOrNil,
-                            startDate: draft.startDate.trimmedOrNil,
-                            targetDate: draft.targetDate.trimmedOrNil
+                            startDate: draft.startDateString,
+                            targetDate: draft.targetDateString
                         )
                     )
                     try await model.loadAllData()
@@ -300,8 +300,14 @@ private struct WorkbenchProjectFormView: View {
             Form {
                 TextField("名称", text: $draft.name)
                 TextField("描述", text: $draft.description, axis: .vertical)
-                TextField("开始日期 (YYYY-MM-DD)", text: $draft.startDate)
-                TextField("目标日期 (YYYY-MM-DD)", text: $draft.targetDate)
+                Toggle("设置开始日期", isOn: $draft.hasStartDate)
+                if draft.hasStartDate {
+                    DatePicker("开始日期", selection: $draft.startDate, displayedComponents: .date)
+                }
+                Toggle("设置目标日期", isOn: $draft.hasTargetDate)
+                if draft.hasTargetDate {
+                    DatePicker("目标日期", selection: $draft.targetDate, displayedComponents: .date)
+                }
             }
             HStack {
                 Spacer()

@@ -47,6 +47,7 @@ private struct APIErrorDetail: Decodable {
 
 public final class APIClient {
     public var baseURL: URL
+    public var authMode: AppAuthMode
     public let tokenStore: TokenStore
 
     private let session: URLSession
@@ -55,10 +56,12 @@ public final class APIClient {
 
     public init(
         baseURL: URL = URL(string: "http://127.0.0.1:8000/api/v1")!,
+        authMode: AppAuthMode = .localOwner,
         tokenStore: TokenStore = KeychainTokenStore(),
         session: URLSession = .shared
     ) {
         self.baseURL = baseURL
+        self.authMode = authMode
         self.tokenStore = tokenStore
         self.session = session
         self.decoder = JSONDecoder.personalAffairs
@@ -104,7 +107,7 @@ public final class APIClient {
             throw APIClientError.transport("HTTP 响应无效。")
         }
 
-        if http.statusCode == 401, allowRefresh, try await refreshTokensIfPossible() {
+        if authMode == .cloudJWT, http.statusCode == 401, allowRefresh, try await refreshTokensIfPossible() {
             return try await send(
                 path,
                 method: method,
@@ -144,7 +147,7 @@ public final class APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = method.rawValue
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = tokenStore.accessToken {
+        if authMode == .cloudJWT, let token = tokenStore.accessToken {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         if let body {
@@ -155,6 +158,7 @@ public final class APIClient {
     }
 
     private func refreshTokensIfPossible() async throws -> Bool {
+        guard authMode == .cloudJWT else { return false }
         guard let refreshToken = tokenStore.refreshToken else { return false }
         let body = RefreshRequest(refreshToken: refreshToken)
         do {
@@ -172,6 +176,27 @@ public final class APIClient {
             try? tokenStore.clear()
             return false
         }
+    }
+
+    public func fetchAll<Item: Codable>(
+        _ path: String,
+        query: [URLQueryItem] = [],
+        limit: Int = 100,
+        response: PageResponse<Item>.Type = PageResponse<Item>.self
+    ) async throws -> [Item] {
+        var items: [Item] = []
+        var cursor: String?
+
+        repeat {
+            var pageQuery = query
+            pageQuery.append(URLQueryItem(name: "limit", value: "\(limit)"))
+            pageQuery.appendIfPresent("cursor", cursor)
+            let page: PageResponse<Item> = try await send(path, query: pageQuery, response: response)
+            items.append(contentsOf: page.items)
+            cursor = page.nextCursor
+        } while cursor != nil
+
+        return items
     }
 }
 

@@ -8,12 +8,28 @@ public final class NoteRepository {
     }
 
     public func list(status: NoteStatus? = nil, type: NoteType? = nil, search: String? = nil) async throws -> [Note] {
+        try await api.fetchAll("/notes", query: noteQuery(status: status, type: type, search: search))
+    }
+
+    public func page(
+        status: NoteStatus? = nil,
+        type: NoteType? = nil,
+        search: String? = nil,
+        limit: Int = 100,
+        cursor: String? = nil
+    ) async throws -> PageResponse<Note> {
+        var query = noteQuery(status: status, type: type, search: search)
+        query.append(URLQueryItem(name: "limit", value: "\(limit)"))
+        query.appendIfPresent("cursor", cursor)
+        return try await api.send("/notes", query: query, response: PageResponse<Note>.self)
+    }
+
+    private func noteQuery(status: NoteStatus?, type: NoteType?, search: String?) -> [URLQueryItem] {
         var query: [URLQueryItem] = []
         query.appendIfPresent("status", status?.rawValue)
         query.appendIfPresent("type", type?.rawValue)
         query.appendIfPresent("search", search?.nilIfBlank)
-        let response: PageResponse<Note> = try await api.send("/notes", query: query, response: PageResponse<Note>.self)
-        return response.items
+        return query
     }
 
     public func create(_ request: NoteCreateRequest) async throws -> Note {
@@ -41,4 +57,3 @@ public final class NoteRepository {
         )
     }
 }
-

@@ -8,12 +8,28 @@ public final class ProjectRepository {
     }
 
     public func list(spaceId: String? = nil, status: ProjectStatus? = nil, search: String? = nil) async throws -> [Project] {
+        try await api.fetchAll("/projects", query: projectQuery(spaceId: spaceId, status: status, search: search))
+    }
+
+    public func page(
+        spaceId: String? = nil,
+        status: ProjectStatus? = nil,
+        search: String? = nil,
+        limit: Int = 100,
+        cursor: String? = nil
+    ) async throws -> PageResponse<Project> {
+        var query = projectQuery(spaceId: spaceId, status: status, search: search)
+        query.append(URLQueryItem(name: "limit", value: "\(limit)"))
+        query.appendIfPresent("cursor", cursor)
+        return try await api.send("/projects", query: query, response: PageResponse<Project>.self)
+    }
+
+    private func projectQuery(spaceId: String?, status: ProjectStatus?, search: String?) -> [URLQueryItem] {
         var query: [URLQueryItem] = []
         query.appendIfPresent("space_id", spaceId)
         query.appendIfPresent("status", status?.rawValue)
         query.appendIfPresent("search", search?.nilIfBlank)
-        let response: PageResponse<Project> = try await api.send("/projects", query: query, response: PageResponse<Project>.self)
-        return response.items
+        return query
     }
 
     public func create(_ request: ProjectCreateRequest) async throws -> Project {
@@ -39,12 +55,6 @@ public final class ProjectRepository {
     public func tasks(projectId: String, status: TaskStatus? = nil) async throws -> [TaskItem] {
         var query: [URLQueryItem] = []
         query.appendIfPresent("status", status?.rawValue)
-        let response: PageResponse<TaskItem> = try await api.send(
-            "/projects/\(projectId)/tasks",
-            query: query,
-            response: PageResponse<TaskItem>.self
-        )
-        return response.items
+        return try await api.fetchAll("/projects/\(projectId)/tasks", query: query)
     }
 }
-

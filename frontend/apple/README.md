@@ -70,13 +70,18 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-The macOS client defaults to:
+The Apple client defaults to local owner mode. In local owner mode it does not show login,
+does not read Keychain tokens, and does not send an Authorization header; the backend lazily
+creates the single local owner account and the Personal / Company spaces.
+
+The client defaults to:
 
 ```text
 http://127.0.0.1:8000/api/v1
 ```
 
-You can change it in Settings inside the app.
+You can change it in Settings inside the app. Switch Settings to cloud login mode only when
+testing the JWT register/login flow against a cloud-style backend.
 
 ## Phase 3 iOS Scope
 

@@ -52,7 +52,7 @@ struct PersonalTasksView: View {
                             title: draft.title,
                             description: draft.description.trimmedOrNil,
                             priority: draft.priority,
-                            dueDate: draft.dueDate.trimmedOrNil
+                            dueDate: draft.dueDateString
                         )
                     )
                     model.personalTasks = try await model.taskRepository.list(
@@ -191,8 +191,13 @@ struct TaskDraft {
     var title = ""
     var description = ""
     var priority: TaskPriority = .medium
-    var dueDate = ""
+    var hasDueDate = false
+    var dueDate = Date()
     var projectId: String?
+
+    var dueDateString: String? {
+        hasDueDate ? dueDate.dayKey : nil
+    }
 }
 
 struct TaskFormView: View {
@@ -215,7 +220,10 @@ struct TaskFormView: View {
                         Text(priority.label).tag(priority)
                     }
                 }
-                TextField("截止日期 (YYYY-MM-DD)", text: $draft.dueDate)
+                Toggle("设置截止日期", isOn: $draft.hasDueDate)
+                if draft.hasDueDate {
+                    DatePicker("截止日期", selection: $draft.dueDate, displayedComponents: .date)
+                }
                 if allowsProject {
                     Picker("项目", selection: $draft.projectId) {
                         Text("无项目").tag(Optional<String>.none)

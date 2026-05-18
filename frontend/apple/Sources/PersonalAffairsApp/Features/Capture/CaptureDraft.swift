@@ -25,15 +25,24 @@ struct CaptureDraft {
     var title: String
     var description = ""
     var priority: TaskPriority = .medium
-    var dueDate = ""
+    var hasDueDate = false
+    var dueDate = Date()
     var calendarSpace: SpaceType = .personal
     var calendarType: CalendarItemType = .appointment
     var allDay = false
-    var startDate = Date().dayKey
+    var startDate = Date()
     var startAt = Date()
     var recurrence: Recurrence = .none
     var noteType: NoteType = .idea
     var projectId: String?
+
+    var dueDateString: String? {
+        hasDueDate ? dueDate.dayKey : nil
+    }
+
+    var startDateString: String {
+        startDate.dayKey
+    }
 }
 
 extension CaptureDraft {
@@ -42,11 +51,35 @@ extension CaptureDraft {
         self.rawText = trimmed
         self.title = trimmed
 
-        let lower = trimmed.lowercased()
-        if lower.contains("idea") || lower.contains("想法") || lower.contains("灵感") {
-            self.target = .personalNote
-        } else if lower.contains("明天") || lower.contains("下午") || lower.contains("上午") || lower.contains(":") || lower.contains("预约") {
-            self.target = .fixedCalendar
+        if let intent = CaptureParser.parse(trimmed) {
+            self.title = intent.title
+            self.description = intent.description ?? ""
+            self.priority = intent.priority
+            self.calendarSpace = intent.calendarSpace
+            self.calendarType = intent.calendarType
+            self.allDay = intent.allDay
+            self.recurrence = intent.recurrence
+            self.noteType = intent.noteType
+            if let dueDate = intent.dueDate, let parsed = parsedDateOnly(dueDate) {
+                self.hasDueDate = true
+                self.dueDate = parsed
+            }
+            if let startDate = intent.startDate, let parsed = parsedDateOnly(startDate) {
+                self.startDate = parsed
+            }
+            if let startAt = intent.startAt {
+                self.startAt = startAt
+            }
+            switch intent.target {
+            case .personalTask:
+                self.target = .personalTask
+            case .companyTask, .companyProject:
+                self.target = .companyTask
+            case .fixedCalendar:
+                self.target = .fixedCalendar
+            case .personalNote:
+                self.target = .personalNote
+            }
         }
     }
 }

@@ -52,10 +52,6 @@ public final class AgentRepository {
     }
 
     public func logs() async throws -> [AgentActionLog] {
-        let response: PageResponse<AgentActionLog> = try await api.send(
-            "/agent/action-logs",
-            response: PageResponse<AgentActionLog>.self
-        )
-        return response.items
+        try await api.fetchAll("/agent/action-logs")
     }
 }

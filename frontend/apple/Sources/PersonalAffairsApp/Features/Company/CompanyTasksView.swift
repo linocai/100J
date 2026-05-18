@@ -42,7 +42,7 @@ struct CompanyTasksView: View {
                             title: draft.title,
                             description: draft.description.trimmedOrNil,
                             priority: draft.priority,
-                            dueDate: draft.dueDate.trimmedOrNil
+                            dueDate: draft.dueDateString
                         )
                     )
                     try await model.loadAllData()

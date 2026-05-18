@@ -121,7 +121,7 @@ private struct IOSCompanyTasksList: View {
                             title: draft.title,
                             description: draft.description.trimmedOrNil,
                             priority: draft.priority,
-                            dueDate: draft.dueDate.trimmedOrNil
+                            dueDate: draft.dueDateString
                         )
                     )
                     try await model.loadAllData()
@@ -149,7 +149,7 @@ private struct IOSCompanyTasksList: View {
                             title: draft.title,
                             description: draft.description.trimmedOrNil,
                             priority: draft.priority,
-                            dueDate: draft.dueDate.trimmedOrNil
+                            dueDate: draft.dueDateString
                         )
                     )
                     await reload()
@@ -254,8 +254,8 @@ private struct IOSCompanyProjectsList: View {
                             spaceId: space.id,
                             name: draft.name,
                             description: draft.description.trimmedOrNil,
-                            startDate: draft.startDate.trimmedOrNil,
-                            targetDate: draft.targetDate.trimmedOrNil
+                            startDate: draft.startDateString,
+                            targetDate: draft.targetDateString
                         )
                     )
                     model.projects = try await model.projectRepository.list(spaceId: space.id, status: .active)
@@ -277,8 +277,8 @@ private struct IOSCompanyProjectsList: View {
                         request: ProjectUpdateRequest(
                             name: draft.name,
                             description: draft.description.trimmedOrNil,
-                            startDate: draft.startDate.trimmedOrNil,
-                            targetDate: draft.targetDate.trimmedOrNil
+                            startDate: draft.startDateString,
+                            targetDate: draft.targetDateString
                         )
                     )
                     guard let space = model.companySpace else { return }
@@ -357,7 +357,7 @@ private struct IOSProjectDetail: View {
                             title: draft.title,
                             description: draft.description.trimmedOrNil,
                             priority: draft.priority,
-                            dueDate: draft.dueDate.trimmedOrNil
+                            dueDate: draft.dueDateString
                         )
                     )
                     tasks = try await model.projectRepository.tasks(projectId: project.id, status: .active)

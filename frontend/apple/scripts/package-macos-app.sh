@@ -9,6 +9,7 @@ PRODUCT_NAME="PersonalAffairsApp"
 BUNDLE_ID="${BUNDLE_ID:-com.lino.100j}"
 VERSION="${VERSION:-1.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-$(date +%Y%m%d%H%M)}"
+ICON_SOURCE="${ICON_SOURCE:-/Users/linotsai/Pictures/GPT Image/rounded-j-appicon-v1.png}"
 DIST_DIR="$PROJECT_DIR/dist"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_BUNDLE/Contents"
@@ -39,7 +40,10 @@ generate_icon() {
   rm -rf "$ICONSET_DIR"
   mkdir -p "$ICONSET_DIR"
 
-  python3 - "$ppm_path" <<'PY'
+  if [[ -f "$ICON_SOURCE" ]]; then
+    sips -z 1024 1024 "$ICON_SOURCE" --out "$png_path" >/dev/null
+  else
+    python3 - "$ppm_path" <<'PY'
 import math
 import sys
 
@@ -64,7 +68,9 @@ with open(path, "wb") as f:
             f.write(bytes((r, g, b)))
 PY
 
-  sips -s format png "$ppm_path" --out "$png_path" >/dev/null
+    sips -s format png "$ppm_path" --out "$png_path" >/dev/null
+  fi
+
   for spec in \
     "16 icon_16x16.png" \
     "32 icon_16x16@2x.png" \

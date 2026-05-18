@@ -41,7 +41,6 @@ struct MacWorkbenchShellView: View {
             .background(AppBackgroundView())
         }
         .frame(minWidth: 900, minHeight: 680)
-        .task { await model.refreshAll() }
         .sheet(isPresented: $showingQuickCapture) {
             QuickCaptureSheet(rawText: quickCaptureText) {
                 quickCaptureText = ""

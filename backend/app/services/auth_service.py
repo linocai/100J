@@ -2,6 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
+from app.core.config import get_settings
 from app.core.security import create_access_token, create_refresh_token, hash_password, verify_password
 from app.models import Space, User
 
@@ -43,10 +44,39 @@ def authenticate_user(db: Session, email: str, password: str) -> User:
     return user
 
 
+def get_or_create_local_owner(db: Session) -> User:
+    settings = get_settings()
+    email = settings.local_owner_email.lower()
+    user = db.scalar(select(User).where(User.email == email, User.deleted_at.is_(None)))
+    if not user:
+        user = User(
+            email=email,
+            password_hash=hash_password("local-owner-password-not-used"),
+            display_name=settings.local_owner_display_name,
+            timezone=settings.local_owner_timezone,
+        )
+        db.add(user)
+        db.flush()
+    else:
+        changed = False
+        if user.display_name != settings.local_owner_display_name:
+            user.display_name = settings.local_owner_display_name
+            changed = True
+        if user.timezone != settings.local_owner_timezone:
+            user.timezone = settings.local_owner_timezone
+            changed = True
+        if changed:
+            user.version += 1
+
+    create_default_spaces(db, user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def issue_tokens(user: User) -> dict:
     return {
         "access_token": create_access_token(user.id),
         "refresh_token": create_refresh_token(user.id),
         "token_type": "bearer",
     }
-

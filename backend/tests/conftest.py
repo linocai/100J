@@ -4,7 +4,6 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base, build_engine, get_db
 from app.main import create_app
-from app.services.agent_service import PENDING_CONFIRMATIONS
 
 
 engine = build_engine("sqlite://")
@@ -15,9 +14,7 @@ TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=Fals
 def reset_database():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    PENDING_CONFIRMATIONS.clear()
     yield
-    PENDING_CONFIRMATIONS.clear()
 
 
 @pytest.fixture

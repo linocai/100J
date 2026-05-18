@@ -1,4 +1,5 @@
 #if os(iOS)
+import PersonalAffairsCore
 import SwiftUI
 
 struct IOSSettingsView: View {
@@ -9,9 +10,24 @@ struct IOSSettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    IOSScreenHeader(title: "设置", subtitle: "本地 API、未来云端 API 和钥匙串会话配置。")
+                    IOSScreenHeader(title: "设置", subtitle: "本机服务、未来云端 API 和高级连接配置。")
                         .listRowInsets(EdgeInsets())
                         .listRowSeparator(.hidden)
+                }
+
+                Section("模式") {
+                    Picker("当前模式", selection: $model.authMode) {
+                        ForEach(AppAuthMode.allCases) { mode in
+                            Text(mode.label).tag(mode)
+                        }
+                    }
+                    .onChange(of: model.authMode) { newValue in
+                        model.updateAuthMode(newValue)
+                    }
+                    if let user = model.currentUser {
+                        LabeledContent("用户", value: user.displayName ?? user.email ?? user.id)
+                        LabeledContent("时区", value: user.timezone)
+                    }
                 }
 
                 Section("API") {
@@ -27,15 +43,13 @@ struct IOSSettingsView: View {
                 }
 
                 Section("账号") {
-                    Text("登录 token 保存在 Apple 钥匙串；退出登录会清理本机会话。")
+                    Text(model.authMode == .localOwner ? "本机 Owner 模式不使用 Keychain 或 Authorization header。" : "云端登录 token 保存在 Apple 钥匙串。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-                    if let user = model.currentUser {
-                        LabeledContent("用户", value: user.email ?? user.id)
-                        LabeledContent("时区", value: user.timezone)
-                    }
-                    Button("退出登录", role: .destructive) {
-                        Task { await model.logout() }
+                    if model.authMode == .cloudJWT {
+                        Button("退出登录", role: .destructive) {
+                            Task { await model.logout() }
+                        }
                     }
                 }
 

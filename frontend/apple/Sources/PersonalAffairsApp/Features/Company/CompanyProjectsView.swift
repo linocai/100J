@@ -4,8 +4,36 @@ import SwiftUI
 struct ProjectDraft {
     var name = ""
     var description = ""
-    var startDate = ""
-    var targetDate = ""
+    var hasStartDate = false
+    var startDate = Date()
+    var hasTargetDate = false
+    var targetDate = Date()
+
+    init(
+        name: String = "",
+        description: String = "",
+        startDate: String? = nil,
+        targetDate: String? = nil
+    ) {
+        self.name = name
+        self.description = description
+        if let parsedStartDate = parsedDateOnly(startDate) {
+            self.hasStartDate = true
+            self.startDate = parsedStartDate
+        }
+        if let parsedTargetDate = parsedDateOnly(targetDate) {
+            self.hasTargetDate = true
+            self.targetDate = parsedTargetDate
+        }
+    }
+
+    var startDateString: String? {
+        hasStartDate ? startDate.dayKey : nil
+    }
+
+    var targetDateString: String? {
+        hasTargetDate ? targetDate.dayKey : nil
+    }
 }
 
 #if os(macOS)
@@ -57,8 +85,8 @@ struct CompanyProjectsView: View {
                             spaceId: space.id,
                             name: draft.name,
                             description: draft.description.trimmedOrNil,
-                            startDate: draft.startDate.trimmedOrNil,
-                            targetDate: draft.targetDate.trimmedOrNil
+                            startDate: draft.startDateString,
+                            targetDate: draft.targetDateString
                         )
                     )
                     try await model.loadAllData()
@@ -257,8 +285,14 @@ private struct ProjectFormView: View {
             Form {
                 TextField("名称", text: $draft.name)
                 TextField("描述", text: $draft.description, axis: .vertical)
-                TextField("开始日期 (YYYY-MM-DD)", text: $draft.startDate)
-                TextField("目标日期 (YYYY-MM-DD)", text: $draft.targetDate)
+                Toggle("设置开始日期", isOn: $draft.hasStartDate)
+                if draft.hasStartDate {
+                    DatePicker("开始日期", selection: $draft.startDate, displayedComponents: .date)
+                }
+                Toggle("设置目标日期", isOn: $draft.hasTargetDate)
+                if draft.hasTargetDate {
+                    DatePicker("目标日期", selection: $draft.targetDate, displayedComponents: .date)
+                }
             }
             HStack {
                 Spacer()

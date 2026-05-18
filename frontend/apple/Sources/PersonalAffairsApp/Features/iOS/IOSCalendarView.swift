@@ -86,7 +86,7 @@ struct IOSCalendarView: View {
                                 description: draft.description.trimmedOrNil,
                                 type: draft.type,
                                 allDay: draft.allDay,
-                                startDate: draft.allDay ? draft.startDate.trimmedOrNil : nil,
+                                startDate: draft.allDay ? draft.startDate.dayKey : nil,
                                 startAt: draft.allDay ? nil : draft.startAt,
                                 timezone: TimeZone.current.identifier,
                                 recurrence: draft.recurrence,
@@ -109,7 +109,7 @@ struct IOSCalendarView: View {
                                 description: draft.description.trimmedOrNil,
                                 type: draft.type,
                                 allDay: draft.allDay,
-                                startDate: draft.allDay ? draft.startDate.trimmedOrNil : nil,
+                                startDate: draft.allDay ? draft.startDate.dayKey : nil,
                                 startAt: draft.allDay ? nil : draft.startAt,
                                 timezone: TimeZone.current.identifier,
                                 recurrence: draft.recurrence,
@@ -160,7 +160,7 @@ struct IOSCalendarView: View {
             description: item.description ?? "",
             type: item.type,
             allDay: item.allDay,
-            startDate: item.startDate ?? "",
+            startDate: parsedDateOnly(item.startDate) ?? Date(),
             startAt: item.startAt ?? Date(),
             recurrence: item.recurrence ?? .none,
             projectId: item.projectId
@@ -174,7 +174,7 @@ private struct IOSCalendarDraft {
     var description = ""
     var type: CalendarItemType = .appointment
     var allDay = false
-    var startDate = ""
+    var startDate = Date()
     var startAt = Date()
     var recurrence: Recurrence = .none
     var projectId: String?
@@ -236,7 +236,7 @@ private struct IOSCalendarItemForm: View {
                     }
                     Toggle("全天", isOn: $draft.allDay)
                     if draft.allDay {
-                        TextField("开始日期 (YYYY-MM-DD)", text: $draft.startDate)
+                        DatePicker("开始日期", selection: $draft.startDate, displayedComponents: .date)
                     } else {
                         DatePicker("开始时间", selection: $draft.startAt)
                     }
@@ -259,7 +259,7 @@ private struct IOSCalendarItemForm: View {
                             dismiss()
                         }
                     }
-                    .disabled(draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (draft.allDay && draft.startDate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+                    .disabled(draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }

@@ -101,7 +101,10 @@ struct QuickCaptureSheet: View {
                 Text(priority.label).tag(priority)
             }
         }
-        TextField("截止日期 (YYYY-MM-DD)", text: $draft.dueDate)
+        Toggle("设置截止日期", isOn: $draft.hasDueDate)
+        if draft.hasDueDate {
+            DatePicker("截止日期", selection: $draft.dueDate, displayedComponents: .date)
+        }
         if allowsProject {
             Picker("项目", selection: $draft.projectId) {
                 Text("无项目").tag(Optional<String>.none)
@@ -126,7 +129,7 @@ struct QuickCaptureSheet: View {
             }
             Toggle("全天", isOn: $draft.allDay)
             if draft.allDay {
-                TextField("开始日期 (YYYY-MM-DD)", text: $draft.startDate)
+                DatePicker("开始日期", selection: $draft.startDate, displayedComponents: .date)
             } else {
                 DatePicker("开始时间", selection: $draft.startAt)
             }
@@ -163,7 +166,7 @@ struct QuickCaptureSheet: View {
                             title: title,
                             description: description,
                             priority: draft.priority,
-                            dueDate: draft.dueDate.trimmedOrNil
+                            dueDate: draft.dueDateString
                         )
                     )
                 case .companyTask:
@@ -175,7 +178,7 @@ struct QuickCaptureSheet: View {
                             title: title,
                             description: description,
                             priority: draft.priority,
-                            dueDate: draft.dueDate.trimmedOrNil
+                            dueDate: draft.dueDateString
                         )
                     )
                 case .fixedCalendar:
@@ -188,7 +191,7 @@ struct QuickCaptureSheet: View {
                             description: description,
                             type: draft.calendarType,
                             allDay: draft.allDay,
-                            startDate: draft.allDay ? draft.startDate.trimmedOrNil : nil,
+                            startDate: draft.allDay ? draft.startDateString : nil,
                             startAt: draft.allDay ? nil : draft.startAt,
                             timezone: TimeZone.current.identifier,
                             recurrence: draft.recurrence,
@@ -218,10 +221,6 @@ struct QuickCaptureSheet: View {
         let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
         if title.isEmpty {
             return "保存前请先填写标题。"
-        }
-
-        if draft.target == .fixedCalendar && draft.allDay && draft.startDate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "全天固定日程需要开始日期。"
         }
 
         return nil

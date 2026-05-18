@@ -15,6 +15,47 @@ public final class TaskRepository {
         priority: TaskPriority? = nil,
         search: String? = nil
     ) async throws -> [TaskItem] {
+        try await api.fetchAll("/tasks", query: taskQuery(
+            spaceId: spaceId,
+            projectId: projectId,
+            projectScope: projectScope,
+            status: status,
+            priority: priority,
+            search: search
+        ))
+    }
+
+    public func page(
+        spaceId: String? = nil,
+        projectId: String? = nil,
+        projectScope: String? = nil,
+        status: TaskStatus? = nil,
+        priority: TaskPriority? = nil,
+        search: String? = nil,
+        limit: Int = 100,
+        cursor: String? = nil
+    ) async throws -> PageResponse<TaskItem> {
+        var query = taskQuery(
+            spaceId: spaceId,
+            projectId: projectId,
+            projectScope: projectScope,
+            status: status,
+            priority: priority,
+            search: search
+        )
+        query.append(URLQueryItem(name: "limit", value: "\(limit)"))
+        query.appendIfPresent("cursor", cursor)
+        return try await api.send("/tasks", query: query, response: PageResponse<TaskItem>.self)
+    }
+
+    private func taskQuery(
+        spaceId: String?,
+        projectId: String?,
+        projectScope: String?,
+        status: TaskStatus?,
+        priority: TaskPriority?,
+        search: String?
+    ) -> [URLQueryItem] {
         var query: [URLQueryItem] = []
         query.appendIfPresent("space_id", spaceId)
         query.appendIfPresent("project_id", projectId)
@@ -22,8 +63,7 @@ public final class TaskRepository {
         query.appendIfPresent("status", status?.rawValue)
         query.appendIfPresent("priority", priority?.rawValue)
         query.appendIfPresent("search", search?.nilIfBlank)
-        let response: PageResponse<TaskItem> = try await api.send("/tasks", query: query, response: PageResponse<TaskItem>.self)
-        return response.items
+        return query
     }
 
     public func create(_ request: TaskCreateRequest) async throws -> TaskItem {
@@ -50,4 +90,3 @@ public final class TaskRepository {
         try await api.send("/tasks/\(id)", method: .delete, response: DeleteResponse.self)
     }
 }
-

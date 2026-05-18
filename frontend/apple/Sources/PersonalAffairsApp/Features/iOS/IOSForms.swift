@@ -36,7 +36,10 @@ struct IOSTaskForm: View {
                             Text(priority.label).tag(priority)
                         }
                     }
-                    TextField("截止日期 (YYYY-MM-DD)", text: $draft.dueDate)
+                    Toggle("设置截止日期", isOn: $draft.hasDueDate)
+                    if draft.hasDueDate {
+                        DatePicker("截止日期", selection: $draft.dueDate, displayedComponents: .date)
+                    }
                 }
                 if allowsProject {
                     Section("公司项目") {
@@ -126,8 +129,14 @@ struct IOSProjectForm: View {
             Form {
                 TextField("名称", text: $draft.name)
                 TextField("描述", text: $draft.description, axis: .vertical)
-                TextField("开始日期 (YYYY-MM-DD)", text: $draft.startDate)
-                TextField("目标日期 (YYYY-MM-DD)", text: $draft.targetDate)
+                Toggle("设置开始日期", isOn: $draft.hasStartDate)
+                if draft.hasStartDate {
+                    DatePicker("开始日期", selection: $draft.startDate, displayedComponents: .date)
+                }
+                Toggle("设置目标日期", isOn: $draft.hasTargetDate)
+                if draft.hasTargetDate {
+                    DatePicker("目标日期", selection: $draft.targetDate, displayedComponents: .date)
+                }
             }
             .navigationTitle("新建项目")
             .toolbar {

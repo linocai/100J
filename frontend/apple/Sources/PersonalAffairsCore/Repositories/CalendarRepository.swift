@@ -14,18 +14,54 @@ public final class CalendarRepository {
         fromDate: String? = nil,
         toDate: String? = nil
     ) async throws -> [CalendarItem] {
+        try await api.fetchAll("/calendar-items", query: calendarQuery(
+            spaceId: spaceId,
+            projectId: projectId,
+            type: type,
+            fromDate: fromDate,
+            toDate: toDate
+        ))
+    }
+
+    public func page(
+        spaceId: String? = nil,
+        projectId: String? = nil,
+        type: CalendarItemType? = nil,
+        fromDate: String? = nil,
+        toDate: String? = nil,
+        limit: Int = 100,
+        cursor: String? = nil
+    ) async throws -> PageResponse<CalendarItem> {
+        var query = calendarQuery(
+            spaceId: spaceId,
+            projectId: projectId,
+            type: type,
+            fromDate: fromDate,
+            toDate: toDate
+        )
+        query.append(URLQueryItem(name: "limit", value: "\(limit)"))
+        query.appendIfPresent("cursor", cursor)
+        return try await api.send(
+            "/calendar-items",
+            query: query,
+            response: PageResponse<CalendarItem>.self
+        )
+    }
+
+    private func calendarQuery(
+        spaceId: String?,
+        projectId: String?,
+        type: CalendarItemType?,
+        fromDate: String?,
+        toDate: String?
+    ) -> [URLQueryItem] {
         var query: [URLQueryItem] = []
         query.appendIfPresent("space_id", spaceId)
         query.appendIfPresent("project_id", projectId)
         query.appendIfPresent("type", type?.rawValue)
         query.appendIfPresent("from_date", fromDate)
         query.appendIfPresent("to_date", toDate)
-        let response: PageResponse<CalendarItem> = try await api.send(
-            "/calendar-items",
-            query: query,
-            response: PageResponse<CalendarItem>.self
-        )
-        return response.items
+        return query
     }
 
     public func create(_ request: CalendarItemCreateRequest) async throws -> CalendarItem {
@@ -56,4 +92,3 @@ private extension CalendarItem {
         return title
     }
 }
-

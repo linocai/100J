@@ -6,7 +6,25 @@ from app.core.config import get_settings
 from app.core.errors import AppError, app_error_handler, http_error_handler
 
 
+DEFAULT_JWT_SECRET = "change-me-in-development"
+DEFAULT_LLM_SECRET = "change-me-32-byte-minimum-secret"
+
+
+def validate_runtime_settings() -> None:
+    settings = get_settings()
+    if settings.app_env != "production":
+        return
+
+    if settings.auth_mode == "local_owner":
+        raise RuntimeError("AUTH_MODE=local_owner is not allowed in production.")
+    if settings.jwt_secret_key == DEFAULT_JWT_SECRET:
+        raise RuntimeError("JWT_SECRET_KEY must be changed in production.")
+    if settings.llm_key_encryption_secret == DEFAULT_LLM_SECRET:
+        raise RuntimeError("LLM_KEY_ENCRYPTION_SECRET must be changed in production.")
+
+
 def create_app() -> FastAPI:
+    validate_runtime_settings()
     settings = get_settings()
     app = FastAPI(title="Personal Affairs API", version="0.1.0")
 
@@ -31,4 +49,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-

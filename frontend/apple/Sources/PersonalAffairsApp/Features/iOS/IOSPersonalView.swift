@@ -100,7 +100,7 @@ private struct IOSPersonalTasksList: View {
                             title: draft.title,
                             description: draft.description.trimmedOrNil,
                             priority: draft.priority,
-                            dueDate: draft.dueDate.trimmedOrNil
+                            dueDate: draft.dueDateString
                         )
                     )
                     model.personalTasks = try await model.taskRepository.list(spaceId: space.id, status: status)
@@ -127,7 +127,7 @@ private struct IOSPersonalTasksList: View {
                             title: draft.title,
                             description: draft.description.trimmedOrNil,
                             priority: draft.priority,
-                            dueDate: draft.dueDate.trimmedOrNil
+                            dueDate: draft.dueDateString
                         )
                     )
                     guard let space = model.personalSpace else { return }
