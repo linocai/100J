@@ -7,22 +7,37 @@ struct PersonalNotesView: View {
     @State private var type: NoteType?
     @State private var search = ""
     @State private var showingNewNote = false
+    var onSelectNote: (Note) -> Void = { _ in }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-            if model.notes.isEmpty {
-                EmptyStateView(title: "No personal notes", message: "Ideas and memos stay personal in v1.")
-            } else {
-                List(model.notes) { note in
-                    NoteRow(
-                        note: note,
-                        archive: { archive(note) },
-                        convert: { convert(note) }
-                    )
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
+                header
+                SurfaceView {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                        filterBar
+                        if model.notes.isEmpty {
+                            EmptyStateCardView(
+                                title: "No ideas yet",
+                                message: "Capture thoughts here before they become tasks.",
+                                systemImage: "lightbulb"
+                            )
+                        } else {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: AppTheme.Spacing.md)], spacing: AppTheme.Spacing.md) {
+                                ForEach(model.notes) { note in
+                                    NoteCardView(
+                                        note: note,
+                                        onSelect: { onSelectNote(note) },
+                                        onConvert: { convert(note) },
+                                        onArchive: { archive(note) }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
+            .padding(AppTheme.Spacing.xl)
         }
         .sheet(isPresented: $showingNewNote) {
             NoteFormView { draft in
@@ -46,15 +61,30 @@ struct PersonalNotesView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 16) {
-            ToolbarTitle(title: "Personal Notes", subtitle: "Ideas and memos. Convert only when they become work.")
-            Spacer()
+        SectionHeaderView(
+            eyebrow: "Personal",
+            title: "Ideas / Notes",
+            subtitle: "Notes are thoughts, not tasks. Convert only when they become work.",
+            systemImage: "note.text"
+        ) {
+            Button {
+                showingNewNote = true
+            } label: {
+                Label("New Idea", systemImage: "plus")
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+
+    private var filterBar: some View {
+        HStack(spacing: AppTheme.Spacing.md) {
             Picker("Status", selection: $status) {
                 ForEach(NoteStatus.allCases) { status in
                     Text(status.label).tag(status)
                 }
             }
-            .frame(width: 130)
+            .pickerStyle(.segmented)
+            .frame(width: 180)
             .onChange(of: status) { newValue in
                 Task { await model.reloadNotes(status: newValue, type: type, search: search.trimmedOrNil) }
             }
@@ -72,19 +102,12 @@ struct PersonalNotesView: View {
 
             TextField("Search", text: $search)
                 .textFieldStyle(.roundedBorder)
-                .frame(width: 180)
                 .onSubmit {
                     Task { await model.reloadNotes(status: status, type: type, search: search.trimmedOrNil) }
                 }
-
-            Button {
-                showingNewNote = true
-            } label: {
-                Label("New Note", systemImage: "plus")
-            }
-            .buttonStyle(.borderedProminent)
+            Spacer()
+            PillView(text: "Personal notes only", style: .personal)
         }
-        .padding()
     }
 
     private func archive(_ note: Note) {
@@ -167,8 +190,7 @@ private struct NoteFormView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("New Personal Note")
-                .font(.title2.weight(.semibold))
+            SectionHeaderView(title: "New Personal Note", subtitle: "Capture ideas and memos before they become tasks.")
             Form {
                 TextField("Title", text: $draft.title)
                 Picker("Type", selection: $draft.type) {
@@ -192,7 +214,7 @@ private struct NoteFormView: View {
                 .disabled(draft.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
-        .padding()
-        .frame(width: 480)
+        .padding(AppTheme.Spacing.xl)
+        .frame(width: 560)
     }
 }

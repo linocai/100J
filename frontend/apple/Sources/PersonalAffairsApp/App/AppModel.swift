@@ -15,7 +15,7 @@ final class AppModel: ObservableObject {
     @Published var llmKey: LLMKey?
     @Published var isLoading = false
     @Published var errorMessage: String?
-    @Published var selectedSection: AppSection? = .personalTasks
+    @Published var selectedSection: AppSection? = .today
 
     let api: APIClient
     let authRepository: AuthRepository
@@ -49,6 +49,27 @@ final class AppModel: ObservableObject {
 
     var companySpace: Space? {
         spaces.first { $0.type == .company }
+    }
+
+    var activePersonalTasks: [TaskItem] {
+        personalTasks.filter { $0.status == .active }
+    }
+
+    var activeCompanyTasks: [TaskItem] {
+        companyTasks.filter { $0.status == .active }
+    }
+
+    var noProjectCompanyTasks: [TaskItem] {
+        activeCompanyTasks.filter { $0.projectId == nil }
+    }
+
+    func projectName(for projectId: String?) -> String? {
+        guard let projectId else { return nil }
+        return projects.first { $0.id == projectId }?.name ?? "Unknown Project"
+    }
+
+    func spaceLabel(for spaceId: String) -> String {
+        spaces.first { $0.id == spaceId }?.type.label ?? "Unknown Space"
     }
 
     func updateBaseURL(_ value: String) {
@@ -196,4 +217,3 @@ enum CalendarFilter: Hashable {
     case company
     case project(String)
 }
-

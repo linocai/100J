@@ -15,31 +15,38 @@ struct CompanyProjectsView: View {
     @State private var showingNewProject = false
     @State private var selectedProjectId: String?
     @State private var projectTasks: [TaskItem] = []
+    var onSelectProject: (Project) -> Void = { _ in }
 
     var body: some View {
-        HSplitView {
-            VStack(spacing: 0) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
                 header
-                Divider()
-                List(selection: $selectedProjectId) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: AppTheme.Spacing.md)], spacing: AppTheme.Spacing.md) {
                     ForEach(model.projects) { project in
-                        ProjectRow(project: project)
-                            .tag(Optional(project.id))
+                        ProjectCardView(
+                            project: project,
+                            activeTaskCount: model.companyTasks.filter { $0.projectId == project.id && $0.status == .active }.count,
+                            completedTaskCount: model.companyTasks.filter { $0.projectId == project.id && $0.status == .done }.count,
+                            isSelected: selectedProjectId == project.id,
+                            onSelect: {
+                                selectedProjectId = project.id
+                                onSelectProject(project)
+                                Task { await loadProjectTasks(project.id) }
+                            }
+                        )
                     }
                 }
-                .onChange(of: selectedProjectId) { projectId in
-                    Task { await loadProjectTasks(projectId) }
-                }
-            }
-            .frame(minWidth: 420)
 
-            ProjectDetailView(
-                project: selectedProject,
-                tasks: projectTasks,
-                complete: { project in complete(project) },
-                archive: { project in archive(project) }
-            )
-            .frame(minWidth: 420)
+                ProjectDetailView(
+                    project: selectedProject,
+                    tasks: projectTasks,
+                    complete: { project in complete(project) },
+                    archive: { project in archive(project) },
+                    completeTask: { task in completeTask(task) },
+                    archiveTask: { task in archiveTask(task) }
+                )
+            }
+            .padding(AppTheme.Spacing.xl)
         }
         .sheet(isPresented: $showingNewProject) {
             ProjectFormView { draft in
@@ -69,27 +76,32 @@ struct CompanyProjectsView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 14) {
-            ToolbarTitle(title: "Company Projects", subtitle: "Projects are company-only in v1.")
-            Spacer()
-            Picker("Status", selection: $status) {
-                ForEach(ProjectStatus.allCases) { status in
-                    Text(status.label).tag(status)
+        SectionHeaderView(
+            eyebrow: "Company",
+            title: "Projects",
+            subtitle: "Projects show the whole shape. Daily task handling stays in Company Workbench.",
+            systemImage: "folder"
+        ) {
+            HStack {
+                Picker("Status", selection: $status) {
+                    ForEach(ProjectStatus.allCases) { status in
+                        Text(status.label).tag(status)
+                    }
                 }
-            }
-            .frame(width: 150)
-            .onChange(of: status) { newValue in
-                Task { await model.reloadProjects(status: newValue) }
-            }
+                .pickerStyle(.segmented)
+                .frame(width: 150)
+                .onChange(of: status) { newValue in
+                    Task { await model.reloadProjects(status: newValue) }
+                }
 
-            Button {
-                showingNewProject = true
-            } label: {
-                Label("New Project", systemImage: "plus")
+                Button {
+                    showingNewProject = true
+                } label: {
+                    Label("New Project", systemImage: "plus")
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .buttonStyle(.borderedProminent)
         }
-        .padding()
     }
 
     private func loadProjectTasks(_ projectId: String?) async {
@@ -117,6 +129,26 @@ struct CompanyProjectsView: View {
                 _ = try await model.projectRepository.archive(id: project.id)
                 try await model.loadAllData()
             }
+        }
+    }
+
+    private func completeTask(_ task: TaskItem) {
+        Task {
+            await model.run {
+                _ = try await model.taskRepository.complete(id: task.id)
+                try await model.loadAllData()
+            }
+            await loadProjectTasks(task.projectId)
+        }
+    }
+
+    private func archiveTask(_ task: TaskItem) {
+        Task {
+            await model.run {
+                _ = try await model.taskRepository.archive(id: task.id)
+                try await model.loadAllData()
+            }
+            await loadProjectTasks(task.projectId)
         }
     }
 }
@@ -149,32 +181,65 @@ private struct ProjectDetailView: View {
     let tasks: [TaskItem]
     let complete: (Project) -> Void
     let archive: (Project) -> Void
+    let completeTask: (TaskItem) -> Void
+    let archiveTask: (TaskItem) -> Void
 
     var body: some View {
         Group {
             if let project {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        ToolbarTitle(title: project.name, subtitle: project.description ?? "Project detail")
-                        Spacer()
-                        Button("Complete") { complete(project) }
-                        Button("Archive") { archive(project) }
-                    }
-                    Divider()
-                    Text("Active Tasks")
-                        .font(.headline)
-                    if tasks.isEmpty {
-                        EmptyStateView(title: "No active tasks", message: "Project tasks will appear here.")
-                    } else {
-                        List(tasks) { task in
-                            TaskRow(task: task, projectName: nil, complete: {}, reopen: {}, archive: {})
+                SurfaceView {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(project.name)
+                                    .font(.title3.weight(.semibold))
+                                Text(project.description ?? "Project detail")
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            PillView(text: project.status.label, style: project.status.pillStyle)
                         }
+                        HStack(spacing: 6) {
+                            if let startDate = project.startDate {
+                                PillView(text: "Start \(startDate)", style: .neutralSubtle)
+                            }
+                            if let targetDate = project.targetDate {
+                                PillView(text: "Target \(targetDate)", style: .warningSubtle)
+                            }
+                            PillView(text: "\(tasks.count) active tasks", style: .company)
+                        }
+                        HStack {
+                            Button("Complete") { complete(project) }
+                            Button("Archive") { archive(project) }
+                        }
+                        Divider()
+                        Text("Project Task Preview")
+                            .font(.headline)
+                        if tasks.isEmpty {
+                            EmptyStateInline(title: "No active tasks", message: "Project tasks are handled from Company Workbench.")
+                        } else {
+                            TaskCardList {
+                                ForEach(tasks.prefix(5)) { task in
+                                    TaskCardView(
+                                        task: task,
+                                        projectName: nil,
+                                        spaceStyle: .company,
+                                        spaceLabel: "Company",
+                                        compact: true,
+                                        onSelect: {},
+                                        onComplete: { completeTask(task) },
+                                        onReopen: {},
+                                        onArchive: { archiveTask(task) }
+                                    )
+                                }
+                            }
+                        }
+                        Spacer()
                     }
-                    Spacer()
                 }
-                .padding()
             } else {
-                EmptyStateView(title: "Select a project", message: "Project tasks and details appear here.")
+                EmptyStateCardView(title: "Select a project", message: "Project details and a short task preview appear here.", systemImage: "folder")
             }
         }
     }
@@ -188,8 +253,7 @@ private struct ProjectFormView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("New Company Project")
-                .font(.title2.weight(.semibold))
+            SectionHeaderView(title: "New Company Project", subtitle: "Projects are company-only in v1.")
             Form {
                 TextField("Name", text: $draft.name)
                 TextField("Description", text: $draft.description, axis: .vertical)
@@ -209,8 +273,8 @@ private struct ProjectFormView: View {
                 .disabled(draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
-        .padding()
-        .frame(width: 460)
+        .padding(AppTheme.Spacing.xl)
+        .frame(width: 520)
     }
 }
 #endif

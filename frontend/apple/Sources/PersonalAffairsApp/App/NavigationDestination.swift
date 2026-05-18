@@ -1,6 +1,7 @@
 import Foundation
 
 enum AppSection: String, CaseIterable, Identifiable, Hashable {
+    case today
     case personalTasks
     case personalNotes
     case companyTasks
@@ -13,11 +14,12 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
 
     var title: String {
         switch self {
-        case .personalTasks: return "Tasks"
-        case .personalNotes: return "Notes"
-        case .companyTasks: return "Tasks"
+        case .today: return "Today Command"
+        case .personalTasks: return "Personal Tasks"
+        case .personalNotes: return "Ideas / Notes"
+        case .companyTasks: return "Company Workbench"
         case .companyProjects: return "Projects"
-        case .calendar: return "Calendar"
+        case .calendar: return "Fixed Calendar"
         case .agent: return "Agent"
         case .settings: return "Settings"
         }
@@ -25,9 +27,10 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
 
     var systemImage: String {
         switch self {
+        case .today: return "sparkle.magnifyingglass"
         case .personalTasks: return "checklist"
         case .personalNotes: return "note.text"
-        case .companyTasks: return "list.bullet.rectangle"
+        case .companyTasks: return "rectangle.3.group"
         case .companyProjects: return "folder"
         case .calendar: return "calendar"
         case .agent: return "sparkles"
@@ -35,4 +38,3 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         }
     }
 }
-

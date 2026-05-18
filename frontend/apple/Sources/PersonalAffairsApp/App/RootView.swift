@@ -9,7 +9,7 @@ struct RootView: View {
                 #if os(iOS)
                 IOSMainShellView()
                 #else
-                MainShellView()
+                MacWorkbenchShellView()
                 #endif
             } else {
                 AuthView()
@@ -33,6 +33,10 @@ struct MainShellView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $model.selectedSection) {
+                Section("Focus") {
+                    SidebarRow(section: .today)
+                    SidebarRow(section: .calendar)
+                }
                 Section("Personal") {
                     SidebarRow(section: .personalTasks)
                     SidebarRow(section: .personalNotes)
@@ -41,8 +45,7 @@ struct MainShellView: View {
                     SidebarRow(section: .companyTasks)
                     SidebarRow(section: .companyProjects)
                 }
-                Section("Global") {
-                    SidebarRow(section: .calendar)
+                Section("System") {
                     SidebarRow(section: .agent)
                     SidebarRow(section: .settings)
                 }
@@ -57,7 +60,9 @@ struct MainShellView: View {
             }
         } detail: {
             Group {
-                switch model.selectedSection ?? .personalTasks {
+                switch model.selectedSection ?? .today {
+                case .today:
+                    TodayCommandView(selectTask: { _ in }, selectCalendarItem: { _ in }, jumpToSection: { model.selectedSection = $0 })
                 case .personalTasks:
                     PersonalTasksView()
                 case .personalNotes:

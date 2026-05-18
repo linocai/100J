@@ -12,49 +12,44 @@ struct AgentView: View {
     @State private var confirmationToken = ""
     @State private var provider = "openai"
     @State private var apiKey = ""
+    var onSelectAgentLog: (AgentActionLog) -> Void = { _ in }
 
     var body: some View {
-        HSplitView {
-            VStack(alignment: .leading, spacing: 16) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
                 header
-                agentCommandPanel
-                confirmationPanel
-                llmKeyPanel
-                Spacer()
-            }
-            .padding()
-            .frame(minWidth: 480)
-
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Agent Tools")
-                    .font(.headline)
-                List(model.agentTools) { tool in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(tool.name)
-                            .font(.headline)
-                        Text(tool.description)
-                            .foregroundStyle(.secondary)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 360), spacing: AppTheme.Spacing.lg)], spacing: AppTheme.Spacing.lg) {
+                    SurfaceView {
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                            agentCommandPanel
+                            suggestionChips
+                            confirmationPanel
+                        }
                     }
-                    .padding(.vertical, 4)
+
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
+                        llmKeyPanel
+                        toolsPanel
+                    }
                 }
-                Text("Action Logs")
-                    .font(.headline)
-                List(model.agentLogs) { log in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(log.actionType)
+
+                SurfaceView {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                        Text("Recent Agent Logs")
                             .font(.headline)
-                        HStack {
-                            BadgeText(text: log.status, color: log.status == "success" ? .green : .orange)
-                            if let targetType = log.targetType {
-                                BadgeText(text: targetType)
+                        if model.agentLogs.isEmpty {
+                            EmptyStateInline(title: "No logs yet", message: "Dry runs and confirmed app-internal actions will appear here.")
+                        } else {
+                            LazyVStack(spacing: AppTheme.Spacing.sm) {
+                                ForEach(model.agentLogs) { log in
+                                    AgentLogCard(log: log, onSelect: { onSelectAgentLog(log) })
+                                }
                             }
                         }
                     }
-                    .padding(.vertical, 4)
                 }
             }
-            .padding()
-            .frame(minWidth: 420)
+            .padding(AppTheme.Spacing.xl)
         }
         .task {
             await model.run {
@@ -66,13 +61,18 @@ struct AgentView: View {
     }
 
     private var header: some View {
-        ToolbarTitle(title: "Agent", subtitle: "App-internal commands with dry run, confirmation, and action logs.")
+        SectionHeaderView(
+            eyebrow: "System",
+            title: "Agent",
+            subtitle: "Let the app organize tasks, calendar items, notes, and projects with dry runs and confirmations.",
+            systemImage: "sparkles"
+        )
     }
 
     private var agentCommandPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Command")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            Text("Command Composer")
+                .font(.headline.weight(.semibold))
             Picker("Command", selection: $command) {
                 ForEach(model.agentTools.map(\.name), id: \.self) { name in
                     Text(name).tag(name)
@@ -87,7 +87,7 @@ struct AgentView: View {
                 Button {
                     execute()
                 } label: {
-                    Label("Execute", systemImage: "paperplane")
+                    Label(dryRun ? "Run Dry" : "Run", systemImage: "paperplane")
                 }
                 .buttonStyle(.borderedProminent)
 
@@ -104,33 +104,62 @@ struct AgentView: View {
             if !responseText.isEmpty {
                 Text(responseText)
                     .font(.system(.caption, design: .monospaced))
-                    .padding(8)
+                    .padding(AppTheme.Spacing.md)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.secondary.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .background(Color.primary.opacity(0.06))
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
             }
         }
     }
 
     private var confirmationPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Confirmation")
-                .font(.headline)
-            TextField("Confirmation token", text: $confirmationToken)
-                .textFieldStyle(.roundedBorder)
-            Button {
-                confirm()
-            } label: {
-                Label("Confirm", systemImage: "checkmark.seal")
+            Text("Action Review")
+                .font(.headline.weight(.semibold))
+            if confirmationToken.isEmpty {
+                Text("Dangerous or batch changes need confirmation before they touch app data.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("This command returned a confirmation token. Review the dry run summary before confirming.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextField("Confirmation token", text: $confirmationToken)
+                    .textFieldStyle(.roundedBorder)
+                HStack {
+                    Button {
+                        confirmationToken = ""
+                    } label: {
+                        Label("Cancel", systemImage: "xmark")
+                    }
+                    Button {
+                        confirm()
+                    } label: {
+                        Label("Confirm", systemImage: "checkmark.seal")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(confirmationToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
             }
-            .disabled(confirmationToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
+        .padding(AppTheme.Spacing.md)
+        .background((confirmationToken.isEmpty ? Color.primary : AppTheme.Colors.warningAccent).opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
     }
 
     private var llmKeyPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("LLM Key")
-                .font(.headline)
+        SurfaceView {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                HStack {
+                    Text("LLM Key")
+                        .font(.headline.weight(.semibold))
+                    Spacer()
+                    if let key = model.llmKey, key.isActive {
+                        PillView(text: "Active", style: .success)
+                    } else {
+                        PillView(text: "Missing", style: .warning)
+                    }
+                }
             if let key = model.llmKey, key.isActive {
                 Text("Current: \(key.provider) \(key.keyPreview ?? "")")
                     .foregroundStyle(.secondary)
@@ -154,6 +183,59 @@ struct AgentView: View {
                 .disabled(provider.isEmpty || apiKey.isEmpty)
             }
         }
+    }
+    }
+
+    private var toolsPanel: some View {
+        SurfaceView {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                Text("Available Tools")
+                    .font(.headline.weight(.semibold))
+                if model.agentTools.isEmpty {
+                    Text("No tools loaded.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(model.agentTools.prefix(6)) { tool in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(tool.name)
+                                .font(.caption.weight(.semibold))
+                            Text(tool.description)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(AppTheme.Spacing.sm)
+                        .background(Color.primary.opacity(0.035))
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.sm, style: .continuous))
+                    }
+                }
+            }
+        }
+    }
+
+    private var suggestionChips: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+            Text("Suggested Commands")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(AppTheme.Colors.tertiaryText)
+            HStack {
+                suggestion("整理无项目公司待办", command: "organize_company_inbox")
+                suggestion("找出最近到期订阅", command: "find_subscription_expiries")
+                suggestion("今天我可以做什么", command: "suggest_today_focus")
+            }
+        }
+    }
+
+    private func suggestion(_ title: String, command suggestedCommand: String) -> some View {
+        Button(title) {
+            command = suggestedCommand
+            argumentsText = "{\n  \"dry_run\": true\n}"
+            dryRun = true
+        }
+        .font(.caption.weight(.semibold))
+        .buttonStyle(.bordered)
     }
 
     private func execute() {
@@ -179,6 +261,47 @@ struct AgentView: View {
                 try await model.loadAllData()
             }
         }
+    }
+}
+
+private struct AgentLogCard: View {
+    let log: AgentActionLog
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
+                Image(systemName: "sparkles")
+                    .foregroundStyle(AppTheme.Colors.agentAccent)
+                    .frame(width: 28, height: 28)
+                    .background(AppTheme.Colors.agentAccent.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.sm, style: .continuous))
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(log.actionType)
+                        .font(.callout.weight(.semibold))
+                    HStack {
+                        PillView(text: log.status, style: log.status == "success" ? .success : .warning)
+                        if let targetType = log.targetType {
+                            PillView(text: targetType, style: .neutralSubtle)
+                        }
+                    }
+                    if let error = log.errorMessage {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.Colors.dangerAccent)
+                            .lineLimit(2)
+                    }
+                }
+                Spacer()
+                Text(log.createdAt.shortDateTime)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(AppTheme.Spacing.md)
+            .background(Color.white.opacity(0.52))
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 }
 

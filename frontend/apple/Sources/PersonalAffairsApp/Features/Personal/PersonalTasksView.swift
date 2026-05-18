@@ -6,24 +6,41 @@ struct PersonalTasksView: View {
     @State private var status: TaskStatus = .active
     @State private var search = ""
     @State private var showingNewTask = false
+    var onSelectTask: (TaskItem) -> Void = { _ in }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-            if model.personalTasks.isEmpty {
-                EmptyStateView(title: "No personal tasks", message: "Flexible personal work will appear here.")
-            } else {
-                List(model.personalTasks) { task in
-                    TaskRow(
-                        task: task,
-                        projectName: nil,
-                        complete: { complete(task) },
-                        reopen: { reopen(task) },
-                        archive: { archive(task) }
-                    )
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
+                header
+                SurfaceView {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                        filterBar
+                        if model.personalTasks.isEmpty {
+                            EmptyStateCardView(
+                                title: "No flexible personal tasks",
+                                message: "Tasks are things you can do when you choose.",
+                                systemImage: "checklist"
+                            )
+                        } else {
+                            TaskCardList {
+                                ForEach(model.personalTasks) { task in
+                                    TaskCardView(
+                                        task: task,
+                                        projectName: nil,
+                                        spaceStyle: .personal,
+                                        spaceLabel: "Personal",
+                                        onSelect: { onSelectTask(task) },
+                                        onComplete: { complete(task) },
+                                        onReopen: { reopen(task) },
+                                        onArchive: { archive(task) }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
+            .padding(AppTheme.Spacing.xl)
         }
         .sheet(isPresented: $showingNewTask) {
             TaskFormView(title: "New Personal Task", projects: [], allowsProject: false) { draft in
@@ -52,26 +69,12 @@ struct PersonalTasksView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 16) {
-            ToolbarTitle(title: "Personal Tasks", subtitle: "Flexible personal work. Due dates stay in tasks.")
-            Spacer()
-            Picker("Status", selection: $status) {
-                ForEach(TaskStatus.allCases) { status in
-                    Text(status.label).tag(status)
-                }
-            }
-            .frame(width: 140)
-            .onChange(of: status) { newValue in
-                Task { await model.reloadPersonalTasks(status: newValue, search: search.trimmedOrNil) }
-            }
-
-            TextField("Search", text: $search)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 180)
-                .onSubmit {
-                    Task { await model.reloadPersonalTasks(status: status, search: search.trimmedOrNil) }
-                }
-
+        SectionHeaderView(
+            eyebrow: "Personal",
+            title: "Personal Tasks",
+            subtitle: "Flexible personal work. Due dates stay in tasks.",
+            systemImage: "checklist"
+        ) {
             Button {
                 showingNewTask = true
             } label: {
@@ -79,7 +82,29 @@ struct PersonalTasksView: View {
             }
             .buttonStyle(.borderedProminent)
         }
-        .padding()
+    }
+
+    private var filterBar: some View {
+        HStack(spacing: AppTheme.Spacing.md) {
+            Picker("Status", selection: $status) {
+                ForEach(TaskStatus.allCases) { status in
+                    Text(status.label).tag(status)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 260)
+            .onChange(of: status) { newValue in
+                Task { await model.reloadPersonalTasks(status: newValue, search: search.trimmedOrNil) }
+            }
+
+            TextField("Search", text: $search)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit {
+                    Task { await model.reloadPersonalTasks(status: status, search: search.trimmedOrNil) }
+                }
+            Spacer()
+            PillView(text: "Personal has no Project", style: .personal)
+        }
     }
 
     private func complete(_ task: TaskItem) {
@@ -181,8 +206,7 @@ struct TaskFormView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(title)
-                .font(.title2.weight(.semibold))
+            SectionHeaderView(title: title, subtitle: allowsProject ? "Company tasks can stay in No Project or attach to a project." : "Personal tasks do not use projects.")
             Form {
                 TextField("Title", text: $draft.title)
                 TextField("Description", text: $draft.description, axis: .vertical)
@@ -214,7 +238,7 @@ struct TaskFormView: View {
                 .disabled(draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
-        .padding()
-        .frame(width: 460)
+        .padding(AppTheme.Spacing.xl)
+        .frame(width: 480)
     }
 }

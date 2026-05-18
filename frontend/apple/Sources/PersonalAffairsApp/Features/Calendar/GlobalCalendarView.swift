@@ -6,23 +6,34 @@ struct GlobalCalendarView: View {
     @State private var filter = "all"
     @State private var selectedProjectId: String?
     @State private var showingNewItem = false
+    var onSelectCalendarItem: (CalendarItem) -> Void = { _ in }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-            if model.calendarItems.isEmpty {
-                EmptyStateView(title: "No calendar items", message: "Fixed dates and fixed times across Personal and Company appear here.")
-            } else {
-                List(model.calendarItems) { item in
-                    CalendarItemRow(
-                        item: item,
-                        space: spaceLabel(item.spaceId, spaces: model.spaces),
-                        project: projectName(item.projectId, projects: model.projects),
-                        delete: { delete(item) }
-                    )
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
+                header
+                SurfaceView {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                        filterBar
+                        Text("有截止日期的待办仍然属于待办；只有固定日期 / 固定时间事项进入日历。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        if model.calendarItems.isEmpty {
+                            EmptyStateCardView(
+                                title: "No fixed items",
+                                message: "Appointments, anniversaries, and expiries belong here.",
+                                systemImage: "calendar"
+                            )
+                        } else {
+                            agendaGroup("Today", items: todayItems)
+                            agendaGroup("Tomorrow", items: tomorrowItems)
+                            agendaGroup("This Week", items: weekItems)
+                            agendaGroup("Later", items: laterItems)
+                        }
+                    }
                 }
             }
+            .padding(AppTheme.Spacing.xl)
         }
         .sheet(isPresented: $showingNewItem) {
             CalendarItemFormView(projects: model.projects) { draft in
@@ -51,16 +62,31 @@ struct GlobalCalendarView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 14) {
-            ToolbarTitle(title: "Global Calendar", subtitle: "Personal and Company fixed-time items in one timeline.")
-            Spacer()
+        SectionHeaderView(
+            eyebrow: "System",
+            title: "Fixed Calendar",
+            subtitle: "Only fixed dates, appointments, anniversaries, and expiries.",
+            systemImage: "calendar"
+        ) {
+            Button {
+                showingNewItem = true
+            } label: {
+                Label("New Item", systemImage: "plus")
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+
+    private var filterBar: some View {
+        HStack(spacing: AppTheme.Spacing.md) {
             Picker("Filter", selection: $filter) {
                 Text("All").tag("all")
                 Text("Personal").tag("personal")
                 Text("Company").tag("company")
                 Text("Project").tag("project")
             }
-            .frame(width: 140)
+            .pickerStyle(.segmented)
+            .frame(width: 320)
             .onChange(of: filter) { _ in Task { await reload() } }
 
             if filter == "project" {
@@ -73,15 +99,81 @@ struct GlobalCalendarView: View {
                 .frame(width: 180)
                 .onChange(of: selectedProjectId) { _ in Task { await reload() } }
             }
-
-            Button {
-                showingNewItem = true
-            } label: {
-                Label("New Item", systemImage: "plus")
-            }
-            .buttonStyle(.borderedProminent)
+            Spacer()
+            PillView(text: "Tasks do not auto-enter Calendar", style: .warningSubtle)
         }
-        .padding()
+    }
+
+    private func agendaGroup(_ title: String, items: [CalendarItem]) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+            Text(title)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(AppTheme.Colors.tertiaryText)
+                .textCase(.uppercase)
+            if items.isEmpty {
+                Text("No fixed items.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(AppTheme.Spacing.md)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.primary.opacity(0.035))
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
+            } else {
+                VStack(spacing: AppTheme.Spacing.sm) {
+                    ForEach(items) { item in
+                        CalendarEventCardView(
+                            item: item,
+                            spaceName: model.spaceLabel(for: item.spaceId),
+                            spaceStyle: spaceStyle(item.spaceId),
+                            projectName: model.projectName(for: item.projectId),
+                            onSelect: { onSelectCalendarItem(item) },
+                            onDelete: { delete(item) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private var sortedItems: [CalendarItem] {
+        sortedCalendarItems(model.calendarItems)
+    }
+
+    private var todayItems: [CalendarItem] {
+        sortedItems.filter { item in
+            guard let date = calendarSortDate(item) else { return false }
+            return Calendar.current.isDateInToday(date)
+        }
+    }
+
+    private var tomorrowItems: [CalendarItem] {
+        sortedItems.filter { item in
+            guard let date = calendarSortDate(item) else { return false }
+            return Calendar.current.isDateInTomorrow(date)
+        }
+    }
+
+    private var weekItems: [CalendarItem] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let dayAfterTomorrow = calendar.date(byAdding: .day, value: 2, to: today) ?? today
+        let upper = calendar.date(byAdding: .day, value: 7, to: today) ?? today
+        return sortedItems.filter { item in
+            guard let date = calendarSortDate(item) else { return false }
+            return date >= dayAfterTomorrow && date <= upper
+        }
+    }
+
+    private var laterItems: [CalendarItem] {
+        let upper = Calendar.current.date(byAdding: .day, value: 7, to: Calendar.current.startOfDay(for: Date())) ?? Date()
+        return sortedItems.filter { item in
+            guard let date = calendarSortDate(item) else { return false }
+            return date > upper
+        }
+    }
+
+    private func spaceStyle(_ spaceId: String) -> PillStyle {
+        model.spaces.first { $0.id == spaceId }?.type == .personal ? .personal : .company
     }
 
     private func reload() async {
@@ -182,8 +274,7 @@ private struct CalendarItemFormView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("New Calendar Item")
-                .font(.title2.weight(.semibold))
+            SectionHeaderView(title: "New Fixed Calendar Item", subtitle: "Only fixed dates, appointments, anniversaries, expiries, deadlines, and reminders.")
             Form {
                 Picker("Space", selection: $draft.spaceType) {
                     ForEach(SpaceType.allCases) { space in
@@ -230,8 +321,7 @@ private struct CalendarItemFormView: View {
                 .disabled(draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (draft.allDay && draft.startDate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
             }
         }
-        .padding()
-        .frame(width: 500)
+        .padding(AppTheme.Spacing.xl)
+        .frame(width: 540)
     }
 }
-
