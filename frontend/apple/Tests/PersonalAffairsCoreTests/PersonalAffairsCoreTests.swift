@@ -33,6 +33,34 @@ final class PersonalAffairsCoreTests: XCTestCase {
         XCTAssertEqual(task.status, .active)
     }
 
+    func testTaskDecodesBackendNaiveDates() throws {
+        let json = """
+        {
+          "id": "task-1",
+          "user_id": "user-1",
+          "space_id": "space-1",
+          "project_id": null,
+          "title": "SQLite date",
+          "description": null,
+          "status": "active",
+          "priority": "medium",
+          "due_date": null,
+          "remind_at": null,
+          "estimated_minutes": null,
+          "source": "manual",
+          "completed_at": null,
+          "archived_at": null,
+          "created_at": "2026-05-18T01:35:20.503731",
+          "updated_at": "2026-05-18T01:35:20",
+          "version": 1
+        }
+        """.data(using: .utf8)!
+
+        let task = try JSONDecoder.personalAffairs.decode(TaskItem.self, from: json)
+
+        XCTAssertEqual(task.id, "task-1")
+    }
+
     func testRequestEncodesCamelCaseToSnakeCase() throws {
         let request = TaskCreateRequest(
             spaceId: "space-1",
@@ -67,4 +95,3 @@ final class PersonalAffairsCoreTests: XCTestCase {
         XCTAssertEqual(object["dry"], .bool(true))
     }
 }
-

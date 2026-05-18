@@ -3,6 +3,7 @@ import SwiftUI
 struct CommandTopBar: View {
     @EnvironmentObject private var model: AppModel
     @Binding var quickCaptureText: String
+    @FocusState.Binding var isQuickCaptureFocused: Bool
     let onSubmitQuickCapture: () -> Void
     let onNew: () -> Void
 
@@ -26,7 +27,7 @@ struct CommandTopBar: View {
             }
             .frame(width: 190, alignment: .leading)
 
-            QuickCaptureBar(text: $quickCaptureText, submit: onSubmitQuickCapture)
+            QuickCaptureBar(text: $quickCaptureText, isFocused: $isQuickCaptureFocused, submit: onSubmitQuickCapture)
                 .frame(maxWidth: 680)
 
             Spacer(minLength: AppTheme.Spacing.md)

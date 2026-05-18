@@ -188,6 +188,12 @@ extension JSONDecoder {
             if let date = DateFormatters.iso8601.date(from: value) {
                 return date
             }
+            if let date = DateFormatters.backendNaiveWithFractional.date(from: value) {
+                return date
+            }
+            if let date = DateFormatters.backendNaive.date(from: value) {
+                return date
+            }
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date \(value)")
         }
         return decoder
@@ -216,6 +222,24 @@ private enum DateFormatters {
     static let iso8601WithFractional: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    static let backendNaiveWithFractional: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS"
+        return formatter
+    }()
+
+    static let backendNaive: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
         return formatter
     }()
 }

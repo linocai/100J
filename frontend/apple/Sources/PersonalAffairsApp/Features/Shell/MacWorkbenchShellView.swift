@@ -6,12 +6,14 @@ struct MacWorkbenchShellView: View {
     @State private var inspectorSelection: InspectorSelection?
     @State private var quickCaptureText = ""
     @State private var showingQuickCapture = false
+    @FocusState private var isQuickCaptureFocused: Bool
 
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
                 CommandTopBar(
                     quickCaptureText: $quickCaptureText,
+                    isQuickCaptureFocused: $isQuickCaptureFocused,
                     onSubmitQuickCapture: openQuickCapture,
                     onNew: openQuickCapture
                 )
@@ -38,7 +40,7 @@ struct MacWorkbenchShellView: View {
             }
             .background(AppBackgroundView())
         }
-        .frame(minWidth: 860, minHeight: 620)
+        .frame(minWidth: 900, minHeight: 680)
         .task { await model.refreshAll() }
         .sheet(isPresented: $showingQuickCapture) {
             QuickCaptureSheet(rawText: quickCaptureText) {
@@ -82,6 +84,7 @@ struct MacWorkbenchShellView: View {
     }
 
     private func openQuickCapture() {
+        isQuickCaptureFocused = false
         showingQuickCapture = true
     }
 }

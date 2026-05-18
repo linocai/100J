@@ -14,6 +14,7 @@ APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_BUNDLE/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
+ICONSET_DIR="$RESOURCES_DIR/AppIcon.iconset"
 
 cd "$PROJECT_DIR"
 
@@ -32,6 +33,58 @@ rm -rf "$APP_BUNDLE"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 install -m 755 "$EXECUTABLE" "$MACOS_DIR/$PRODUCT_NAME"
 
+generate_icon() {
+  local ppm_path="$RESOURCES_DIR/AppIcon.ppm"
+  local png_path="$RESOURCES_DIR/AppIcon-1024.png"
+  rm -rf "$ICONSET_DIR"
+  mkdir -p "$ICONSET_DIR"
+
+  python3 - "$ppm_path" <<'PY'
+import math
+import sys
+
+path = sys.argv[1]
+size = 1024
+with open(path, "wb") as f:
+    f.write(f"P6\n{size} {size}\n255\n".encode())
+    for y in range(size):
+        for x in range(size):
+            nx = x / (size - 1)
+            ny = y / (size - 1)
+            radius = math.hypot(nx - 0.5, ny - 0.5)
+            if radius > 0.47:
+                r, g, b = 238, 234, 225
+            else:
+                t = (nx + ny) / 2
+                r = int(67 * (1 - t) + 131 * t)
+                g = int(118 * (1 - t) + 87 * t)
+                b = int(244 * (1 - t) + 216 * t)
+                if 0.47 < nx < 0.57 or (0.55 < ny < 0.66 and 0.34 < nx < 0.57):
+                    r, g, b = 255, 255, 255
+            f.write(bytes((r, g, b)))
+PY
+
+  sips -s format png "$ppm_path" --out "$png_path" >/dev/null
+  for spec in \
+    "16 icon_16x16.png" \
+    "32 icon_16x16@2x.png" \
+    "32 icon_32x32.png" \
+    "64 icon_32x32@2x.png" \
+    "128 icon_128x128.png" \
+    "256 icon_128x128@2x.png" \
+    "256 icon_256x256.png" \
+    "512 icon_256x256@2x.png" \
+    "512 icon_512x512.png" \
+    "1024 icon_512x512@2x.png"; do
+    set -- $spec
+    sips -z "$1" "$1" "$png_path" --out "$ICONSET_DIR/$2" >/dev/null
+  done
+  iconutil -c icns "$ICONSET_DIR" -o "$RESOURCES_DIR/AppIcon.icns"
+  rm -rf "$ICONSET_DIR" "$ppm_path" "$png_path"
+}
+
+generate_icon
+
 cat > "$CONTENTS_DIR/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -45,6 +98,8 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <string>$PRODUCT_NAME</string>
   <key>CFBundleIdentifier</key>
   <string>$BUNDLE_ID</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
@@ -59,6 +114,11 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <string>public.app-category.productivity</string>
   <key>LSMinimumSystemVersion</key>
   <string>13.0</string>
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsLocalNetworking</key>
+    <true/>
+  </dict>
   <key>NSHighResolutionCapable</key>
   <true/>
   <key>NSPrincipalClass</key>

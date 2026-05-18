@@ -7,8 +7,12 @@ public final class AgentRepository {
         self.api = api
     }
 
-    public func llmKey() async throws -> LLMKey {
-        try await api.send("/agent/llm-key", response: LLMKey.self)
+    public func llmKey() async throws -> LLMKey? {
+        do {
+            return try await api.send("/agent/llm-key", response: LLMKey.self)
+        } catch APIClientError.server(let code, _) where code == "not_found" {
+            return nil
+        }
     }
 
     public func saveLLMKey(provider: String, apiKey: String) async throws -> LLMKey {
@@ -55,4 +59,3 @@ public final class AgentRepository {
         return response.items
     }
 }
-

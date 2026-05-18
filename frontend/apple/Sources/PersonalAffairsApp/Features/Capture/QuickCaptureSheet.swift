@@ -8,8 +8,7 @@ struct QuickCaptureSheet: View {
     let onSaved: () -> Void
 
     init(rawText: String, onSaved: @escaping () -> Void) {
-        let title = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
-        _draft = State(initialValue: CaptureDraft(rawText: title, title: title))
+        _draft = State(initialValue: CaptureDraft(rawText: rawText))
         self.onSaved = onSaved
     }
 
@@ -38,6 +37,9 @@ struct QuickCaptureSheet: View {
                 }
             }
             .pickerStyle(.segmented)
+            .onChange(of: draft.target) { _ in
+                normalizeDraftForTarget()
+            }
 
             Form {
                 TextField("Title", text: $draft.title)
@@ -63,6 +65,13 @@ struct QuickCaptureSheet: View {
             .formStyle(.grouped)
             #endif
 
+            if let validationMessage {
+                Label(validationMessage, systemImage: "exclamationmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.Colors.warningAccent)
+                    .padding(.horizontal, AppTheme.Spacing.sm)
+            }
+
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }
@@ -70,11 +79,19 @@ struct QuickCaptureSheet: View {
                     save()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(validationMessage != nil)
             }
         }
         .padding(AppTheme.Spacing.xl)
         .frame(width: 560)
+        .onChange(of: draft.calendarType) { newValue in
+            if newValue == .anniversary || newValue == .subscriptionExpiry {
+                draft.allDay = true
+                if draft.recurrence == .none && newValue == .anniversary {
+                    draft.recurrence = .yearly
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -130,6 +147,8 @@ struct QuickCaptureSheet: View {
     }
 
     private func save() {
+        guard validationMessage == nil else { return }
+
         Task {
             let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
             let description = draft.description.trimmedOrNil
@@ -182,7 +201,7 @@ struct QuickCaptureSheet: View {
                         NoteCreateRequest(
                             spaceId: space.id,
                             title: title,
-                            body: draft.description.trimmedOrNil ?? draft.rawText,
+                            body: draft.description.trimmedOrNil ?? draft.rawText.trimmedOrNil ?? title,
                             type: draft.noteType
                         )
                     )
@@ -192,6 +211,34 @@ struct QuickCaptureSheet: View {
 
             onSaved()
             dismiss()
+        }
+    }
+
+    private var validationMessage: String? {
+        let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if title.isEmpty {
+            return "Add a title before saving."
+        }
+
+        if draft.target == .fixedCalendar && draft.allDay && draft.startDate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "All-day fixed items need a start date."
+        }
+
+        return nil
+    }
+
+    private func normalizeDraftForTarget() {
+        switch draft.target {
+        case .personalTask:
+            draft.projectId = nil
+        case .companyTask:
+            break
+        case .fixedCalendar:
+            if draft.calendarType == .anniversary || draft.calendarType == .subscriptionExpiry {
+                draft.allDay = true
+            }
+        case .personalNote:
+            draft.projectId = nil
         }
     }
 }

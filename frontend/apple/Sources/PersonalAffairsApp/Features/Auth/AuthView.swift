@@ -6,82 +6,116 @@ struct AuthView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var displayName = ""
+    @State private var baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "http://127.0.0.1:8000/api/v1"
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 24) {
             VStack(spacing: 6) {
-                Image(systemName: "checklist.checked")
+                Image(systemName: "sparkle.magnifyingglass")
                     .font(.system(size: 44))
                     .foregroundStyle(Color.accentColor)
-                Text("Personal Affairs")
+                Text("100J")
                     .font(.largeTitle.weight(.semibold))
-                Text("Sign in to your local v1 workspace")
+                Text("Sign in to your personal affairs workbench")
                     .foregroundStyle(.secondary)
             }
 
-            Form {
-                TextField("Email", text: $email)
-                    .textFieldStyle(.roundedBorder)
-                SecureField("Password", text: $password)
-                    .textFieldStyle(.roundedBorder)
-                if isRegistering {
-                    TextField("Display name", text: $displayName)
+            VStack(spacing: 12) {
+                AuthField(label: "Email") {
+                    TextField("name@example.com", text: $email)
                         .textFieldStyle(.roundedBorder)
                 }
-            }
-            #if os(macOS)
-            .formStyle(.grouped)
-            #endif
-            #if os(macOS)
-            .frame(width: 360)
-            #else
-            .frame(maxWidth: 420)
-            .padding(.horizontal)
-            #endif
-
-            HStack {
-                Button(isRegistering ? "Have an account?" : "Create account") {
-                    isRegistering.toggle()
+                AuthField(label: "Password") {
+                    SecureField("Password", text: $password)
+                        .textFieldStyle(.roundedBorder)
                 }
-                #if os(macOS)
-                .buttonStyle(.link)
-                #else
-                .buttonStyle(.plain)
-                .foregroundStyle(Color.accentColor)
-                #endif
+                if isRegistering {
+                    AuthField(label: "Display name") {
+                        TextField("Optional", text: $displayName)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                }
+                AuthField(label: "API base URL") {
+                    TextField("http://127.0.0.1:8000/api/v1", text: $baseURL)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.caption)
+                }
 
-                Spacer()
+                HStack {
+                    Button(isRegistering ? "Have an account?" : "Create account") {
+                        isRegistering.toggle()
+                    }
+                    #if os(macOS)
+                    .buttonStyle(.link)
+                    #else
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.accentColor)
+                    #endif
 
-                Button {
-                    Task {
-                        if isRegistering {
-                            await model.register(email: email, password: password, displayName: displayName.trimmedOrNil)
+                    Spacer()
+
+                    Button {
+                        submit()
+                    } label: {
+                        if model.isLoading {
+                            ProgressView()
+                                .controlSize(.small)
                         } else {
-                            await model.login(email: email, password: password)
+                            Text(isRegistering ? "Register" : "Login")
                         }
                     }
-                } label: {
-                    if model.isLoading {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Text(isRegistering ? "Register" : "Login")
-                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(email.isEmpty || password.isEmpty || model.isLoading)
+                    .keyboardShortcut(.defaultAction)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(email.isEmpty || password.isEmpty || model.isLoading)
+                .padding(.top, 4)
             }
+            .frame(maxWidth: 400)
             #if os(macOS)
-            .frame(width: 360)
+            .controlSize(.large)
             #else
-            .frame(maxWidth: 420)
             .padding(.horizontal)
             #endif
+
+            if let errorMessage = model.errorMessage {
+                Text(errorMessage)
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 400)
+            }
         }
+        .onSubmit(submit)
         #if os(macOS)
         .padding(40)
         #else
         .padding(.vertical, 28)
         #endif
+    }
+
+    private func submit() {
+        guard !email.isEmpty, !password.isEmpty, !model.isLoading else { return }
+        Task {
+            model.updateBaseURL(baseURL)
+            if isRegistering {
+                await model.register(email: email, password: password, displayName: displayName.trimmedOrNil)
+            } else {
+                await model.login(email: email, password: password)
+            }
+        }
+    }
+}
+
+private struct AuthField<Content: View>: View {
+    let label: String
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            content
+        }
     }
 }

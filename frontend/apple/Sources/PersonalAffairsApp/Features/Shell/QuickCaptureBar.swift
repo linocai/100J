@@ -2,6 +2,7 @@ import SwiftUI
 
 struct QuickCaptureBar: View {
     @Binding var text: String
+    @FocusState.Binding var isFocused: Bool
     let submit: () -> Void
 
     var body: some View {
@@ -11,6 +12,7 @@ struct QuickCaptureBar: View {
             TextField("快速记录：待办、固定日程、灵感……", text: $text)
                 .textFieldStyle(.plain)
                 .font(.callout)
+                .focused($isFocused)
                 .onSubmit(submit)
             Text("K")
                 .font(.caption2.weight(.bold))
@@ -26,6 +28,15 @@ struct QuickCaptureBar: View {
         .overlay {
             Capsule()
                 .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        }
+        .overlay(alignment: .trailing) {
+            Button("Focus Quick Capture") {
+                isFocused = true
+            }
+            .keyboardShortcut("k", modifiers: .command)
+            .frame(width: 1, height: 1)
+            .opacity(0.01)
+            .accessibilityHidden(true)
         }
         .accessibilityLabel("Quick capture")
     }

@@ -221,17 +221,17 @@ struct AgentView: View {
                 .font(.caption.weight(.bold))
                 .foregroundStyle(AppTheme.Colors.tertiaryText)
             HStack {
-                suggestion("整理无项目公司待办", command: "organize_company_inbox")
-                suggestion("找出最近到期订阅", command: "find_subscription_expiries")
-                suggestion("今天我可以做什么", command: "suggest_today_focus")
+                suggestion("整理无项目公司待办", command: "list_tasks", arguments: #"{"status":"active","project_scope":"no_project"}"#)
+                suggestion("找出最近到期订阅", command: "list_calendar_items", arguments: #"{"item_type":"subscription_expiry"}"#)
+                suggestion("今天我可以做什么", command: "list_tasks", arguments: #"{"status":"active","limit":8}"#)
             }
         }
     }
 
-    private func suggestion(_ title: String, command suggestedCommand: String) -> some View {
+    private func suggestion(_ title: String, command suggestedCommand: String, arguments: String) -> some View {
         Button(title) {
             command = suggestedCommand
-            argumentsText = "{\n  \"dry_run\": true\n}"
+            argumentsText = prettyJSON(arguments) ?? arguments
             dryRun = true
         }
         .font(.caption.weight(.semibold))
@@ -327,5 +327,17 @@ private func render(_ response: AgentCommandResponse) -> String {
         lines.append("would_execute: \(wouldExecute)")
     }
     return lines.joined(separator: "\n")
+}
+
+private func prettyJSON(_ text: String) -> String? {
+    guard
+        let data = text.data(using: .utf8),
+        let object = try? JSONSerialization.jsonObject(with: data),
+        let prettyData = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]),
+        let pretty = String(data: prettyData, encoding: .utf8)
+    else {
+        return nil
+    }
+    return pretty
 }
 #endif

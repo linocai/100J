@@ -27,6 +27,34 @@ Setuptools package discovery should include only `app*` for this backend package
 
 ---
 
+## [ERR-20260518-001] swiftui_textcontenttype_macos_availability
+
+**Logged**: 2026-05-18T09:50:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+SwiftPM rejected `TextContentType.emailAddress` in the macOS package build because that symbol is only available on newer macOS SDK targets.
+
+### Error
+```text
+'emailAddress' is only available in macOS 14.0 or newer
+```
+
+### Context
+- Command: `swift test --scratch-path /tmp/personal-affairs-apple-build`
+- Failure happened after polishing the auth screen with platform-sensitive text content hints.
+
+### Suggested Fix
+Avoid unguarded `textContentType` modifiers in shared macOS/iOS SwiftUI views unless the package deployment target is known to support them.
+
+### Metadata
+- Reproducible: yes
+- Related Files: `frontend/apple/Sources/PersonalAffairsApp/Features/Auth/AuthView.swift`
+
+---
+
 ## [ERR-20260517-005] ios_build_ios16_contentunavailable_hsplitview
 
 **Logged**: 2026-05-17T11:35:00+08:00

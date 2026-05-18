@@ -35,3 +35,18 @@ struct CaptureDraft {
     var noteType: NoteType = .idea
     var projectId: String?
 }
+
+extension CaptureDraft {
+    init(rawText: String) {
+        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.rawText = trimmed
+        self.title = trimmed
+
+        let lower = trimmed.lowercased()
+        if lower.contains("idea") || lower.contains("想法") || lower.contains("灵感") {
+            self.target = .personalNote
+        } else if lower.contains("明天") || lower.contains("下午") || lower.contains("上午") || lower.contains(":") || lower.contains("预约") {
+            self.target = .fixedCalendar
+        }
+    }
+}
