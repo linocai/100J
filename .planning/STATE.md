@@ -8,7 +8,7 @@ Build Personal Affairs App v1 in phases: backend, macOS, iOS, local E2E testing,
 
 Phase 4 automated local verification was completed for the 2026-05-17 snapshot. P0/P1 production hardening, P2 / Phase 5 deployment, and the first P3 production-soak slice are now complete on branch `codex/production-hardening`.
 
-As of 2026-05-19 16:10 CST, the local implementation for single-owner cloud access-code login is complete and verified, but the HZ cloud deployment is blocked because SSH to `deploy@118.178.122.194` accepts TCP connections but times out during SSH banner exchange. Public HTTPS health still returns ok, and `/api/v1/auth/owner-login` still returns 404, so the new backend route is not live yet.
+As of 2026-05-19 16:23 CST, single-owner cloud access-code login is implemented, verified locally, deployed to HZ, and verified in production at `https://100j.linotsai.top`.
 
 As of 2026-05-19, `AUDIT_v1.md` is the highest-authority production guidance file. The active implementation documents are now:
 
@@ -65,6 +65,7 @@ Stopped frontend documents were removed to end the source-of-truth split.
   - macOS/iOS `AuthView` now asks for a cloud access code, not email/password, and exchanges it through shared `AuthRepository.ownerLogin`.
   - Apple app defaults were moved to `https://100j.linotsai.top/api/v1` and `个人云端`; first run migrates old local-owner default to cloud mode.
   - Deployment docs and `.env.example` now include `OWNER_CLOUD_ACCESS_CODE`.
+  - HZ deployment was refreshed after SSH recovered; wrong access code returns 401, server-side configured access code returns 200, and `/me` returns `owner@100j.app`.
 
 ## Verification
 
@@ -126,6 +127,17 @@ ssh deploy@118.178.122.194 'cd /opt/100j/current/backend && /opt/100j/venv/bin/p
 
 Result: deploy passed; HTTPS health passed; production smoke passed. Nginx, certbot timer, and `100j-api.service` are active. Certbot issued the `100j.linotsai.top` certificate expiring on 2026-08-17 with automatic renewal configured.
 
+Single-owner cloud login production verification on 2026-05-19:
+
+```bash
+scripts/deploy-hz.sh
+curl -sS -i --resolve 100j.linotsai.top:443:118.178.122.194 -X POST https://100j.linotsai.top/api/v1/auth/owner-login -H 'Content-Type: application/json' --data '{"access_code":"wrong-code-000"}'
+ssh deploy@118.178.122.194 'set -a; . /opt/100j/env/100j.env; set +a; cd /opt/100j/current/backend && /opt/100j/venv/bin/python - <<PY ... PY'
+scripts/prod-check.sh
+```
+
+Result: deploy passed; wrong owner access code returned 401; configured server-side owner access code returned 200 without printing the secret; `/me` returned `owner@100j.app`; production check passed for `https://100j.linotsai.top`.
+
 Release-candidate verification on 2026-05-19:
 
 ```bash
@@ -163,4 +175,4 @@ Result: project listed targets and schemes successfully; iOS Simulator build pas
 
 ## Next Action
 
-Next useful action is to restore SSH access to HZ, then rerun `scripts/deploy-hz.sh`. After deploy succeeds, verify `/api/v1/auth/owner-login` returns 401 for a wrong code and 200 with the server-side `OWNER_CLOUD_ACCESS_CODE` without printing the secret. Then use Xcode to open `frontend/apple/PersonalAffairsApp.xcodeproj`, select the `PersonalAffairsApp` target, choose the user's Apple ID / Team in Signing & Capabilities, and run on the user's iPhone.
+Next useful action is to use Xcode to open `frontend/apple/PersonalAffairsApp.xcodeproj`, select the `PersonalAffairsApp` target, choose the user's Apple ID / Team in Signing & Capabilities, and run on the user's iPhone. On the login screen, enter the server-side `OWNER_CLOUD_ACCESS_CODE` from `/opt/100j/env/100j.env`.
