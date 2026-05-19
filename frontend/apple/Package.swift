@@ -19,7 +19,8 @@ let package = Package(
         .executableTarget(
             name: "PersonalAffairsApp",
             dependencies: ["PersonalAffairsCore"],
-            path: "Sources/PersonalAffairsApp"
+            path: "Sources/PersonalAffairsApp",
+            exclude: ["Resources"]
         ),
         .testTarget(
             name: "PersonalAffairsCoreTests",
