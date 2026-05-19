@@ -1,3 +1,8 @@
+from datetime import date
+
+from sqlalchemy.dialects import postgresql
+
+from app.services import calendar_service
 from tests.conftest import register_and_auth
 
 
@@ -167,6 +172,30 @@ def test_calendar_all_day_and_timed_validation(client):
         },
     )
     assert bad_timed.status_code == 422
+
+
+def test_calendar_date_window_uses_date_binds_for_postgres(monkeypatch):
+    captured = {}
+
+    def capture_paginate(db, statement, limit, cursor):
+        captured["compiled"] = statement.compile(dialect=postgresql.dialect())
+        return [], None
+
+    monkeypatch.setattr(calendar_service, "paginate", capture_paginate)
+
+    calendar_service.list_calendar_items(
+        db=None,
+        user_id="user-1",
+        space_id="space-1",
+        from_date="2026-04-19",
+        to_date=date(2026, 11, 15),
+    )
+
+    compiled = captured["compiled"]
+    assert compiled.params["date_1"] == date(2026, 4, 19)
+    assert compiled.params["date_2"] == date(2026, 11, 15)
+    assert compiled.binds["date_1"].type.python_type is date
+    assert compiled.binds["date_2"].type.python_type is date
 
 
 def test_note_convert_to_task_keeps_note(client):

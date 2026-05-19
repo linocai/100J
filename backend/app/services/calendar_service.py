@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from sqlalchemy import func, or_, select
@@ -30,6 +30,8 @@ def list_calendar_items(
     limit: int = 50,
     cursor: Optional[str] = None,
 ):
+    from_date = _coerce_date(from_date)
+    to_date = _coerce_date(to_date)
     statement = select(CalendarItem).where(
         CalendarItem.user_id == user_id,
         CalendarItem.deleted_at.is_(None),
@@ -44,14 +46,14 @@ def list_calendar_items(
         statement = statement.where(
             or_(
                 CalendarItem.start_date >= from_date,
-                func.date(CalendarItem.start_at) >= str(from_date),
+                func.date(CalendarItem.start_at) >= from_date,
             )
         )
     if to_date:
         statement = statement.where(
             or_(
                 CalendarItem.start_date <= to_date,
-                func.date(CalendarItem.start_at) <= str(to_date),
+                func.date(CalendarItem.start_at) <= to_date,
             )
         )
     if from_at:
@@ -60,6 +62,16 @@ def list_calendar_items(
         statement = statement.where(CalendarItem.start_at <= to_at)
     statement = statement.order_by(CalendarItem.start_date.asc(), CalendarItem.start_at.asc(), CalendarItem.id.asc())
     return paginate(db, statement, limit, cursor)
+
+
+def _coerce_date(value):
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, str):
+        return date.fromisoformat(value)
+    return value
 
 
 def create_calendar_item(
@@ -131,4 +143,3 @@ def soft_delete_calendar_item(db: Session, user_id: str, calendar_item_id: str) 
     db.commit()
     db.refresh(item)
     return item
-
