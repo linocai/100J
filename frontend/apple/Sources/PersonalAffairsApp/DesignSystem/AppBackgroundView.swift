@@ -6,32 +6,37 @@ struct AppBackgroundView: View {
     var body: some View {
         ZStack {
             base
-            LinearGradient(
-                colors: gradientColors,
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
+            RadialGradient(
+                colors: [
+                    AppTheme.Colors.companyAccent.opacity(colorScheme == .dark ? 0.18 : 0.10),
+                    .clear
+                ],
+                center: .topLeading,
+                startRadius: 24,
+                endRadius: 560
             )
-            .opacity(0.86)
+            RadialGradient(
+                colors: [
+                    AppTheme.Colors.agentAccent.opacity(colorScheme == .dark ? 0.16 : 0.08),
+                    .clear
+                ],
+                center: .bottomTrailing,
+                startRadius: 36,
+                endRadius: 640
+            )
+            LinearGradient(
+                colors: [
+                    AppTheme.Colors.windowBackground.opacity(colorScheme == .dark ? 0.05 : 0.26),
+                    Color.clear
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
         }
         .ignoresSafeArea()
     }
 
     private var base: Color {
         colorScheme == .dark ? Color(red: 0.12, green: 0.13, blue: 0.15) : AppTheme.Colors.windowBackground
-    }
-
-    private var gradientColors: [Color] {
-        if colorScheme == .dark {
-            return [
-                Color(red: 0.18, green: 0.20, blue: 0.24).opacity(0.88),
-                Color(red: 0.12, green: 0.13, blue: 0.15),
-                Color(red: 0.08, green: 0.09, blue: 0.11)
-            ]
-        }
-        return [
-            Color.white.opacity(0.45),
-            AppTheme.Colors.windowBackground,
-            Color(red: 0.86, green: 0.84, blue: 0.79)
-        ]
     }
 }

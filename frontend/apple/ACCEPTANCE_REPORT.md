@@ -118,11 +118,10 @@
 
 已复核文件：
 
+- `AUDIT_v1.md`
 - `plan.md`
 - `personal_affairs_backend_blueprint_v1.md`
-- `personal_affairs_frontend_blueprint_v1.md`
 - `100j_swiftui_frontend_redesign_blueprint_v1.md`
-- `100j_frontend_redesign_v1.html`
 
 结论：
 

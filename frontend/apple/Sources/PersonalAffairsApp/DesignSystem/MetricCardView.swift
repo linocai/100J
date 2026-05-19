@@ -8,7 +8,7 @@ struct MetricCardView: View {
     var systemImage: String = "circle.grid.2x2"
 
     var body: some View {
-        SurfaceView(cornerRadius: AppTheme.Radius.md, padding: AppTheme.Spacing.md) {
+        SurfaceView(style: .subtle, cornerRadius: AppTheme.Radius.md, padding: AppTheme.Spacing.md) {
             HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
                 Image(systemName: systemImage)
                     .font(.headline)

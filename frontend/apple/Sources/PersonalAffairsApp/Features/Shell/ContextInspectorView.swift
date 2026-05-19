@@ -45,18 +45,16 @@ struct ContextInspectorView: View {
             }
             .padding(AppTheme.Spacing.lg)
         }
-        .background(.thinMaterial)
+        .background(AppTheme.Colors.surfaceTinted)
     }
 
     private var defaultInspector: some View {
         Group {
-            SurfaceView {
+            InspectorCardView("Agent Summary", subtitle: "今天的事务助理", systemImage: "sparkles") {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                    Text("今日概览")
-                        .font(.headline.weight(.semibold))
-                    Text("弹性任务和固定时间会一起被看见，但它们仍然是两类对象。")
+                    Text("弹性待办保持弹性；固定时间进入日程；公司无项目任务建议定期整理。")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.Colors.secondaryText)
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: AppTheme.Spacing.sm) {
                         miniStat("\(model.activePersonalTasks.count)", "个人")
                         miniStat("\(model.activeCompanyTasks.count)", "公司")
@@ -66,20 +64,16 @@ struct ContextInspectorView: View {
                 }
             }
 
-            SurfaceView {
+            InspectorCardView("Agent Suggestions", systemImage: "wand.and.stars") {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                    Label("Agent 建议", systemImage: "sparkles")
-                        .font(.headline.weight(.semibold))
                     suggestionRow("\(model.noProjectCompanyTasks.count) 个公司任务还没有归入项目。", style: .warning)
                     suggestionRow("本周还有 \(upcomingItems.count) 个固定日程。", style: .company)
                     suggestionRow("\(model.notes.filter { $0.linkedTaskId == nil }.count) 条备忘之后可能会变成待办。", style: .agent)
                 }
             }
 
-            SurfaceView {
+            InspectorCardView("Upcoming Fixed Items", systemImage: "calendar") {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                    Text("即将到来的固定日程")
-                        .font(.headline.weight(.semibold))
                     if upcomingItems.isEmpty {
                         Text("近期没有固定日程。")
                             .font(.caption)
@@ -92,10 +86,8 @@ struct ContextInspectorView: View {
                 }
             }
 
-            SurfaceView {
+            InspectorCardView("Loose Company Tasks", systemImage: "tray") {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                    Text("无项目公司任务")
-                        .font(.headline.weight(.semibold))
                     if model.noProjectCompanyTasks.isEmpty {
                         Text("无项目收件箱已清空。")
                             .font(.caption)
@@ -105,6 +97,24 @@ struct ContextInspectorView: View {
                             Text(task.title)
                                 .font(.caption.weight(.semibold))
                                 .lineLimit(2)
+                        }
+                    }
+                }
+            }
+
+            InspectorCardView("Recent Agent Actions", systemImage: "clock.arrow.circlepath") {
+                if model.agentLogs.isEmpty {
+                    Text("暂无 Agent 操作。")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.Colors.secondaryText)
+                } else {
+                    ForEach(model.agentLogs.prefix(3)) { log in
+                        HStack {
+                            Text(log.actionType)
+                                .font(.caption.weight(.semibold))
+                                .lineLimit(1)
+                            Spacer()
+                            PillView(text: log.status, style: log.status == "success" ? .success : .warning, size: .small)
                         }
                     }
                 }
@@ -121,10 +131,8 @@ struct ContextInspectorView: View {
     }
 
     private func taskDetail(_ task: TaskItem) -> some View {
-        SurfaceView {
+        InspectorCardView("Task Detail", subtitle: "Selected Context", systemImage: "checklist") {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                Label("待办", systemImage: "checklist")
-                    .font(.headline.weight(.semibold))
                 Text(task.title)
                     .font(.title3.weight(.semibold))
                     .fixedSize(horizontal: false, vertical: true)
@@ -158,10 +166,8 @@ struct ContextInspectorView: View {
     }
 
     private func calendarDetail(_ item: CalendarItem) -> some View {
-        SurfaceView {
+        InspectorCardView("Fixed Calendar", subtitle: item.type.label, systemImage: item.type.systemImage) {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                Label("固定日程", systemImage: item.type.systemImage)
-                    .font(.headline.weight(.semibold))
                 Text(item.title)
                     .font(.title3.weight(.semibold))
                 if let description = item.description?.trimmedOrNil {
@@ -190,10 +196,8 @@ struct ContextInspectorView: View {
     }
 
     private func noteDetail(_ note: Note) -> some View {
-        SurfaceView {
+        InspectorCardView("Idea / Note", subtitle: note.type.label, systemImage: note.type.systemImage) {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                Label("灵感 / 备忘", systemImage: note.type.systemImage)
-                    .font(.headline.weight(.semibold))
                 Text(note.title?.trimmedOrNil ?? "未命名")
                     .font(.title3.weight(.semibold))
                 Text(note.body)
@@ -223,10 +227,8 @@ struct ContextInspectorView: View {
     }
 
     private func projectDetail(_ project: Project) -> some View {
-        SurfaceView {
+        InspectorCardView("Project Detail", subtitle: "Company", systemImage: "folder") {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                Label("公司项目", systemImage: "folder")
-                    .font(.headline.weight(.semibold))
                 Text(project.name)
                     .font(.title3.weight(.semibold))
                 if let description = project.description?.trimmedOrNil {
@@ -256,10 +258,8 @@ struct ContextInspectorView: View {
     }
 
     private func agentLogDetail(_ log: AgentActionLog) -> some View {
-        SurfaceView {
+        InspectorCardView("Agent Action", subtitle: log.status, systemImage: "sparkles") {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                Label("Agent 操作", systemImage: "sparkles")
-                    .font(.headline.weight(.semibold))
                 Text(log.actionType)
                     .font(.title3.weight(.semibold))
                 FlowPills {
@@ -405,7 +405,7 @@ private struct FlowPills<Content: View>: View {
     }
 
     var body: some View {
-        HStack(spacing: 6) {
+        WrappingHStack(spacing: 6, rowSpacing: 6) {
             content
         }
     }

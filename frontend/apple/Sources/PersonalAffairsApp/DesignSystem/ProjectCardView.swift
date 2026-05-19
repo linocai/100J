@@ -29,7 +29,7 @@ struct ProjectCardView: View {
                     PillView(text: project.status.label, style: project.status.pillStyle)
                 }
 
-                HStack(spacing: 6) {
+                WrappingHStack(spacing: 6, rowSpacing: 5) {
                     PillView(text: "\(activeTaskCount) 个进行中", style: .company)
                     if completedTaskCount > 0 {
                         PillView(text: "\(completedTaskCount) 个完成", style: .success)
@@ -39,13 +39,17 @@ struct ProjectCardView: View {
                     }
                 }
 
+                Text("Updated \(project.updatedAt.shortDateTime)")
+                    .font(.caption2)
+                    .foregroundStyle(AppTheme.Colors.tertiaryText)
+
                 ProgressView(value: progress)
                     .tint(AppTheme.Colors.companyAccent)
                     .controlSize(.small)
             }
             .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
             .padding(AppTheme.Spacing.lg)
-            .background(isSelected ? AppTheme.Colors.companyAccent.opacity(0.12) : Color.white.opacity(isHovering ? 0.76 : 0.54))
+            .background(isSelected ? AppTheme.Colors.companyAccent.opacity(0.12) : (isHovering ? AppTheme.Colors.surfaceElevated : AppTheme.Colors.surfaceBase))
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)

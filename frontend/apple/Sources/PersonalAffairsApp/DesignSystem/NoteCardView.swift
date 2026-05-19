@@ -41,16 +41,17 @@ struct NoteCardView: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(note.title?.trimmedOrNil ?? "未命名")
-                        .font(.callout.weight(.semibold))
+                        .font(note.type == .idea ? .title3.weight(.semibold) : .callout.weight(.semibold))
                         .lineLimit(2)
                     Text(note.body)
                         .font(.caption)
                         .foregroundStyle(AppTheme.Colors.secondaryText)
-                        .lineLimit(4)
+                        .lineLimit(3)
                 }
 
-                HStack(spacing: 6) {
+                WrappingHStack(spacing: 6, rowSpacing: 5) {
                     PillView(text: note.type.label, style: note.type.pillStyle)
+                    PillView(text: note.updatedAt.shortDateTime, style: .neutralSubtle)
                     if note.linkedTaskId != nil {
                         PillView(text: "已转待办", style: .success)
                     }
@@ -61,12 +62,13 @@ struct NoteCardView: View {
             }
             .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
             .padding(AppTheme.Spacing.lg)
-            .background(isSelected ? AppTheme.Colors.agentAccent.opacity(0.12) : Color.white.opacity(isHovering ? 0.76 : 0.54))
+            .background(isSelected ? AppTheme.Colors.agentAccent.opacity(0.12) : (isHovering ? AppTheme.Colors.surfaceElevated : AppTheme.Colors.surfaceBase))
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
                     .stroke(isSelected ? AppTheme.Colors.agentAccent.opacity(0.45) : Color.primary.opacity(0.06), lineWidth: 1)
             }
+            .opacity(note.status == .archived ? 0.58 : 1)
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }

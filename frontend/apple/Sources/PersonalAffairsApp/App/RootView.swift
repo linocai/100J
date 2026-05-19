@@ -30,7 +30,8 @@ struct RootView: View {
 }
 
 #if os(macOS)
-struct MainShellView: View {
+// Legacy fallback only. Do not use this as the macOS product shell.
+struct LegacyMainShellView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
@@ -71,7 +72,7 @@ struct MainShellView: View {
                 case .personalNotes:
                     PersonalNotesView()
                 case .companyTasks:
-                    CompanyTasksView()
+                    LegacyCompanyTasksView()
                 case .companyProjects:
                     CompanyProjectsView()
                 case .calendar:

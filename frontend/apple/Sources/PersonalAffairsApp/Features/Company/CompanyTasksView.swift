@@ -1,7 +1,7 @@
 import PersonalAffairsCore
 import SwiftUI
 
-struct CompanyTasksView: View {
+struct LegacyCompanyTasksView: View {
     @EnvironmentObject private var model: AppModel
     @State private var status: TaskStatus = .active
     @State private var scope = "all"
@@ -19,7 +19,7 @@ struct CompanyTasksView: View {
                 List(groupedTasks, id: \.key) { group in
                     Section(group.key) {
                         ForEach(group.tasks) { task in
-                            TaskRow(
+                            LegacyTaskRow(
                                 task: task,
                                 projectName: projectName(task.projectId, projects: model.projects),
                                 complete: { complete(task) },

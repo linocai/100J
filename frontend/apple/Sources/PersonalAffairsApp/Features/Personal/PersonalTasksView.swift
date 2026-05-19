@@ -3,44 +3,46 @@ import SwiftUI
 
 struct PersonalTasksView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.workbenchLayout) private var layout
     @State private var status: TaskStatus = .active
     @State private var search = ""
     @State private var showingNewTask = false
+    var selection: InspectorSelection? = nil
     var onSelectTask: (TaskItem) -> Void = { _ in }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
                 header
-                SurfaceView {
-                    VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                        filterBar
-                        if model.personalTasks.isEmpty {
-                            EmptyStateCardView(
-                                title: "暂无个人待办",
-                                message: "待办是你可以自行安排时间处理的弹性事项。",
-                                systemImage: "checklist"
+                if status == .active {
+                    focusPreview
+                }
+                filterBar
+                if model.personalTasks.isEmpty {
+                    EmptyStateCardView(
+                        title: "暂无个人待办",
+                        message: "待办是你可以自行安排时间处理的弹性事项。",
+                        systemImage: "checklist"
+                    )
+                } else {
+                    TaskCardList {
+                        ForEach(model.personalTasks) { task in
+                            TaskCardView(
+                                task: task,
+                                projectName: nil,
+                                spaceStyle: .personal,
+                                spaceLabel: "个人",
+                                isSelected: selection == .task(task.id),
+                                onSelect: { onSelectTask(task) },
+                                onComplete: { complete(task) },
+                                onReopen: { reopen(task) },
+                                onArchive: { archive(task) }
                             )
-                        } else {
-                            TaskCardList {
-                                ForEach(model.personalTasks) { task in
-                                    TaskCardView(
-                                        task: task,
-                                        projectName: nil,
-                                        spaceStyle: .personal,
-                                        spaceLabel: "个人",
-                                        onSelect: { onSelectTask(task) },
-                                        onComplete: { complete(task) },
-                                        onReopen: { reopen(task) },
-                                        onArchive: { archive(task) }
-                                    )
-                                }
-                            }
                         }
                     }
                 }
             }
-            .padding(AppTheme.Spacing.xl)
+            .padding(layout.pagePadding)
         }
         .sheet(isPresented: $showingNewTask) {
             TaskFormView(title: "新建个人待办", projects: [], allowsProject: false) { draft in
@@ -85,25 +87,79 @@ struct PersonalTasksView: View {
     }
 
     private var filterBar: some View {
-        HStack(spacing: AppTheme.Spacing.md) {
-            Picker("状态", selection: $status) {
-                ForEach(TaskStatus.allCases) { status in
-                    Text(status.label).tag(status)
-                }
+        SurfaceView(style: .subtle, padding: AppTheme.Spacing.md) {
+            ViewThatFits(in: .horizontal) {
+                horizontalFilterBar
+                verticalFilterBar
             }
-            .pickerStyle(.segmented)
-            .frame(width: 260)
-            .onChange(of: status) { newValue in
-                Task { await model.reloadPersonalTasks(status: newValue, search: search.trimmedOrNil) }
-            }
+        }
+    }
 
+    private var horizontalFilterBar: some View {
+        HStack(spacing: AppTheme.Spacing.md) {
+            statusPicker
+                .frame(width: min(260, max(220, layout.centerWidth * 0.30)))
             TextField("搜索", text: $search)
                 .textFieldStyle(.roundedBorder)
+                .frame(width: layout.narrowControlWidth)
                 .onSubmit {
                     Task { await model.reloadPersonalTasks(status: status, search: search.trimmedOrNil) }
                 }
             Spacer()
             PillView(text: "个人不使用项目", style: .personal)
+        }
+    }
+
+    private var verticalFilterBar: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+            statusPicker
+            TextField("搜索", text: $search)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit {
+                    Task { await model.reloadPersonalTasks(status: status, search: search.trimmedOrNil) }
+                }
+            PillView(text: "个人不使用项目", style: .personal)
+        }
+    }
+
+    private var statusPicker: some View {
+        Picker("状态", selection: $status) {
+            ForEach(TaskStatus.allCases) { status in
+                Text(status.label).tag(status)
+            }
+        }
+        .pickerStyle(.segmented)
+        .onChange(of: status) { newValue in
+            Task { await model.reloadPersonalTasks(status: newValue, search: search.trimmedOrNil) }
+        }
+    }
+
+    private var focusPreview: some View {
+        SurfaceView(style: .tinted(.personal)) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                HStack {
+                    Text("个人 Focus Preview")
+                        .font(.headline.weight(.semibold))
+                    Spacer()
+                    PillView(text: "Top 3", style: .personal)
+                }
+                TaskCardList {
+                    ForEach(sortedForFocus(model.activePersonalTasks).prefix(3)) { task in
+                        TaskCardView(
+                            task: task,
+                            projectName: nil,
+                            spaceStyle: .personal,
+                            spaceLabel: "个人",
+                            isSelected: selection == .task(task.id),
+                            compact: true,
+                            onSelect: { onSelectTask(task) },
+                            onComplete: { complete(task) },
+                            onReopen: { reopen(task) },
+                            onArchive: { archive(task) }
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -138,7 +194,7 @@ struct PersonalTasksView: View {
     }
 }
 
-struct TaskRow: View {
+struct LegacyTaskRow: View {
     let task: TaskItem
     let projectName: String?
     let complete: () -> Void
@@ -163,16 +219,16 @@ struct TaskRow: View {
                         .lineLimit(2)
                 }
                 HStack {
-                    BadgeText(text: task.priority.label, color: task.priority == .urgent ? .red : .secondary)
-                    BadgeText(text: task.status.label)
+                    PillView(text: task.priority.label, style: task.priority.pillStyle)
+                    PillView(text: task.status.label, style: task.status == .done ? .success : .neutralSubtle)
                     if let dueDate = task.dueDate {
-                        BadgeText(text: "截止 \(dueDate)", color: .orange)
+                        PillView(text: "截止 \(dueDate)", style: .warningSubtle)
                     }
                     if let projectName {
-                        BadgeText(text: projectName, color: .blue)
+                        PillView(text: projectName, style: .company)
                     }
                     if task.source == "agent" {
-                        BadgeText(text: "Agent", color: .indigo)
+                        PillView(text: "Agent", style: .agent)
                     }
                 }
             }
@@ -210,8 +266,18 @@ struct TaskFormView: View {
     @State private var draft = TaskDraft()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            SectionHeaderView(title: title, subtitle: allowsProject ? "公司待办可以留在无项目，也可以关联到项目。" : "个人待办不使用项目。")
+        EditorSheetView(
+            title: title,
+            subtitle: allowsProject ? "公司待办可以留在无项目，也可以关联到项目。" : "个人待办不使用项目。",
+            isActionDisabled: draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            cancel: { dismiss() },
+            action: {
+                Task {
+                    await save(draft)
+                    dismiss()
+                }
+            }
+        ) {
             Form {
                 TextField("标题", text: $draft.title)
                 TextField("描述", text: $draft.description, axis: .vertical)
@@ -233,20 +299,6 @@ struct TaskFormView: View {
                     }
                 }
             }
-            HStack {
-                Spacer()
-                Button("取消") { dismiss() }
-                Button("保存") {
-                    Task {
-                        await save(draft)
-                        dismiss()
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
         }
-        .padding(AppTheme.Spacing.xl)
-        .frame(width: 480)
     }
 }

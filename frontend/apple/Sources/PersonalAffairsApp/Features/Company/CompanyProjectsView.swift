@@ -39,10 +39,12 @@ struct ProjectDraft {
 #if os(macOS)
 struct CompanyProjectsView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.workbenchLayout) private var layout
     @State private var status: ProjectStatus = .active
     @State private var showingNewProject = false
     @State private var selectedProjectId: String?
     @State private var projectTasks: [TaskItem] = []
+    var selection: InspectorSelection? = nil
     var onSelectProject: (Project) -> Void = { _ in }
 
     var body: some View {
@@ -55,7 +57,7 @@ struct CompanyProjectsView: View {
                             project: project,
                             activeTaskCount: model.companyTasks.filter { $0.projectId == project.id && $0.status == .active }.count,
                             completedTaskCount: model.companyTasks.filter { $0.projectId == project.id && $0.status == .done }.count,
-                            isSelected: selectedProjectId == project.id,
+                            isSelected: selectedProjectId == project.id || selection == .project(project.id),
                             onSelect: {
                                 selectedProjectId = project.id
                                 onSelectProject(project)
@@ -74,7 +76,7 @@ struct CompanyProjectsView: View {
                     archiveTask: { task in archiveTask(task) }
                 )
             }
-            .padding(AppTheme.Spacing.xl)
+            .padding(layout.pagePadding)
         }
         .sheet(isPresented: $showingNewProject) {
             ProjectFormView { draft in
@@ -194,9 +196,9 @@ private struct ProjectRow: View {
                     .lineLimit(2)
             }
             HStack {
-                BadgeText(text: project.status.label, color: project.status == .active ? .blue : .secondary)
+                PillView(text: project.status.label, style: project.status.pillStyle)
                 if let targetDate = project.targetDate {
-                    BadgeText(text: "目标 \(targetDate)", color: .orange)
+                    PillView(text: "目标 \(targetDate)", style: .warningSubtle)
                 }
             }
         }
@@ -280,8 +282,18 @@ private struct ProjectFormView: View {
     @State private var draft = ProjectDraft()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            SectionHeaderView(title: "新建公司项目", subtitle: "v1 中项目只属于公司空间。")
+        EditorSheetView(
+            title: "新建公司项目",
+            subtitle: "v1 中项目只属于公司空间。",
+            isActionDisabled: draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            cancel: { dismiss() },
+            action: {
+                Task {
+                    await save(draft)
+                    dismiss()
+                }
+            }
+        ) {
             Form {
                 TextField("名称", text: $draft.name)
                 TextField("描述", text: $draft.description, axis: .vertical)
@@ -294,21 +306,7 @@ private struct ProjectFormView: View {
                     DatePicker("目标日期", selection: $draft.targetDate, displayedComponents: .date)
                 }
             }
-            HStack {
-                Spacer()
-                Button("取消") { dismiss() }
-                Button("保存") {
-                    Task {
-                        await save(draft)
-                        dismiss()
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
         }
-        .padding(AppTheme.Spacing.xl)
-        .frame(width: 520)
     }
 }
 #endif

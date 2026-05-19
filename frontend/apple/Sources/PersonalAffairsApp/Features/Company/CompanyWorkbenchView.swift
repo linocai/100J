@@ -3,10 +3,12 @@ import SwiftUI
 
 struct CompanyWorkbenchView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.workbenchLayout) private var layout
     @State private var showingNewTask = false
     @State private var showingNewProject = false
     @State private var selectedProjectId: String?
 
+    var selection: InspectorSelection? = nil
     let selectTask: (TaskItem) -> Void
     let selectProject: (Project) -> Void
 
@@ -44,7 +46,7 @@ struct CompanyWorkbenchView: View {
                     }
                 )
 
-                SurfaceView {
+                SurfaceView(style: .elevated) {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
@@ -55,16 +57,19 @@ struct CompanyWorkbenchView: View {
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
-                            PillView(text: "仅进行中 / 已完成 / 已归档", style: .neutralSubtle)
+                            PillView(text: "无项目 = 公司任务分组，不是状态", style: .warningSubtle)
                         }
 
                         ScrollView(.horizontal) {
                             HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
                                 CompanyTaskLane(
                                     title: "无项目收件箱",
-                                    subtitle: "project_id = nil",
+                                    subtitle: "公司杂项，建议定期归类",
                                     tasks: sortedForFocus(model.noProjectCompanyTasks),
                                     projectName: nil,
+                                    isInbox: true,
+                                    isSelectedProject: selectedProjectId == nil,
+                                    selection: selection,
                                     selectTask: selectTask
                                 )
                                 ForEach(sortedProjects) { project in
@@ -73,16 +78,19 @@ struct CompanyWorkbenchView: View {
                                         subtitle: project.targetDate.map { "目标 \($0)" } ?? "项目任务",
                                         tasks: sortedForFocus(projectTasks(project.id)),
                                         projectName: project.name,
+                                        isInbox: false,
+                                        isSelectedProject: selectedProjectId == project.id || selection == .project(project.id),
+                                        selection: selection,
                                         selectTask: selectTask
                                     )
                                 }
                             }
-                            .padding(.bottom, AppTheme.Spacing.xs)
+                            .padding(.bottom, AppTheme.Spacing.md)
                         }
                     }
                 }
             }
-            .padding(AppTheme.Spacing.xl)
+            .padding(layout.pagePadding)
         }
         .sheet(isPresented: $showingNewTask) {
             TaskFormView(title: "新建公司待办", projects: model.projects, allowsProject: true) { draft in
@@ -173,8 +181,9 @@ private struct ProjectOverviewStrip: View {
                     systemImage: "folder"
                 )
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: AppTheme.Spacing.md)], spacing: AppTheme.Spacing.md) {
-                    ForEach(projects.prefix(6)) { project in
+                ScrollView(.horizontal) {
+                    HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
+                    ForEach(projects) { project in
                         ProjectCardView(
                             project: project,
                             activeTaskCount: activeCount(project.id),
@@ -182,7 +191,10 @@ private struct ProjectOverviewStrip: View {
                             isSelected: selectedProjectId == project.id,
                             onSelect: { select(project) }
                         )
+                        .frame(width: 260)
                     }
+                    }
+                    .padding(.bottom, AppTheme.Spacing.xs)
                 }
             }
         }
@@ -203,15 +215,22 @@ private struct CompanyTaskLane: View {
     let subtitle: String
     let tasks: [TaskItem]
     let projectName: String?
+    let isInbox: Bool
+    let isSelectedProject: Bool
+    let selection: InspectorSelection?
     let selectTask: (TaskItem) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.callout.weight(.semibold))
-                        .lineLimit(2)
+                    HStack(spacing: 6) {
+                        Image(systemName: isInbox ? "tray" : "folder")
+                            .foregroundStyle(accent)
+                        Text(title)
+                            .font(.callout.weight(.semibold))
+                            .lineLimit(2)
+                    }
                     Text(subtitle)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -219,17 +238,17 @@ private struct CompanyTaskLane: View {
                 Spacer()
                 Text("\(tasks.count)")
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(AppTheme.Colors.companyAccent)
+                    .foregroundStyle(accent)
                     .padding(.horizontal, 7)
                     .frame(height: 20)
-                    .background(AppTheme.Colors.companyAccent.opacity(0.12))
+                    .background(accent.opacity(0.12))
                     .clipShape(Capsule())
             }
 
             if tasks.isEmpty {
                 EmptyStateInline(
                     title: "暂无任务",
-                    message: projectName == nil ? "没有无项目公司任务。" : "这个项目暂无进行中任务。"
+                    message: projectName == nil ? "没有无项目公司任务。" : "Add task to this project."
                 )
             } else {
                 TaskCardList {
@@ -239,6 +258,7 @@ private struct CompanyTaskLane: View {
                             projectName: projectName,
                             spaceStyle: .company,
                             spaceLabel: "公司",
+                            isSelected: selection == .task(task.id),
                             compact: true,
                             onSelect: { selectTask(task) },
                             onComplete: { mutateTask(.complete, task) },
@@ -250,15 +270,26 @@ private struct CompanyTaskLane: View {
             }
             Spacer(minLength: 0)
         }
-        .frame(width: 284)
+        .frame(width: 312)
         .frame(minHeight: 430, alignment: .topLeading)
         .padding(AppTheme.Spacing.md)
-        .background(Color.white.opacity(0.38))
+        .background(laneFill)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous)
-                .stroke(Color.white.opacity(0.38), lineWidth: 1)
+                .stroke(isSelectedProject ? accent.opacity(0.36) : AppTheme.Colors.hairline, lineWidth: 1)
         }
+    }
+
+    private var accent: Color {
+        isInbox ? AppTheme.Colors.warningAccent : AppTheme.Colors.companyAccent
+    }
+
+    private var laneFill: Color {
+        if isSelectedProject {
+            return accent.opacity(0.12)
+        }
+        return isInbox ? AppTheme.Colors.warningAccent.opacity(0.08) : AppTheme.Colors.surfaceTinted
     }
 
     private enum Mutation {
@@ -291,12 +322,18 @@ private struct WorkbenchProjectFormView: View {
     @State private var draft = ProjectDraft()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
-            SectionHeaderView(
-                eyebrow: "公司",
-                title: "新建项目",
-                subtitle: "100J v1 中项目只属于公司空间。"
-            )
+        EditorSheetView(
+            title: "新建项目",
+            subtitle: "100J v1 中项目只属于公司空间。",
+            isActionDisabled: draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            cancel: { dismiss() },
+            action: {
+                Task {
+                    await save(draft)
+                    dismiss()
+                }
+            }
+        ) {
             Form {
                 TextField("名称", text: $draft.name)
                 TextField("描述", text: $draft.description, axis: .vertical)
@@ -309,20 +346,6 @@ private struct WorkbenchProjectFormView: View {
                     DatePicker("目标日期", selection: $draft.targetDate, displayedComponents: .date)
                 }
             }
-            HStack {
-                Spacer()
-                Button("取消") { dismiss() }
-                Button("保存") {
-                    Task {
-                        await save(draft)
-                        dismiss()
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
         }
-        .padding(AppTheme.Spacing.xl)
-        .frame(width: 520)
     }
 }

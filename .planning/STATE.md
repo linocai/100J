@@ -6,7 +6,16 @@ Build Personal Affairs App v1 in phases: backend, macOS, iOS, local E2E testing,
 
 ## Current Position
 
-Phase 4 automated local verification is complete. The local backend is running on port 8000 for manual macOS and iOS testing.
+Phase 4 automated local verification was completed for the 2026-05-17 snapshot. Since then, an additional macOS visual / shell redesign pass has been in flight.
+
+As of 2026-05-19, `AUDIT_v1.md` is the highest-authority production guidance file. The active implementation documents are now:
+
+- `AUDIT_v1.md`
+- `plan.md`
+- `personal_affairs_backend_blueprint_v1.md`
+- `100j_swiftui_frontend_redesign_blueprint_v1.md`
+
+Stopped frontend documents were removed to end the source-of-truth split.
 
 ## Completed
 
@@ -16,6 +25,7 @@ Phase 4 automated local verification is complete. The local backend is running o
 - iOS shares `PersonalAffairsCore` Domain / API / Repository with macOS.
 - iOS Simulator build passes on iPhone 17, iOS 26.5.
 - Phase 4 backend tests, migration check, OpenAPI check, API smoke test, macOS build/test, and iOS simulator build pass.
+- Documentation source-of-truth cleanup: old frontend blueprint, temporary frontend review memo, and HTML visual prototype were removed.
 
 ## Verification
 
@@ -41,11 +51,15 @@ DATABASE_URL=sqlite:////tmp/personal_affairs_phase4_migration.db .venv/bin/alemb
 
 ## Decisions
 
+- Treat `AUDIT_v1.md` as the current production guidance file until superseded by a newer audit or explicit user instruction.
+- Treat `100j_swiftui_frontend_redesign_blueprint_v1.md` as the active frontend v1.1 blueprint.
+- Deleted stopped frontend documents instead of keeping superseded copies in the repo.
 - Keep Calendar and Agent as global top-level navigation entries on both macOS and iOS.
+- Keep Today as the macOS default command center, constrained to aggregate existing Task / CalendarItem / Note / Project data without new backend objects or APIs.
 - Use native SwiftUI instead of web UI.
 - Use scratch paths outside this repo for SwiftPM / Xcode derived data because the repository path contains `%`.
 - Keep macOS-specific `NavigationSplitView` / `HSplitView` surfaces behind `#if os(macOS)` and iOS-specific views behind `#if os(iOS)`.
 
 ## Next Action
 
-Manual test macOS and iOS against `http://127.0.0.1:8000/api/v1`, using `.planning/PHASE4_LOCAL_TEST.md` as the checklist. Stop the local backend with `kill $(cat /tmp/personal-affairs-phase4-api.pid)` when testing is done.
+When the user asks to resume implementation, start with the P0 items in `AUDIT_v1.md`: Agent confirmation UI, STATE/worktree cleanup, then iOS sharing rules and ViewModel extraction.

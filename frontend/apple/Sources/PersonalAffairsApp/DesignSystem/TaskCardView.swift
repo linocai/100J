@@ -42,21 +42,24 @@ struct TaskCardView: View {
                             .lineLimit(2)
                     }
 
-                    HStack(spacing: 6) {
+                    WrappingHStack(spacing: 6, rowSpacing: 5) {
                         PillView(text: task.priority.label, style: task.priority.pillStyle)
-                        PillView(text: task.status.label, style: task.status == .done ? .success : .neutralSubtle)
-                        PillView(text: spaceLabel, style: spaceStyle)
                         if let dueDate = task.dueDate {
-                            PillView(text: "截止 \(dueDate)", style: .warningSubtle, systemImage: "calendar.badge.clock")
+                            PillView(text: dueLabel(dueDate), style: duePillStyle(dueDate), systemImage: "calendar.badge.clock")
                         }
                         if let projectName {
                             PillView(text: projectName, style: .company, systemImage: "folder")
+                        } else if spaceStyle == .company {
+                            PillView(text: "No Project", style: .warningSubtle, systemImage: "tray")
+                        } else {
+                            PillView(text: spaceLabel, style: spaceStyle)
                         }
                         if task.source == "agent" {
                             PillView(text: "Agent", style: .agent, systemImage: "sparkles")
+                        } else if task.status != .active {
+                            PillView(text: task.status.label, style: task.status == .done ? .success : .neutralSubtle)
                         }
                     }
-                    .lineLimit(1)
                 }
 
                 Spacer(minLength: AppTheme.Spacing.md)
@@ -97,13 +100,29 @@ struct TaskCardView: View {
             return AnyShapeStyle(selectionColor.opacity(0.12))
         }
         if isHovering {
-            return AnyShapeStyle(Color.white.opacity(0.72))
+            return AnyShapeStyle(AppTheme.Colors.surfaceElevated)
         }
-        return AnyShapeStyle(Color.white.opacity(0.54))
+        return AnyShapeStyle(AppTheme.Colors.surfaceBase)
     }
 
     private var selectionColor: Color {
         spaceStyle == .personal ? AppTheme.Colors.personalAccent : AppTheme.Colors.companyAccent
+    }
+
+    private func dueLabel(_ value: String) -> String {
+        guard let date = parsedDateOnly(value) else { return "截止 \(value)" }
+        if Calendar.current.isDateInToday(date) { return "今天截止" }
+        if date < Calendar.current.startOfDay(for: Date()) { return "已逾期" }
+        return "截止 \(value)"
+    }
+
+    private func duePillStyle(_ value: String) -> PillStyle {
+        guard let date = parsedDateOnly(value) else { return .warningSubtle }
+        let today = Calendar.current.startOfDay(for: Date())
+        let soon = Calendar.current.date(byAdding: .day, value: 2, to: today) ?? today
+        if date < today { return .danger }
+        if date <= soon { return .warning }
+        return .warningSubtle
     }
 }
 

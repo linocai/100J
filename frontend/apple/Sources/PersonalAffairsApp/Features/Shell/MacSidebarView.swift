@@ -5,7 +5,7 @@ struct MacSidebarView: View {
     @Binding var selection: AppSection?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
             brand
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
@@ -25,22 +25,24 @@ struct MacSidebarView: View {
                         SidebarButton(section: .agent, count: model.agentLogs.count, selection: $selection)
                         SidebarButton(section: .settings, count: nil, selection: $selection)
                     }
-                    principleCard
                 }
                 .padding(.horizontal, AppTheme.Spacing.md)
-                .padding(.bottom, AppTheme.Spacing.xl)
+                .padding(.bottom, AppTheme.Spacing.md)
             }
+            principleCard
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.bottom, AppTheme.Spacing.lg)
         }
         .padding(.top, AppTheme.Spacing.lg)
-        .background(.thinMaterial)
+        .background(AppTheme.Colors.sidebarBackground.opacity(0.54))
     }
 
     private var brand: some View {
         HStack(spacing: AppTheme.Spacing.md) {
             Text("J")
-                .font(.headline.weight(.bold))
+                .font(.title3.weight(.bold))
                 .foregroundStyle(.white)
-                .frame(width: 34, height: 34)
+                .frame(width: 38, height: 38)
                 .background(
                     LinearGradient(
                         colors: [AppTheme.Colors.companyAccent, AppTheme.Colors.agentAccent],
@@ -48,13 +50,21 @@ struct MacSidebarView: View {
                         endPoint: .bottomTrailing
                     )
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text("100J")
                     .font(.headline.weight(.semibold))
-                Text("个人事务操作台")
-                    .font(.caption)
+                Text("Personal Affairs OS")
+                    .font(.caption2)
                     .foregroundStyle(AppTheme.Colors.tertiaryText)
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(model.isLoading ? AppTheme.Colors.warningAccent : AppTheme.Colors.successAccent)
+                        .frame(width: 6, height: 6)
+                    Text(model.authMode.label)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(AppTheme.Colors.secondaryText)
+                }
             }
         }
         .padding(.horizontal, AppTheme.Spacing.lg)
@@ -62,18 +72,17 @@ struct MacSidebarView: View {
     }
 
     private var principleCard: some View {
-        SurfaceView(cornerRadius: AppTheme.Radius.md, padding: AppTheme.Spacing.md) {
+        SurfaceView(style: .sidebar, cornerRadius: AppTheme.Radius.md, padding: AppTheme.Spacing.md) {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-                Text("核心规则")
+                Text("Core Rule")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(AppTheme.Colors.tertiaryText)
-                Text("待办保持弹性；固定时间进入日程；灵感先留在备忘，确认后再转成任务。")
+                Text("待办保持弹性；固定时间进入日程；Agent 只做整理和建议。")
                     .font(.caption)
                     .foregroundStyle(AppTheme.Colors.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.horizontal, 2)
     }
 
     @ViewBuilder
@@ -101,44 +110,92 @@ private struct SidebarButton: View {
     let section: AppSection
     let count: Int?
     @Binding var selection: AppSection?
+    @State private var isHovering = false
 
     var body: some View {
         Button {
             selection = section
         } label: {
             HStack(spacing: AppTheme.Spacing.sm) {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(accent)
+                    .frame(width: isSelected ? 3 : 0)
                 Image(systemName: section.systemImage)
                     .font(.callout.weight(.semibold))
-                    .frame(width: 25, height: 25)
-                    .foregroundStyle(isSelected ? AppTheme.Colors.companyAccent : AppTheme.Colors.secondaryText)
-                    .background((isSelected ? AppTheme.Colors.companyAccent : Color.primary).opacity(isSelected ? 0.12 : 0.06))
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                Text(section.title)
-                    .font(.callout.weight(.medium))
-                    .lineLimit(1)
+                    .frame(width: isHero ? 30 : 26, height: isHero ? 30 : 26)
+                    .foregroundStyle(isSelected ? accent : AppTheme.Colors.secondaryText)
+                    .background(accent.opacity(isSelected ? 0.13 : 0.07))
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.sm, style: .continuous))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(section.title)
+                        .font((isHero ? Font.callout.weight(.semibold) : Font.callout.weight(.medium)))
+                        .lineLimit(1)
+                    if isHero {
+                        Text("Command Center")
+                            .font(.caption2)
+                            .foregroundStyle(AppTheme.Colors.tertiaryText)
+                            .lineLimit(1)
+                    }
+                }
                 Spacer(minLength: 0)
                 if let count {
                     Text("\(count)")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(isSelected ? AppTheme.Colors.companyAccent : AppTheme.Colors.tertiaryText)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(isSelected ? accent : AppTheme.Colors.tertiaryText)
                         .padding(.horizontal, 7)
-                        .frame(height: 20)
-                        .background(Color.primary.opacity(isSelected ? 0.00 : 0.06))
+                        .frame(height: 18)
+                        .background(AppTheme.Colors.surfaceTinted)
                         .clipShape(Capsule())
                 }
             }
             .padding(.horizontal, AppTheme.Spacing.sm)
-            .padding(.vertical, 7)
-            .background(isSelected ? Color.white.opacity(0.72) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .padding(.vertical, isHero ? 9 : 7)
+            .background(itemBackground)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
+                    .stroke(isSelected ? AppTheme.Colors.sidebarSelectionBorder : Color.clear, lineWidth: 1)
+            }
         }
         .buttonStyle(.plain)
         .keyboardShortcut(keyEquivalent, modifiers: .command)
         .accessibilityLabel(section.title)
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.14), value: isHovering)
+        .animation(.easeOut(duration: 0.16), value: isSelected)
     }
 
     private var isSelected: Bool {
         selection == section
+    }
+
+    private var isHero: Bool {
+        section == .today
+    }
+
+    private var accent: Color {
+        switch section {
+        case .today, .agent:
+            return AppTheme.Colors.agentAccent
+        case .calendar:
+            return AppTheme.Colors.calendarAccent
+        case .personalTasks, .personalNotes:
+            return AppTheme.Colors.personalAccent
+        case .companyTasks, .companyProjects:
+            return AppTheme.Colors.companyAccent
+        case .settings:
+            return AppTheme.Colors.tertiaryText
+        }
+    }
+
+    private var itemBackground: Color {
+        if isSelected {
+            return AppTheme.Colors.sidebarSelection
+        }
+        if isHovering {
+            return AppTheme.Colors.surfaceTinted
+        }
+        return .clear
     }
 
     private var keyEquivalent: KeyEquivalent {

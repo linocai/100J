@@ -5,53 +5,67 @@ import SwiftUI
 #if os(macOS)
 struct AgentView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.workbenchLayout) private var layout
     @State private var inputText = ""
-    @State private var messages: [AgentChatMessage] = [
-        AgentChatMessage(role: .assistant, text: "把一句话发给我。我会先整理成预览，确认后再写入 100J。")
-    ]
     @State private var pendingCommand: NaturalAgentCommand?
     @State private var confirmationToken = ""
+    @State private var responseText = ""
     var onSelectAgentLog: (AgentActionLog) -> Void = { _ in }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
                 header
-                SurfaceView {
-                    chatBox
-                }
-                SurfaceView {
-                    confirmationBox
+                if layout.usesWideColumns {
+                    HStack(alignment: .top, spacing: AppTheme.Spacing.lg) {
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
+                            commandComposerSurface
+                            dryRunPreviewSurface
+                            actionReviewSurface
+                        }
+                        .frame(minWidth: 0, maxWidth: .infinity)
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
+                            agentStatusSurface
+                            recentActionLogsSurface
+                        }
+                        .frame(width: min(360, max(300, layout.centerWidth * 0.34)))
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
+                        commandComposerSurface
+                        dryRunPreviewSurface
+                        actionReviewSurface
+                        agentStatusSurface
+                        recentActionLogsSurface
+                    }
                 }
             }
-            .padding(AppTheme.Spacing.xl)
+            .padding(layout.pagePadding)
         }
     }
 
     private var header: some View {
         SectionHeaderView(
+            style: .hero,
             eyebrow: "系统",
             title: "Agent",
-            subtitle: "一句话整理事务，确认后再写入待办、日程、备忘或项目。",
+            subtitle: "事务助理负责解析、预演和审核；危险操作必须确认。",
             systemImage: "sparkles"
         )
     }
 
-    private var chatBox: some View {
+    private var commandComposerSurface: some View {
+        SurfaceView(style: .elevated) {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-            Text("聊天")
+            Text("Command Composer")
                 .font(.headline.weight(.semibold))
-
-            LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-                ForEach(messages) { message in
-                    AgentBubble(message: message)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Text("输入指令，或按 ⌘K 快速创建事项。Agent 会先整理成可审核操作。")
+                .font(.caption)
+                .foregroundStyle(AppTheme.Colors.secondaryText)
 
             HStack(alignment: .bottom, spacing: AppTheme.Spacing.sm) {
-                TextField("例如：明天下午3点公司会议 / 公司待办 跟进发票 / 灵感 旅行清单", text: $inputText, axis: .vertical)
-                    .lineLimit(1...4)
+                TextField("例如：帮我把公司无项目任务整理一下 / 明天下午3点体检 / 灵感 旅行清单", text: $inputText, axis: .vertical)
+                    .lineLimit(2...5)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(sendMessage)
 
@@ -64,11 +78,43 @@ struct AgentView: View {
                 .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
+        }
     }
 
-    private var confirmationBox: some View {
+    private var dryRunPreviewSurface: some View {
+        SurfaceView(style: .subtle) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                HStack {
+                    Text("Dry Run Preview")
+                        .font(.headline.weight(.semibold))
+                    Spacer()
+                    if pendingCommand != nil {
+                        Button("预演") { executePending(dryRun: true) }
+                            .font(.caption.weight(.semibold))
+                    }
+                }
+                if let pendingCommand {
+                    commandSummary(pendingCommand)
+                } else {
+                    EmptyStateInline(title: "暂无预览", message: "输入一句话后，这里会出现将要执行的操作。")
+                }
+                if !responseText.isEmpty {
+                    Text(responseText)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(AppTheme.Colors.secondaryText)
+                        .padding(AppTheme.Spacing.md)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppTheme.Colors.surfaceTinted)
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
+                }
+            }
+        }
+    }
+
+    private var actionReviewSurface: some View {
+        SurfaceView(style: confirmationToken.isEmpty ? .base : .warning) {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-            Text("确认")
+            Text("Action Review")
                 .font(.headline.weight(.semibold))
 
             if !confirmationToken.isEmpty {
@@ -78,7 +124,7 @@ struct AgentView: View {
                     Button {
                         confirmationToken = ""
                         pendingCommand = nil
-                        messages.append(.init(role: .assistant, text: "已取消这次操作。"))
+                        responseText = "已取消这次操作。"
                     } label: {
                         Label("取消", systemImage: "xmark")
                     }
@@ -90,24 +136,11 @@ struct AgentView: View {
                     .buttonStyle(.borderedProminent)
                 }
             } else if let pending = pendingCommand {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-                    HStack {
-                        PillView(text: pending.intent.target.label, style: .agent)
-                        PillView(
-                            text: pending.intent.calendarSpace.label,
-                            style: pending.intent.calendarSpace == .personal ? .personal : .company
-                        )
-                    }
-                    Text(pending.summary)
-                        .font(.callout.weight(.semibold))
-                    Text("确认后会写入 100J，并保留 Agent 操作记录。")
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.Colors.secondaryText)
-                }
+                commandSummary(pending)
                 HStack {
                     Button {
                         pendingCommand = nil
-                        messages.append(.init(role: .assistant, text: "已取消这次操作。"))
+                        responseText = "已取消这次操作。"
                     } label: {
                         Label("取消", systemImage: "xmark")
                     }
@@ -124,23 +157,100 @@ struct AgentView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var agentStatusSurface: some View {
+        SurfaceView(style: .tinted(.agent)) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                Label("Agent Layer", systemImage: "sparkles")
+                    .font(.headline.weight(.semibold))
+                suggestionRow("\(model.noProjectCompanyTasks.count) 个公司任务没有项目归属")
+                suggestionRow("\(model.notes.filter { $0.linkedTaskId == nil }.count) 条灵感可生成行动候选")
+                if let key = model.llmKey, key.isActive {
+                    PillView(text: "LLM \(key.provider)", style: .success)
+                } else {
+                    PillView(text: "LLM Key 在 Settings 管理", style: .warningSubtle)
+                }
+            }
+        }
+    }
+
+    private var recentActionLogsSurface: some View {
+        SurfaceView(style: .inspector) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                Text("Recent Agent Actions")
+                    .font(.headline.weight(.semibold))
+                if model.agentLogs.isEmpty {
+                    EmptyStateInline(title: "暂无操作记录", message: "预演或确认写入后会出现在这里。")
+                } else {
+                    ForEach(model.agentLogs.prefix(6)) { log in
+                        Button {
+                            onSelectAgentLog(log)
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(log.actionType)
+                                        .font(.caption.weight(.semibold))
+                                    Text(log.createdAt.shortDateTime)
+                                        .font(.caption2)
+                                        .foregroundStyle(AppTheme.Colors.tertiaryText)
+                                }
+                                Spacer()
+                                PillView(text: log.status, style: log.status == "success" ? .success : .warning, size: .small)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private func commandSummary(_ command: NaturalAgentCommand) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+            HStack {
+                PillView(text: command.intent.target.label, style: .agent)
+                PillView(
+                    text: command.intent.calendarSpace.label,
+                    style: command.intent.calendarSpace == .personal ? .personal : .company
+                )
+                PillView(text: "Needs approve", style: .warningSubtle)
+            }
+            Text(command.summary)
+                .font(.callout.weight(.semibold))
+            Text("No deletion. No calendar changes unless the command is a fixed schedule. Backend keeps an Agent action log.")
+                .font(.caption)
+                .foregroundStyle(AppTheme.Colors.secondaryText)
+        }
+    }
+
+    private func suggestionRow(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: AppTheme.Spacing.sm) {
+            Circle()
+                .fill(AppTheme.Colors.agentAccent)
+                .frame(width: 6, height: 6)
+                .padding(.top, 5)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(AppTheme.Colors.secondaryText)
+        }
     }
 
     private func sendMessage() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
-        messages.append(.init(role: .user, text: text))
         inputText = ""
 
         guard let intent = CaptureParser.parse(text) else {
-            messages.append(.init(role: .assistant, text: "我没看懂这句话。可以试试“公司待办 跟进发票”或“明天下午3点公司会议”。"))
+            responseText = "我没看懂这句话。可以试试“公司待办 跟进发票”或“明天下午3点公司会议”。"
             pendingCommand = nil
             return
         }
 
         guard let built = buildNaturalCommand(intent) else {
-            messages.append(.init(role: .assistant, text: "当前空间还没加载完成。请先刷新数据，再试一次。"))
+            responseText = "当前空间还没加载完成。请先刷新数据，再试一次。"
             pendingCommand = nil
             return
         }
@@ -153,7 +263,7 @@ struct AgentView: View {
         )
         pendingCommand = command
         confirmationToken = ""
-        messages.append(.init(role: .assistant, text: "我会这样处理：\(command.summary)。确认后写入。"))
+        responseText = "已生成可审核操作。"
     }
 
     private func executePending(dryRun: Bool) {
@@ -165,7 +275,7 @@ struct AgentView: View {
                     arguments: pendingCommand.arguments,
                     dryRun: dryRun
                 )
-                messages.append(.init(role: .assistant, text: render(response)))
+                responseText = render(response)
                 if let token = response.confirmationToken {
                     confirmationToken = token
                 } else if !dryRun {
@@ -180,47 +290,12 @@ struct AgentView: View {
         Task {
             await model.run {
                 let response = try await model.agentRepository.confirm(token: confirmationToken)
-                messages.append(.init(role: .assistant, text: render(response)))
+                responseText = render(response)
                 confirmationToken = ""
                 pendingCommand = nil
                 try await model.loadAllData()
             }
         }
-    }
-}
-
-private struct AgentChatMessage: Identifiable, Equatable {
-    enum Role {
-        case user
-        case assistant
-    }
-
-    let id = UUID()
-    let role: Role
-    let text: String
-}
-
-private struct AgentBubble: View {
-    let message: AgentChatMessage
-
-    var body: some View {
-        HStack {
-            if message.role == .user {
-                Spacer(minLength: 40)
-            }
-            Text(message.text)
-                .font(.callout)
-                .foregroundStyle(message.role == .user ? .white : AppTheme.Colors.primaryText)
-                .padding(.horizontal, AppTheme.Spacing.md)
-                .padding(.vertical, 10)
-                .background(message.role == .user ? AppTheme.Colors.agentAccent : Color.white.opacity(0.62))
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
-                .frame(maxWidth: 640, alignment: message.role == .user ? .trailing : .leading)
-            if message.role == .assistant {
-                Spacer(minLength: 40)
-            }
-        }
-        .frame(maxWidth: .infinity)
     }
 }
 

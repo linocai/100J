@@ -2,10 +2,13 @@
 
 > 本计划基于：
 >
+> - `AUDIT_v1.md`（当前最高生产指导文件，负责裁决旧文档冲突）
 > - `personal_affairs_backend_blueprint_v1.md`
-> - `personal_affairs_frontend_blueprint_v1.md`
+> - `100j_swiftui_frontend_redesign_blueprint_v1.md`
 >
 > v1 总顺序固定为：**后端 -> 前端 macOS -> 前端 iOS -> 本地测试 -> 后端整体上云**。
+>
+> 已停用的旧前端蓝图、临时 review memo、HTML 原型不再作为施工输入。
 
 ---
 
@@ -205,13 +208,14 @@ backend/
 
 - 后端本地 API。
 - OpenAPI schema。
-- `personal_affairs_frontend_blueprint_v1.md`
+- `AUDIT_v1.md`。
+- `100j_swiftui_frontend_redesign_blueprint_v1.md`。
 
 ### 3.3 技术方向
 
 ```text
 UI: SwiftUI
-Navigation: NavigationSplitView
+Navigation: MacWorkbenchShellView / SwiftUI workbench shell
 Networking: URLSession + async/await
 Auth Storage: Keychain
 Icons: SF Symbols
@@ -222,6 +226,8 @@ State: Observation / ObservableObject
 
 ```text
 Sidebar
+├── Today
+│   └── Today Command Center
 ├── Personal
 │   ├── Tasks
 │   └── Notes
@@ -232,6 +238,8 @@ Sidebar
 ├── Agent
 └── Settings
 ```
+
+Today 是 macOS 默认首页，只能聚合既有 Task、CalendarItem、Note、Project 数据；不得引入新领域对象、新表或新后端 API。
 
 ### 3.5 施工任务
 

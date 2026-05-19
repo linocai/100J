@@ -48,7 +48,7 @@ struct CalendarEventCardView: View {
                             .lineLimit(2)
                     }
 
-                    HStack(spacing: 6) {
+                    WrappingHStack(spacing: 6, rowSpacing: 5) {
                         PillView(text: spaceName, style: spaceStyle)
                         PillView(text: item.type.label, style: item.type.pillStyle)
                         if let projectName {
@@ -58,7 +58,6 @@ struct CalendarEventCardView: View {
                             PillView(text: "Agent", style: .agent, systemImage: "sparkles")
                         }
                     }
-                    .lineLimit(1)
                 }
 
                 Spacer(minLength: AppTheme.Spacing.md)
@@ -74,7 +73,7 @@ struct CalendarEventCardView: View {
                 .opacity(isHovering || isSelected ? 1 : 0.58)
             }
             .padding(compact ? 10 : 12)
-            .background(isSelected ? accent.opacity(0.12) : Color.white.opacity(isHovering ? 0.76 : 0.54))
+            .background(isSelected ? accent.opacity(0.12) : (isHovering ? AppTheme.Colors.surfaceElevated : AppTheme.Colors.surfaceBase))
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
             .overlay(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 2)

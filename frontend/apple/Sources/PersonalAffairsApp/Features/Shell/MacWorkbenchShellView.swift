@@ -6,46 +6,71 @@ struct MacWorkbenchShellView: View {
     @State private var inspectorSelection: InspectorSelection?
     @State private var quickCaptureText = ""
     @State private var showingQuickCapture = false
+    @State private var showingInspectorPopover = false
     @FocusState private var isQuickCaptureFocused: Bool
 
     var body: some View {
         GeometryReader { geometry in
+            let width = geometry.size.width
+            let showsInspector = width >= 1180
+            let sidebarColumnWidth = sidebarWidth(for: width)
+            let inspectorColumnWidth = showsInspector ? inspectorWidth(for: width) : 0
+            let separatorWidth: CGFloat = showsInspector ? 2 : 1
+            let centerWidth = max(0, width - sidebarColumnWidth - inspectorColumnWidth - separatorWidth)
+            let layout = WorkbenchLayoutContext(
+                windowWidth: width,
+                centerWidth: centerWidth,
+                showsInspector: showsInspector
+            )
             VStack(spacing: 0) {
                 CommandTopBar(
                     quickCaptureText: $quickCaptureText,
                     isQuickCaptureFocused: $isQuickCaptureFocused,
+                    primaryAction: primaryAction,
+                    showsInspectorButton: !showsInspector,
                     onSubmitQuickCapture: openQuickCapture,
-                    onNew: openQuickCapture
+                    onPrimaryAction: runPrimaryAction,
+                    onToggleInspector: { showingInspectorPopover.toggle() }
                 )
+                .environment(\.workbenchLayout, layout)
 
-                Divider()
+                horizontalHairline
 
                 HStack(spacing: 0) {
                     MacSidebarView(selection: $model.selectedSection)
-                        .frame(width: sidebarWidth(for: geometry.size.width))
+                        .frame(width: sidebarColumnWidth)
 
-                    Divider()
+                    verticalHairline
 
                     currentWorkspace
+                        .frame(minWidth: 0, maxWidth: contentMaxWidth(for: layout), maxHeight: .infinity)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color.clear)
+                        .layoutPriority(1)
+                        .environment(\.workbenchLayout, layout)
 
-                    if geometry.size.width >= 1180 {
-                        Divider()
+                    if showsInspector {
+                        verticalHairline
                         ContextInspectorView(selection: inspectorSelection)
-                            .frame(width: 324)
+                            .frame(width: inspectorColumnWidth)
+                            .environment(\.workbenchLayout, layout)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .background(AppBackgroundView())
         }
-        .frame(minWidth: 900, minHeight: 680)
+        .frame(minWidth: 900, minHeight: 720)
         .sheet(isPresented: $showingQuickCapture) {
             QuickCaptureSheet(rawText: quickCaptureText) {
                 quickCaptureText = ""
             }
             .environmentObject(model)
+        }
+        .popover(isPresented: $showingInspectorPopover) {
+            ContextInspectorView(selection: inspectorSelection)
+                .environmentObject(model)
+                .frame(width: 344, height: 640)
         }
     }
 
@@ -54,23 +79,25 @@ struct MacWorkbenchShellView: View {
         switch model.selectedSection ?? .today {
         case .today:
             TodayCommandView(
+                selection: inspectorSelection,
                 selectTask: { inspectorSelection = .task($0.id) },
                 selectCalendarItem: { inspectorSelection = .calendarItem($0.id) },
                 jumpToSection: { model.selectedSection = $0 }
             )
         case .personalTasks:
-            PersonalTasksView(onSelectTask: { inspectorSelection = .task($0.id) })
+            PersonalTasksView(selection: inspectorSelection, onSelectTask: { inspectorSelection = .task($0.id) })
         case .personalNotes:
-            PersonalNotesView(onSelectNote: { inspectorSelection = .note($0.id) })
+            PersonalNotesView(selection: inspectorSelection, onSelectNote: { inspectorSelection = .note($0.id) })
         case .companyTasks:
             CompanyWorkbenchView(
+                selection: inspectorSelection,
                 selectTask: { inspectorSelection = .task($0.id) },
                 selectProject: { inspectorSelection = .project($0.id) }
             )
         case .companyProjects:
-            CompanyProjectsView(onSelectProject: { inspectorSelection = .project($0.id) })
+            CompanyProjectsView(selection: inspectorSelection, onSelectProject: { inspectorSelection = .project($0.id) })
         case .calendar:
-            GlobalCalendarView(onSelectCalendarItem: { inspectorSelection = .calendarItem($0.id) })
+            GlobalCalendarView(selection: inspectorSelection, onSelectCalendarItem: { inspectorSelection = .calendarItem($0.id) })
         case .agent:
             AgentView(onSelectAgentLog: { inspectorSelection = .agentLog($0.id) })
         case .settings:
@@ -78,8 +105,80 @@ struct MacWorkbenchShellView: View {
         }
     }
 
+    private var horizontalHairline: some View {
+        Rectangle()
+            .fill(AppTheme.Colors.hairline)
+            .frame(height: 1)
+    }
+
+    private var verticalHairline: some View {
+        Rectangle()
+            .fill(AppTheme.Colors.hairline)
+            .frame(width: 1)
+    }
+
     private func sidebarWidth(for windowWidth: CGFloat) -> CGFloat {
-        windowWidth < 980 ? 216 : 246
+        if windowWidth >= 1400 { return 260 }
+        if windowWidth >= 1180 { return 244 }
+        return 224
+    }
+
+    private func inspectorWidth(for windowWidth: CGFloat) -> CGFloat {
+        windowWidth >= 1400 ? 372 : 344
+    }
+
+    private func contentMaxWidth(for layout: WorkbenchLayoutContext) -> CGFloat? {
+        if model.selectedSection == .companyTasks { return nil }
+        if layout.centerWidth < 900 { return nil }
+        return layout.windowWidth >= 1400 ? 1180 : 1120
+    }
+
+    private var primaryAction: PrimaryActionDescriptor {
+        switch model.selectedSection ?? .today {
+        case .today:
+            return PrimaryActionDescriptor(title: "New Capture", systemImage: "plus")
+        case .personalTasks:
+            return PrimaryActionDescriptor(title: "Personal Task", systemImage: "checklist")
+        case .personalNotes:
+            return PrimaryActionDescriptor(title: "New Idea", systemImage: "lightbulb")
+        case .companyTasks:
+            return PrimaryActionDescriptor(title: "Company Task", systemImage: "rectangle.3.group")
+        case .companyProjects:
+            return PrimaryActionDescriptor(title: "New Project", systemImage: "folder.badge.plus")
+        case .calendar:
+            return PrimaryActionDescriptor(title: "Event", systemImage: "calendar.badge.plus")
+        case .agent:
+            return PrimaryActionDescriptor(title: "Send", systemImage: "paperplane")
+        case .settings:
+            return PrimaryActionDescriptor(title: "Refresh", systemImage: "arrow.clockwise")
+        }
+    }
+
+    private func runPrimaryAction() {
+        switch model.selectedSection ?? .today {
+        case .personalTasks:
+            quickCaptureText = "个人待办 "
+            openQuickCapture()
+        case .personalNotes:
+            quickCaptureText = "灵感 "
+            openQuickCapture()
+        case .companyTasks:
+            quickCaptureText = "公司待办 "
+            openQuickCapture()
+        case .companyProjects:
+            quickCaptureText = "新项目 "
+            openQuickCapture()
+        case .calendar:
+            quickCaptureText = "固定日程 "
+            openQuickCapture()
+        case .agent:
+            model.selectedSection = .agent
+            isQuickCaptureFocused = true
+        case .settings:
+            Task { await model.refreshAll() }
+        case .today:
+            openQuickCapture()
+        }
     }
 
     private func openQuickCapture() {

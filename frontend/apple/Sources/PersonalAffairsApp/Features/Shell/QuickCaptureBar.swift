@@ -1,33 +1,36 @@
 import SwiftUI
 
 struct QuickCaptureBar: View {
+    @Environment(\.workbenchLayout) private var layout
     @Binding var text: String
     @FocusState.Binding var isFocused: Bool
     let submit: () -> Void
 
     var body: some View {
         HStack(spacing: AppTheme.Spacing.sm) {
-            Image(systemName: "command")
-                .foregroundStyle(AppTheme.Colors.tertiaryText)
-            TextField("快速记录：待办、固定日程、灵感……", text: $text)
+            Image(systemName: "sparkle.magnifyingglass")
+                .foregroundStyle(AppTheme.Colors.agentAccent)
+            TextField("输入任务、固定日程或灵感…", text: $text)
                 .textFieldStyle(.plain)
                 .font(.callout)
                 .focused($isFocused)
                 .onSubmit(submit)
-            Text("K")
-                .font(.caption2.weight(.bold))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(Color.primary.opacity(0.07))
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            if !layout.isCompact {
+                Text("⌘K")
+                    .font(.caption2.weight(.bold))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(AppTheme.Colors.surfaceTinted)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.xs, style: .continuous))
+            }
         }
-        .padding(.horizontal, AppTheme.Spacing.md)
-        .frame(height: 36)
+        .padding(.horizontal, layout.isCompact ? AppTheme.Spacing.md : AppTheme.Spacing.lg)
+        .frame(height: 44)
         .background(.regularMaterial)
         .clipShape(Capsule())
         .overlay {
             Capsule()
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                .stroke(AppTheme.Colors.hairline, lineWidth: 1)
         }
         .overlay(alignment: .trailing) {
             Button("聚焦 Quick Capture") {
