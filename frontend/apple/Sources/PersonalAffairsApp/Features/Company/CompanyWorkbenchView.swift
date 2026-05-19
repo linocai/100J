@@ -62,24 +62,14 @@ struct CompanyWorkbenchView: View {
 
                         ScrollView(.horizontal) {
                             HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
-                                CompanyTaskLane(
-                                    title: "无项目收件箱",
-                                    subtitle: "公司杂项，建议定期归类",
-                                    tasks: sortedForFocus(model.noProjectCompanyTasks),
-                                    projectName: nil,
-                                    isInbox: true,
-                                    isSelectedProject: selectedProjectId == nil,
-                                    selection: selection,
-                                    selectTask: selectTask
-                                )
-                                ForEach(sortedProjects) { project in
+                                ForEach(workbenchLanes) { lane in
                                     CompanyTaskLane(
-                                        title: project.name,
-                                        subtitle: project.targetDate.map { "目标 \($0)" } ?? "项目任务",
-                                        tasks: sortedForFocus(projectTasks(project.id)),
-                                        projectName: project.name,
-                                        isInbox: false,
-                                        isSelectedProject: selectedProjectId == project.id || selection == .project(project.id),
+                                        title: lane.title,
+                                        subtitle: lane.subtitle,
+                                        tasks: lane.tasks,
+                                        projectName: lane.projectName,
+                                        isInbox: lane.isInbox,
+                                        isSelectedProject: isSelected(lane),
                                         selection: selection,
                                         selectTask: selectTask
                                     )
@@ -135,27 +125,18 @@ struct CompanyWorkbenchView: View {
     }
 
     private var sortedProjects: [Project] {
-        model.projects.sorted { lhs, rhs in
-            if lhs.status != rhs.status {
-                return lhs.status == .active
-            }
-            let lhsDate = parsedDateOnly(lhs.targetDate)
-            let rhsDate = parsedDateOnly(rhs.targetDate)
-            switch (lhsDate, rhsDate) {
-            case let (left?, right?) where left != right:
-                return left < right
-            case (_?, nil):
-                return true
-            case (nil, _?):
-                return false
-            default:
-                return lhs.updatedAt > rhs.updatedAt
-            }
-        }
+        CompanyWorkbenchViewState.sortedProjects(model.projects)
     }
 
-    private func projectTasks(_ projectId: String) -> [TaskItem] {
-        model.companyTasks.filter { $0.projectId == projectId && $0.status == .active }
+    private var workbenchLanes: [CompanyTaskLaneState] {
+        CompanyWorkbenchViewState.lanes(projects: model.projects, tasks: model.companyTasks)
+    }
+
+    private func isSelected(_ lane: CompanyTaskLaneState) -> Bool {
+        if let projectId = lane.projectId {
+            return selectedProjectId == projectId || selection == .project(projectId)
+        }
+        return selectedProjectId == nil
     }
 }
 
@@ -201,11 +182,11 @@ private struct ProjectOverviewStrip: View {
     }
 
     private func activeCount(_ projectId: String) -> Int {
-        tasks.filter { $0.projectId == projectId && $0.status == .active }.count
+        CompanyWorkbenchViewState.activeCount(projectId: projectId, tasks: tasks)
     }
 
     private func completedCount(_ projectId: String) -> Int {
-        tasks.filter { $0.projectId == projectId && $0.status == .done }.count
+        CompanyWorkbenchViewState.completedCount(projectId: projectId, tasks: tasks)
     }
 }
 

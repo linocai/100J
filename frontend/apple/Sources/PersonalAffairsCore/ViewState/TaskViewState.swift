@@ -77,7 +77,7 @@ public enum PersonalTasksViewState {
     }
 }
 
-public struct CompanyTaskLaneState: Equatable {
+public struct CompanyTaskLaneState: Identifiable, Equatable {
     public let id: String
     public let title: String
     public let subtitle: String

@@ -166,11 +166,16 @@ private struct IOSCompanyTasksList: View {
     }
 
     private func reload() async {
-        await model.reloadCompanyTasks(
-            status: status,
-            projectScope: scope == "all" || scope == "project" ? nil : scope,
-            projectId: scope == "project" ? selectedProjectId : nil
-        )
+        await model.run {
+            guard let companySpace = model.companySpace else { return }
+            model.companyTasks = try await model.taskRepository.list(
+                query: taskScope.query(companySpaceId: companySpace.id, status: status)
+            )
+        }
+    }
+
+    private var taskScope: CompanyTaskScope {
+        CompanyTaskScope(pickerValue: scope, selectedProjectId: selectedProjectId)
     }
 
     private func toggleDone(_ task: TaskItem) async {

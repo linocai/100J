@@ -224,20 +224,25 @@ final class AppModel: ObservableObject {
     func reloadPersonalTasks(status: TaskStatus = .active, search: String? = nil) async {
         await run {
             guard let personalSpace = self.personalSpace else { return }
-            self.personalTasks = try await self.taskRepository.list(spaceId: personalSpace.id, status: status, search: search)
+            let query = PersonalTasksViewState.query(
+                personalSpaceId: personalSpace.id,
+                status: status,
+                search: search
+            )
+            self.personalTasks = try await self.taskRepository.list(query: query)
         }
     }
 
     func reloadCompanyTasks(status: TaskStatus = .active, projectScope: String? = nil, projectId: String? = nil, search: String? = nil) async {
         await run {
             guard let companySpace = self.companySpace else { return }
-            self.companyTasks = try await self.taskRepository.list(
-                spaceId: projectId == nil ? companySpace.id : nil,
-                projectId: projectId,
-                projectScope: projectScope,
+            let scope = CompanyTaskScope(pickerValue: projectScope ?? (projectId == nil ? "all" : "project"), selectedProjectId: projectId)
+            let query = scope.query(
+                companySpaceId: companySpace.id,
                 status: status,
                 search: search
             )
+            self.companyTasks = try await self.taskRepository.list(query: query)
         }
     }
 

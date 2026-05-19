@@ -103,7 +103,7 @@ private struct IOSPersonalTasksList: View {
                             dueDate: draft.dueDateString
                         )
                     )
-                    model.personalTasks = try await model.taskRepository.list(spaceId: space.id, status: status)
+                    model.personalTasks = try await model.taskRepository.list(query: personalQuery(spaceId: space.id))
                 }
             }
         }
@@ -131,7 +131,7 @@ private struct IOSPersonalTasksList: View {
                         )
                     )
                     guard let space = model.personalSpace else { return }
-                    model.personalTasks = try await model.taskRepository.list(spaceId: space.id, status: status)
+                    model.personalTasks = try await model.taskRepository.list(query: personalQuery(spaceId: space.id))
                 }
             }
         }
@@ -151,7 +151,7 @@ private struct IOSPersonalTasksList: View {
                 _ = try await model.taskRepository.complete(id: task.id)
             }
             guard let space = model.personalSpace else { return }
-            model.personalTasks = try await model.taskRepository.list(spaceId: space.id, status: status)
+            model.personalTasks = try await model.taskRepository.list(query: personalQuery(spaceId: space.id))
         }
     }
 
@@ -159,8 +159,12 @@ private struct IOSPersonalTasksList: View {
         await model.run {
             _ = try await model.taskRepository.archive(id: task.id)
             guard let space = model.personalSpace else { return }
-            model.personalTasks = try await model.taskRepository.list(spaceId: space.id, status: status)
+            model.personalTasks = try await model.taskRepository.list(query: personalQuery(spaceId: space.id))
         }
+    }
+
+    private func personalQuery(spaceId: String) -> TaskListQuery {
+        PersonalTasksViewState.query(personalSpaceId: spaceId, status: status)
     }
 }
 

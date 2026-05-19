@@ -7,8 +7,8 @@ struct AgentView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.workbenchLayout) private var layout
     @State private var inputText = ""
-    @State private var pendingCommand: NaturalAgentCommand?
-    @State private var confirmationToken = ""
+    @State private var pendingCommand: AgentCommandDraft?
+    @State private var pendingConfirmation: AgentConfirmationPrompt?
     @State private var responseText = ""
     var onSelectAgentLog: (AgentActionLog) -> Void = { _ in }
 
@@ -112,24 +112,29 @@ struct AgentView: View {
     }
 
     private var actionReviewSurface: some View {
-        SurfaceView(style: confirmationToken.isEmpty ? .base : .warning) {
+        SurfaceView(style: pendingConfirmation == nil ? .base : .warning) {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
             Text("Action Review")
                 .font(.headline.weight(.semibold))
 
-            if !confirmationToken.isEmpty {
-                Text("这条操作被后端标记为高风险，需要二次确认。")
-                    .foregroundStyle(AppTheme.Colors.secondaryText)
+            if let pendingConfirmation {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                    Text(pendingConfirmation.summary)
+                        .font(.callout.weight(.semibold))
+                    Text(pendingConfirmation.reason)
+                        .foregroundStyle(AppTheme.Colors.secondaryText)
+                    PillView(text: "后端要求二次确认", style: .warningSubtle)
+                }
                 HStack {
                     Button {
-                        confirmationToken = ""
+                        self.pendingConfirmation = nil
                         pendingCommand = nil
                         responseText = "已取消这次操作。"
                     } label: {
                         Label("取消", systemImage: "xmark")
                     }
                     Button {
-                        confirmBackendToken()
+                        confirmBackendPrompt(pendingConfirmation)
                     } label: {
                         Label("确认执行", systemImage: "checkmark.seal")
                     }
@@ -207,7 +212,7 @@ struct AgentView: View {
         }
     }
 
-    private func commandSummary(_ command: NaturalAgentCommand) -> some View {
+    private func commandSummary(_ command: AgentCommandDraft) -> some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
             HStack {
                 PillView(text: command.intent.target.label, style: .agent)
@@ -246,23 +251,19 @@ struct AgentView: View {
         guard let intent = CaptureParser.parse(text) else {
             responseText = "我没看懂这句话。可以试试“公司待办 跟进发票”或“明天下午3点公司会议”。"
             pendingCommand = nil
+            pendingConfirmation = nil
             return
         }
 
         guard let built = buildNaturalCommand(intent) else {
             responseText = "当前空间还没加载完成。请先刷新数据，再试一次。"
             pendingCommand = nil
+            pendingConfirmation = nil
             return
         }
 
-        let command = NaturalAgentCommand(
-            intent: intent,
-            command: built.command,
-            arguments: built.arguments,
-            summary: built.summary
-        )
-        pendingCommand = command
-        confirmationToken = ""
+        pendingCommand = built
+        pendingConfirmation = nil
         responseText = "已生成可审核操作。"
     }
 
@@ -276,22 +277,23 @@ struct AgentView: View {
                     dryRun: dryRun
                 )
                 responseText = render(response)
-                if let token = response.confirmationToken {
-                    confirmationToken = token
+                if let prompt = AgentConfirmationPrompt(response: response, draft: pendingCommand) {
+                    pendingConfirmation = prompt
                 } else if !dryRun {
                     self.pendingCommand = nil
+                    pendingConfirmation = nil
                 }
                 try await model.loadAllData()
             }
         }
     }
 
-    private func confirmBackendToken() {
+    private func confirmBackendPrompt(_ prompt: AgentConfirmationPrompt) {
         Task {
             await model.run {
-                let response = try await model.agentRepository.confirm(token: confirmationToken)
+                let response = try await model.agentRepository.confirm(token: prompt.token)
                 responseText = render(response)
-                confirmationToken = ""
+                pendingConfirmation = nil
                 pendingCommand = nil
                 try await model.loadAllData()
             }
@@ -299,98 +301,14 @@ struct AgentView: View {
     }
 }
 
-private struct NaturalAgentCommand {
-    let intent: ParsedCaptureIntent
-    let command: String
-    let arguments: [String: JSONValue]
-    let summary: String
-}
-
-private extension ParsedCaptureTarget {
-    var label: String {
-        switch self {
-        case .personalTask: return "个人待办"
-        case .companyTask: return "公司待办"
-        case .fixedCalendar: return "固定日程"
-        case .personalNote: return "个人备忘"
-        case .companyProject: return "公司项目"
-        }
-    }
-}
-
 private extension AgentView {
-    func buildNaturalCommand(_ intent: ParsedCaptureIntent) -> (command: String, arguments: [String: JSONValue], summary: String)? {
-        switch intent.target {
-        case .personalTask:
-            guard let space = model.personalSpace else { return nil }
-            return ("create_task", baseTaskArguments(spaceId: space.id, intent: intent), "创建个人待办：\(intent.title)")
-        case .companyTask:
-            guard let space = model.companySpace else { return nil }
-            return ("create_task", baseTaskArguments(spaceId: space.id, intent: intent), "创建公司待办：\(intent.title)")
-        case .fixedCalendar:
-            let targetSpace = intent.calendarSpace == .personal ? model.personalSpace : model.companySpace
-            guard let space = targetSpace else { return nil }
-            var arguments: [String: JSONValue] = [
-                "space_id": .string(space.id),
-                "title": .string(intent.title),
-                "description": .string(intent.description ?? intent.title),
-                "type": .string(intent.calendarType.rawValue),
-                "all_day": .bool(intent.allDay),
-                "timezone": .string(TimeZone.current.identifier),
-                "recurrence": .string(intent.recurrence.rawValue)
-            ]
-            if intent.allDay {
-                arguments["start_date"] = .string(intent.startDate ?? Date().dayKey)
-            } else if let startAt = intent.startAt {
-                arguments["start_at"] = .string(Self.isoFormatter.string(from: startAt))
-            }
-            return ("create_calendar_item", arguments, "创建\(intent.calendarSpace.label)固定日程：\(intent.title)")
-        case .personalNote:
-            guard let space = model.personalSpace else { return nil }
-            return (
-                "create_note",
-                [
-                    "space_id": .string(space.id),
-                    "title": .string(intent.title),
-                    "body": .string(intent.description ?? intent.title),
-                    "type": .string(intent.noteType.rawValue)
-                ],
-                "创建个人备忘：\(intent.title)"
-            )
-        case .companyProject:
-            guard let space = model.companySpace else { return nil }
-            return (
-                "create_project",
-                [
-                    "space_id": .string(space.id),
-                    "name": .string(intent.title),
-                    "description": .string(intent.description ?? "")
-                ],
-                "创建公司项目：\(intent.title)"
-            )
-        }
+    func buildNaturalCommand(_ intent: ParsedCaptureIntent) -> AgentCommandDraft? {
+        AgentNaturalCommandBuilder.build(
+            intent: intent,
+            personalSpace: model.personalSpace,
+            companySpace: model.companySpace
+        )
     }
-
-    func baseTaskArguments(spaceId: String, intent: ParsedCaptureIntent) -> [String: JSONValue] {
-        var arguments: [String: JSONValue] = [
-            "space_id": .string(spaceId),
-            "title": .string(intent.title),
-            "priority": .string(intent.priority.rawValue)
-        ]
-        if let description = intent.description {
-            arguments["description"] = .string(description)
-        }
-        if let dueDate = intent.dueDate {
-            arguments["due_date"] = .string(dueDate)
-        }
-        return arguments
-    }
-
-    static let isoFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
 }
 
 private func render(_ response: AgentCommandResponse) -> String {
