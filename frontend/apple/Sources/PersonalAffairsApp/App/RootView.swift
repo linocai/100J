@@ -18,7 +18,7 @@ struct RootView: View {
         .overlay(alignment: .bottom) {
             if let message = model.errorMessage {
                 ErrorBanner(message: message) {
-                    model.errorMessage = nil
+                    Task { @MainActor in model.errorMessage = nil }
                 }
                 .padding()
             }

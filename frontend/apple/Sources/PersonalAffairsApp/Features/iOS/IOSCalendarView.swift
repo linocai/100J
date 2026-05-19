@@ -23,7 +23,7 @@ struct IOSCalendarView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .onChange(of: filter) { _ in Task { await reload() } }
+                    .onValueChange(of: filter) { _ in Task { await reload() } }
 
                     if filter == .project {
                         Picker("项目", selection: $selectedProjectId) {
@@ -32,7 +32,7 @@ struct IOSCalendarView: View {
                                 Text(project.name).tag(Optional(project.id))
                             }
                         }
-                        .onChange(of: selectedProjectId) { _ in Task { await reload() } }
+                        .onValueChange(of: selectedProjectId) { _ in Task { await reload() } }
                     }
                 }
 

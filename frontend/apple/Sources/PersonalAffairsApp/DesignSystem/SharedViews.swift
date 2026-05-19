@@ -1,5 +1,32 @@
 import SwiftUI
 
+private struct ValueChangeModifier<Value: Equatable>: ViewModifier {
+    let value: Value
+    let action: (Value) -> Void
+    @State private var previousValue: Value?
+
+    func body(content: Content) -> some View {
+        content.task(id: value) {
+            guard let previousValue else {
+                self.previousValue = value
+                return
+            }
+            guard previousValue != value else { return }
+            self.previousValue = value
+            action(value)
+        }
+    }
+}
+
+extension View {
+    func onValueChange<Value: Equatable>(
+        of value: Value,
+        perform action: @escaping (Value) -> Void
+    ) -> some View {
+        modifier(ValueChangeModifier(value: value, action: action))
+    }
+}
+
 struct ErrorBanner: View {
     let message: String
     let dismiss: () -> Void
@@ -76,4 +103,3 @@ extension Date {
         return formatter.string(from: self)
     }
 }
-

@@ -83,11 +83,15 @@ struct IOSErrorAlert: ViewModifier {
             "出现问题",
             isPresented: Binding(
                 get: { model.errorMessage != nil },
-                set: { if !$0 { model.errorMessage = nil } }
+                set: { isPresented in
+                    if !isPresented {
+                        Task { @MainActor in model.errorMessage = nil }
+                    }
+                }
             )
         ) {
             Button("好") {
-                model.errorMessage = nil
+                Task { @MainActor in model.errorMessage = nil }
             }
         } message: {
             Text(model.errorMessage ?? "")

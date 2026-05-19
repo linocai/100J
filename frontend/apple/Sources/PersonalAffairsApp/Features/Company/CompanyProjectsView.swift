@@ -120,7 +120,7 @@ struct CompanyProjectsView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 150)
-                .onChange(of: status) { newValue in
+                .onValueChange(of: status) { newValue in
                     Task { await model.reloadProjects(status: newValue) }
                 }
 

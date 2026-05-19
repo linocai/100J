@@ -129,7 +129,7 @@ struct PersonalNotesView: View {
             }
         }
         .pickerStyle(.segmented)
-        .onChange(of: status) { newValue in
+        .onValueChange(of: status) { newValue in
             Task { await model.reloadNotes(status: newValue, type: type, search: search.trimmedOrNil) }
         }
     }
@@ -141,7 +141,7 @@ struct PersonalNotesView: View {
                 Text(type.label).tag(Optional(type))
             }
         }
-        .onChange(of: type) { newValue in
+        .onValueChange(of: type) { newValue in
             Task { await model.reloadNotes(status: status, type: newValue, search: search.trimmedOrNil) }
         }
     }

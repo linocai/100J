@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
     @State private var baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "http://127.0.0.1:8000/api/v1"
+    @State private var selectedAuthMode = UserDefaults.standard.string(forKey: "appAuthMode").flatMap(AppAuthMode.init(rawValue:)) ?? .localOwner
     @State private var provider = "openai"
     @State private var apiKey = ""
     @State private var showingAdvanced = false
@@ -20,13 +21,13 @@ struct SettingsView: View {
                 SurfaceView {
                     Form {
                         LabeledContent("当前模式") {
-                            Picker("当前模式", selection: $model.authMode) {
+                            Picker("当前模式", selection: $selectedAuthMode) {
                                 ForEach(AppAuthMode.allCases) { mode in
                                     Text(mode.label).tag(mode)
                                 }
                             }
                             .labelsHidden()
-                            .onChange(of: model.authMode) { newValue in
+                            .onValueChange(of: selectedAuthMode) { newValue in
                                 model.updateAuthMode(newValue)
                             }
                         }
@@ -101,6 +102,14 @@ struct SettingsView: View {
                 }
             }
             .padding(AppTheme.Spacing.xl)
+        }
+        .task {
+            selectedAuthMode = model.authMode
+        }
+        .onValueChange(of: model.authMode) { newValue in
+            if selectedAuthMode != newValue {
+                selectedAuthMode = newValue
+            }
         }
     }
 

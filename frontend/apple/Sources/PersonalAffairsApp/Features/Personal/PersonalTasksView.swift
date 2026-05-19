@@ -129,7 +129,7 @@ struct PersonalTasksView: View {
             }
         }
         .pickerStyle(.segmented)
-        .onChange(of: status) { newValue in
+        .onValueChange(of: status) { newValue in
             Task { await model.reloadPersonalTasks(status: newValue, search: search.trimmedOrNil) }
         }
     }

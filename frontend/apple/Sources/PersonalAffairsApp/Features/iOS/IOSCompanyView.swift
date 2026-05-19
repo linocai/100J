@@ -55,7 +55,7 @@ private struct IOSCompanyTasksList: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .onChange(of: status) { _ in Task { await reload() } }
+                .onValueChange(of: status) { _ in Task { await reload() } }
 
                 Picker("范围", selection: $scope) {
                     Text("全部").tag("all")
@@ -63,7 +63,7 @@ private struct IOSCompanyTasksList: View {
                     Text("有项目").tag("with_project")
                     Text("项目").tag("project")
                 }
-                .onChange(of: scope) { _ in Task { await reload() } }
+                .onValueChange(of: scope) { _ in Task { await reload() } }
 
                 if scope == "project" {
                     Picker("项目", selection: $selectedProjectId) {
@@ -72,7 +72,7 @@ private struct IOSCompanyTasksList: View {
                             Text(project.name).tag(Optional(project.id))
                         }
                     }
-                    .onChange(of: selectedProjectId) { _ in Task { await reload() } }
+                    .onValueChange(of: selectedProjectId) { _ in Task { await reload() } }
                 }
             }
 

@@ -100,7 +100,7 @@ struct GlobalCalendarView: View {
             }
         }
         .pickerStyle(.segmented)
-        .onChange(of: filter) { _ in Task { await reload() } }
+        .onValueChange(of: filter) { _ in Task { await reload() } }
     }
 
     private var projectPicker: some View {
@@ -110,7 +110,7 @@ struct GlobalCalendarView: View {
                 Text(project.name).tag(Optional(project.id))
             }
         }
-        .onChange(of: selectedProjectId) { _ in Task { await reload() } }
+        .onValueChange(of: selectedProjectId) { _ in Task { await reload() } }
     }
 
     private var calendarBoard: some View {

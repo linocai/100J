@@ -37,7 +37,7 @@ struct QuickCaptureSheet: View {
                 }
             }
             .pickerStyle(.segmented)
-            .onChange(of: draft.target) { _ in
+            .onValueChange(of: draft.target) { _ in
                 normalizeDraftForTarget()
             }
 
@@ -84,7 +84,7 @@ struct QuickCaptureSheet: View {
         }
         .padding(AppTheme.Spacing.xl)
         .frame(width: 560)
-        .onChange(of: draft.calendarType) { newValue in
+        .onValueChange(of: draft.calendarType) { newValue in
             if newValue == .anniversary || newValue == .subscriptionExpiry {
                 draft.allDay = true
                 if draft.recurrence == .none && newValue == .anniversary {

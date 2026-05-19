@@ -5,6 +5,7 @@ import SwiftUI
 struct IOSSettingsView: View {
     @EnvironmentObject private var model: AppModel
     @State private var baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "http://127.0.0.1:8000/api/v1"
+    @State private var selectedAuthMode = UserDefaults.standard.string(forKey: "appAuthMode").flatMap(AppAuthMode.init(rawValue:)) ?? .localOwner
 
     var body: some View {
         NavigationStack {
@@ -16,12 +17,12 @@ struct IOSSettingsView: View {
                 }
 
                 Section("模式") {
-                    Picker("当前模式", selection: $model.authMode) {
+                    Picker("当前模式", selection: $selectedAuthMode) {
                         ForEach(AppAuthMode.allCases) { mode in
                             Text(mode.label).tag(mode)
                         }
                     }
-                    .onChange(of: model.authMode) { newValue in
+                    .onValueChange(of: selectedAuthMode) { newValue in
                         model.updateAuthMode(newValue)
                     }
                     if let user = model.currentUser {
@@ -66,6 +67,14 @@ struct IOSSettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .overlay { IOSLoadingOverlay() }
             .iosErrorAlert()
+            .task {
+                selectedAuthMode = model.authMode
+            }
+            .onValueChange(of: model.authMode) { newValue in
+                if selectedAuthMode != newValue {
+                    selectedAuthMode = newValue
+                }
+            }
         }
     }
 }
