@@ -16,8 +16,9 @@ def expect(response: httpx.Response, status: int, label: str):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Phase 4 local API smoke test.")
+    parser = argparse.ArgumentParser(description="Personal Affairs API smoke test.")
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
+    parser.add_argument("--env", choices=["local", "prod"], default="local")
     args = parser.parse_args()
 
     base_url = args.base_url.rstrip("/")
@@ -337,9 +338,12 @@ def main() -> None:
         headers2 = {"Authorization": f"Bearer {refreshed['access_token']}"}
         expect(client.get(f"{api_url}/me", headers=headers2), 200, "me after refresh")
 
-    print("phase4 smoke ok")
+    print(f"{args.env} smoke ok")
     print(f"test_user={email}")
-    print(f"test_password={PASSWORD}")
+    if args.env == "prod":
+        print("test_password=<redacted disposable smoke password>")
+    else:
+        print(f"test_password={PASSWORD}")
     print(f"personal_space={personal_id}")
     print(f"company_space={company_id}")
     print(f"project={project['id']}")

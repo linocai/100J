@@ -29,7 +29,12 @@ final class AppModel: ObservableObject {
     let agentRepository: AgentRepository
 
     init() {
-        let storedBaseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "http://127.0.0.1:8000/api/v1"
+        #if DEBUG
+        let defaultBaseURL = "http://127.0.0.1:8000/api/v1"
+        #else
+        let defaultBaseURL = "https://100j.linotsai.top/api/v1"
+        #endif
+        let storedBaseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? defaultBaseURL
         let storedAuthMode = UserDefaults.standard.string(forKey: "appAuthMode")
             .flatMap(AppAuthMode.init(rawValue:)) ?? .localOwner
         self.authMode = storedAuthMode

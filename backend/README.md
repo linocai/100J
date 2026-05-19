@@ -73,6 +73,20 @@ pytest
 
 Tests use in-memory SQLite and do not require a local PostgreSQL server.
 
+## Production Deployment
+
+Production deployment is documented in `../deployment.md`. The HZ cloud deployment uses Docker
+Compose, PostgreSQL, `APP_ENV=production`, and `AUTH_MODE=jwt`.
+
+Production secrets must be random and must not use the development defaults:
+
+- `JWT_SECRET_KEY`
+- `POSTGRES_PASSWORD`
+- `LLM_KEY_ENCRYPTION_SECRET`
+
+`LLM_KEY_ENCRYPTION_SECRET` is hashed into the Fernet key material at runtime; use a high-entropy
+random value in production, not the example placeholder.
+
 ## Phase 4 Local Smoke
 
 With the API running locally, execute:

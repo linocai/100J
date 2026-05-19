@@ -27,6 +27,64 @@ Setuptools package discovery should include only `app*` for this backend package
 
 ---
 
+## [ERR-20260519-001] docker_compose_percent_path_schema
+
+**Logged**: 2026-05-19T13:22:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: infra
+
+### Summary
+`docker compose config` failed when run from the repository path containing `%`.
+
+### Error
+```text
+validating /Users/linotsai/Lino/100%J/docker-compose.yml: error in parsing "compose-spec.json": parse "file:///Users/linotsai/Lino/100%J/compose-spec.json": invalid URL escape "%J/"
+```
+
+### Context
+- Command: `ONEJ_ENV_FILE=backend/.env.example ONEJ_API_PORT=8020 docker compose config`
+- Working directory: `/Users/linotsai/Lino/100%J`
+- Docker Compose attempted to parse a local schema URL and treated `%J` as an invalid URL escape.
+
+### Suggested Fix
+Run Docker Compose checks from a temporary copy outside the `%` path, such as `/tmp/100j-compose-check`.
+
+### Metadata
+- Reproducible: yes
+- Related Files: `docker-compose.yml`
+
+---
+
+## [ERR-20260519-002] local_docker_daemon_unavailable
+
+**Logged**: 2026-05-19T13:24:00+08:00
+**Priority**: low
+**Status**: pending
+**Area**: infra
+
+### Summary
+Local Docker image build could not run because the local Docker daemon was not available.
+
+### Error
+```text
+Cannot connect to the Docker daemon at unix:///Users/linotsai/.docker/run/docker.sock. Is the docker daemon running?
+```
+
+### Context
+- Command: `docker compose --env-file backend/.env.example build api`
+- Working directory: `/tmp/100j-compose-check`
+- Remote HZ server Docker is active, so deployment can still build on the server.
+
+### Suggested Fix
+Use the HZ server Docker daemon for deployment builds, or start Docker Desktop locally before local image-build verification.
+
+### Metadata
+- Reproducible: yes
+- Related Files: `backend/Dockerfile`, `docker-compose.yml`
+
+---
+
 ## [ERR-20260518-001] swiftui_textcontenttype_macos_availability
 
 **Logged**: 2026-05-18T09:50:00+08:00

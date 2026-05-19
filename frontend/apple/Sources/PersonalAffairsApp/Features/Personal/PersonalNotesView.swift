@@ -8,6 +8,7 @@ struct PersonalNotesView: View {
     @State private var type: NoteType?
     @State private var search = ""
     @State private var showingNewNote = false
+    @FocusState private var isSearchFocused: Bool
     var selection: InspectorSelection? = nil
     var onSelectNote: (Note) -> Void = { _ in }
 
@@ -58,6 +59,7 @@ struct PersonalNotesView: View {
         .task {
             await model.reloadNotes(status: status, type: type, search: search.trimmedOrNil)
         }
+        .background(searchShortcut)
     }
 
     private var header: some View {
@@ -94,6 +96,7 @@ struct PersonalNotesView: View {
 
             TextField("搜索", text: $search)
                 .textFieldStyle(.roundedBorder)
+                .focused($isSearchFocused)
                 .frame(width: layout.narrowControlWidth)
                 .onSubmit {
                     Task { await model.reloadNotes(status: status, type: type, search: search.trimmedOrNil) }
@@ -111,6 +114,7 @@ struct PersonalNotesView: View {
             }
             TextField("搜索", text: $search)
                 .textFieldStyle(.roundedBorder)
+                .focused($isSearchFocused)
                 .onSubmit {
                     Task { await model.reloadNotes(status: status, type: type, search: search.trimmedOrNil) }
                 }
@@ -171,6 +175,19 @@ struct PersonalNotesView: View {
                 try await model.loadAllData()
             }
         }
+    }
+
+    @ViewBuilder
+    private var searchShortcut: some View {
+        #if os(macOS)
+        Button("聚焦搜索") {
+            isSearchFocused = true
+        }
+        .keyboardShortcut("f", modifiers: .command)
+        .opacity(0)
+        .frame(width: 0, height: 0)
+        .accessibilityHidden(true)
+        #endif
     }
 }
 

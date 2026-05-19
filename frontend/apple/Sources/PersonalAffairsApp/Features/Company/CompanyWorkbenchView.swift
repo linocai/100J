@@ -7,6 +7,8 @@ struct CompanyWorkbenchView: View {
     @State private var showingNewTask = false
     @State private var showingNewProject = false
     @State private var selectedProjectId: String?
+    @State private var search = ""
+    @FocusState private var isSearchFocused: Bool
 
     var selection: InspectorSelection? = nil
     let selectTask: (TaskItem) -> Void
@@ -37,9 +39,10 @@ struct CompanyWorkbenchView: View {
                 }
 
                 ProjectOverviewStrip(
-                    projects: sortedProjects,
-                    tasks: model.companyTasks,
+                    projects: visibleProjects,
+                    tasks: visibleCompanyTasks,
                     selectedProjectId: selectedProjectId,
+                    showMoreProjects: { model.selectedSection = .companyProjects },
                     select: { project in
                         selectedProjectId = project.id
                         selectProject(project)
@@ -59,6 +62,10 @@ struct CompanyWorkbenchView: View {
                             Spacer()
                             PillView(text: "无项目 = 公司任务分组，不是状态", style: .warningSubtle)
                         }
+                        TextField("搜索公司任务或项目", text: $search)
+                            .textFieldStyle(.roundedBorder)
+                            .focused($isSearchFocused)
+                            .frame(maxWidth: min(360, max(260, layout.centerWidth * 0.32)))
 
                         ScrollView(.horizontal) {
                             HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
@@ -122,6 +129,7 @@ struct CompanyWorkbenchView: View {
                 try await model.loadAllData()
             }
         }
+        .background(searchShortcut)
     }
 
     private var sortedProjects: [Project] {
@@ -129,7 +137,33 @@ struct CompanyWorkbenchView: View {
     }
 
     private var workbenchLanes: [CompanyTaskLaneState] {
-        CompanyWorkbenchViewState.lanes(projects: model.projects, tasks: model.companyTasks)
+        CompanyWorkbenchViewState.lanes(projects: visibleProjects, tasks: visibleCompanyTasks)
+    }
+
+    private var visibleProjects: [Project] {
+        guard let term = searchTerm else { return sortedProjects }
+        return sortedProjects.filter { project in
+            project.name.localizedCaseInsensitiveContains(term)
+                || (project.description?.localizedCaseInsensitiveContains(term) ?? false)
+                || model.companyTasks.contains { task in
+                    task.projectId == project.id && matches(task, term: term)
+                }
+        }
+    }
+
+    private var visibleCompanyTasks: [TaskItem] {
+        guard let term = searchTerm else { return model.companyTasks }
+        return model.companyTasks.filter { task in matches(task, term: term) }
+    }
+
+    private var searchTerm: String? {
+        search.trimmedOrNil
+    }
+
+    private func matches(_ task: TaskItem, term: String) -> Bool {
+        task.title.localizedCaseInsensitiveContains(term)
+            || (task.description?.localizedCaseInsensitiveContains(term) ?? false)
+            || (model.projectName(for: task.projectId)?.localizedCaseInsensitiveContains(term) ?? false)
     }
 
     private func isSelected(_ lane: CompanyTaskLaneState) -> Bool {
@@ -138,12 +172,26 @@ struct CompanyWorkbenchView: View {
         }
         return selectedProjectId == nil
     }
+
+    @ViewBuilder
+    private var searchShortcut: some View {
+        #if os(macOS)
+        Button("聚焦搜索") {
+            isSearchFocused = true
+        }
+        .keyboardShortcut("f", modifiers: .command)
+        .opacity(0)
+        .frame(width: 0, height: 0)
+        .accessibilityHidden(true)
+        #endif
+    }
 }
 
 private struct ProjectOverviewStrip: View {
     let projects: [Project]
     let tasks: [TaskItem]
     let selectedProjectId: String?
+    let showMoreProjects: () -> Void
     let select: (Project) -> Void
 
     var body: some View {
@@ -153,6 +201,13 @@ private struct ProjectOverviewStrip: View {
                     .font(.headline.weight(.semibold))
                 Spacer()
                 PillView(text: "\(projects.count) 个进行中项目", style: .company)
+                if projects.count > 6 {
+                    Button(action: showMoreProjects) {
+                        Label("更多", systemImage: "ellipsis.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("查看全部项目")
+                }
             }
 
             if projects.isEmpty {

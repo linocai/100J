@@ -7,6 +7,7 @@ struct PersonalTasksView: View {
     @State private var status: TaskStatus = .active
     @State private var search = ""
     @State private var showingNewTask = false
+    @FocusState private var isSearchFocused: Bool
     var selection: InspectorSelection? = nil
     var onSelectTask: (TaskItem) -> Void = { _ in }
 
@@ -64,6 +65,7 @@ struct PersonalTasksView: View {
         .task {
             await model.reloadPersonalTasks(status: status, search: search.trimmedOrNil)
         }
+        .background(searchShortcut)
     }
 
     private var header: some View {
@@ -97,6 +99,7 @@ struct PersonalTasksView: View {
                 .frame(width: min(260, max(220, layout.centerWidth * 0.30)))
             TextField("搜索", text: $search)
                 .textFieldStyle(.roundedBorder)
+                .focused($isSearchFocused)
                 .frame(width: layout.narrowControlWidth)
                 .onSubmit {
                     Task { await model.reloadPersonalTasks(status: status, search: search.trimmedOrNil) }
@@ -111,6 +114,7 @@ struct PersonalTasksView: View {
             statusPicker
             TextField("搜索", text: $search)
                 .textFieldStyle(.roundedBorder)
+                .focused($isSearchFocused)
                 .onSubmit {
                     Task { await model.reloadPersonalTasks(status: status, search: search.trimmedOrNil) }
                 }
@@ -195,6 +199,19 @@ struct PersonalTasksView: View {
             status: status,
             search: search.trimmedOrNil
         )
+    }
+
+    @ViewBuilder
+    private var searchShortcut: some View {
+        #if os(macOS)
+        Button("聚焦搜索") {
+            isSearchFocused = true
+        }
+        .keyboardShortcut("f", modifiers: .command)
+        .opacity(0)
+        .frame(width: 0, height: 0)
+        .accessibilityHidden(true)
+        #endif
     }
 }
 
