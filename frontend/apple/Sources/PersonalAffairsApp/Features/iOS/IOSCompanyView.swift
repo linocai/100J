@@ -137,7 +137,7 @@ private struct IOSCompanyTasksList: View {
                     title: task.title,
                     description: task.description ?? "",
                     priority: task.priority,
-                    dueDate: task.dueDate ?? "",
+                    dueDateString: task.dueDate,
                     projectId: task.projectId
                 )
             ) { draft in

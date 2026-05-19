@@ -6,7 +6,7 @@ Build Personal Affairs App v1 in phases: backend, macOS, iOS, local E2E testing,
 
 ## Current Position
 
-Phase 4 automated local verification was completed for the 2026-05-17 snapshot. Since then, an additional macOS visual / shell redesign pass has been in flight.
+Phase 4 automated local verification was completed for the 2026-05-17 snapshot. A P0/P1 production-hardening slice is now complete on branch `codex/production-hardening`.
 
 As of 2026-05-19, `AUDIT_v1.md` is the highest-authority production guidance file. The active implementation documents are now:
 
@@ -26,6 +26,12 @@ Stopped frontend documents were removed to end the source-of-truth split.
 - iOS Simulator build passes on iPhone 17, iOS 26.5.
 - Phase 4 backend tests, migration check, OpenAPI check, API smoke test, macOS build/test, and iOS simulator build pass.
 - Documentation source-of-truth cleanup: old frontend blueprint, temporary frontend review memo, and HTML visual prototype were removed.
+- P0/P1 Apple hardening slice on `codex/production-hardening`:
+  - `PersonalAffairsCore/ViewState` now owns shared task query, company grouping, Agent draft, and Agent confirmation prompt state.
+  - macOS and iOS Agent use productized confirmation prompts; raw backend confirmation tokens are not shown to users.
+  - iOS Personal / Company task flows consume shared query helpers.
+  - Legacy macOS product-path UI was removed.
+  - `frontend/apple/SHARING_RULES.md` records the no-duplicated-business-logic rule.
 
 ## Verification
 
@@ -37,7 +43,12 @@ swift test --scratch-path /tmp/personal-affairs-apple-build
 xcodebuild -quiet -scheme PersonalAffairsApp -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' -derivedDataPath /tmp/personal-affairs-xcode-derived build
 ```
 
-Latest result: all passed on 2026-05-17.
+Latest Apple result: all passed on 2026-05-19 on `codex/production-hardening`.
+
+Notes:
+
+- `xcodebuild` printed `IDERunDestination: Supported platforms for the buildables in the current scheme is empty.`, but exited 0 and completed the iOS Simulator build.
+- Backend files were not changed in this hardening slice, so backend tests were not rerun.
 
 Backend Phase 4 checks:
 
@@ -56,10 +67,12 @@ DATABASE_URL=sqlite:////tmp/personal_affairs_phase4_migration.db .venv/bin/alemb
 - Deleted stopped frontend documents instead of keeping superseded copies in the repo.
 - Keep Calendar and Agent as global top-level navigation entries on both macOS and iOS.
 - Keep Today as the macOS default command center, constrained to aggregate existing Task / CalendarItem / Note / Project data without new backend objects or APIs.
+- Keep Apple-side fetch/filter/group/review business rules in `PersonalAffairsCore/ViewState` or repositories; platform views should stay layout shells.
+- Keep Agent confirmation productized: do not expose raw confirmation tokens or ask users to paste them.
 - Use native SwiftUI instead of web UI.
 - Use scratch paths outside this repo for SwiftPM / Xcode derived data because the repository path contains `%`.
 - Keep macOS-specific `NavigationSplitView` / `HSplitView` surfaces behind `#if os(macOS)` and iOS-specific views behind `#if os(iOS)`.
 
 ## Next Action
 
-When the user asks to resume implementation, start with the P0 items in `AUDIT_v1.md`: Agent confirmation UI, STATE/worktree cleanup, then iOS sharing rules and ViewModel extraction.
+Next useful action is P2 from `AUDIT_v1.md`: Phase 5 deployment materials, OpenAPI schema snapshot test, Cmd+F search, and ProjectOverviewStrip "More" affordance.

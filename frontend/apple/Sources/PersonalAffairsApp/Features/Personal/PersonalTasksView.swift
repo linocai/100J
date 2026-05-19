@@ -206,6 +206,22 @@ struct TaskDraft {
     var dueDate = Date()
     var projectId: String?
 
+    init(
+        title: String = "",
+        description: String = "",
+        priority: TaskPriority = .medium,
+        dueDateString: String? = nil,
+        projectId: String? = nil
+    ) {
+        self.title = title
+        self.description = description
+        self.priority = priority
+        let parsedDueDate = parsedDateOnly(dueDateString)
+        self.hasDueDate = parsedDueDate != nil
+        self.dueDate = parsedDueDate ?? Date()
+        self.projectId = projectId
+    }
+
     var dueDateString: String? {
         hasDueDate ? dueDate.dayKey : nil
     }
