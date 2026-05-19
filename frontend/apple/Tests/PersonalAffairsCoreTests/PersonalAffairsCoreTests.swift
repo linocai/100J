@@ -263,6 +263,24 @@ final class PersonalAffairsCoreTests: XCTestCase {
         XCTAssertEqual(store.refreshToken, "refresh")
     }
 
+    func testOwnerLoginUnauthorizedKeepsServerMessage() async throws {
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: InMemoryTokenStore(), session: Self.stubSession { request in
+            XCTAssertEqual(request.url?.path, "/api/v1/auth/owner-login")
+            return (401, #"{"error":{"code":"unauthorized","message":"Invalid cloud access code.","details":{}}}"#)
+        })
+        let repository = AuthRepository(api: client)
+
+        do {
+            _ = try await repository.ownerLogin(accessCode: "wrong-code")
+            XCTFail("Expected owner login to fail")
+        } catch APIClientError.server(let code, let message) {
+            XCTAssertEqual(code, "unauthorized")
+            XCTAssertEqual(message, "Invalid cloud access code.")
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
     func testCaptureParserParsesChineseCalendarInput() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!

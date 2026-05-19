@@ -536,9 +536,31 @@ final class AppModel: ObservableObject {
         defer { isLoading = false }
         do {
             try await operation()
+        } catch APIClientError.unauthorized {
+            expireCloudSession()
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func expireCloudSession() {
+        guard authMode == .cloudJWT else {
+            errorMessage = APIClientError.unauthorized.localizedDescription
+            return
+        }
+        try? api.tokenStore.clear()
+        currentUser = nil
+        spaces = []
+        personalTasks = []
+        companyTasks = []
+        projects = []
+        notes = []
+        calendarItems = []
+        agentTools = []
+        agentLogs = []
+        llmKey = nil
+        agentReview.cancel()
+        errorMessage = "云端登录已失效，请重新输入访问码。"
     }
 
     private func calendarWindow() -> (fromDate: String, toDate: String) {

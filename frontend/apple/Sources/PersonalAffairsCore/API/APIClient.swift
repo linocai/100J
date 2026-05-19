@@ -120,7 +120,9 @@ public final class APIClient {
 
         guard (200..<300).contains(http.statusCode) else {
             if let envelope = try? decoder.decode(ErrorEnvelope.self, from: data) {
-                if envelope.error.code == "unauthorized" { throw APIClientError.unauthorized }
+                if envelope.error.code == "unauthorized", shouldTreatUnauthorizedAsExpiredSession(path: path) {
+                    throw APIClientError.unauthorized
+                }
                 throw APIClientError.server(code: envelope.error.code, message: envelope.error.message)
             }
             throw APIClientError.server(code: "http_error", message: "HTTP \(http.statusCode)")
@@ -176,6 +178,10 @@ public final class APIClient {
             try? tokenStore.clear()
             return false
         }
+    }
+
+    private func shouldTreatUnauthorizedAsExpiredSession(path: String) -> Bool {
+        !path.hasPrefix("/auth/")
     }
 
     public func fetchAll<Item: Codable>(
