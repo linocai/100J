@@ -33,3 +33,4 @@ jobs:
       - uses: actions/checkout@v4
       - run: swift build --scratch-path /tmp/personal-affairs-apple-build
       - run: swift test --scratch-path /tmp/personal-affairs-apple-build
+      - run: xcodebuild -project PersonalAffairsApp.xcodeproj -scheme PersonalAffairsApp -destination 'generic/platform=iOS' -derivedDataPath /tmp/personal-affairs-xcodeproj-derived CODE_SIGNING_ALLOWED=NO build

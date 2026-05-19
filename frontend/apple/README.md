@@ -47,6 +47,25 @@ xcodebuild -scheme PersonalAffairsApp \
 
 The exact simulator name can be replaced with any available iOS Simulator from `xcrun simctl list devices available`.
 
+## Run On Your iPhone
+
+Open the iPhone-ready Xcode project, not only the Swift package:
+
+```text
+frontend/apple/PersonalAffairsApp.xcodeproj
+```
+
+In Xcode:
+
+1. Select the `PersonalAffairsApp` scheme.
+2. Select the `PersonalAffairsApp` target, then `Signing & Capabilities`.
+3. Enable `Automatically manage signing`.
+4. Choose your Apple ID / Personal Team.
+5. Keep or adjust the Bundle Identifier. The default is `com.linotsai.100j.dev`.
+6. Select your iPhone as the destination and run.
+
+The project target is iPhone-only and links the existing shared `PersonalAffairsCore` static library target.
+
 ## Test
 
 ```bash

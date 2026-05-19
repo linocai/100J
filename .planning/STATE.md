@@ -54,6 +54,10 @@ Stopped frontend documents were removed to end the source-of-truth split.
   - `scripts/prod-check.sh` now checks HTTPS health, TLS certificate dates, HZ services, latest backup presence, recent API/Nginx errors, and production smoke.
   - `scripts/verify-release.sh` is the one-command RC verification entrypoint for backend, Apple build/test, iOS simulator build, macOS package, and optional production check.
   - `frontend/apple/RELEASE.md` documents macOS notarization, iOS TestFlight handoff, and crash/usage monitoring policy.
+- iPhone direct-install slice on `codex/production-hardening`:
+  - `frontend/apple/PersonalAffairsApp.xcodeproj` was added as an iPhone-ready Xcode project for real-device signing and Run.
+  - The Xcode project has `PersonalAffairsApp` and `PersonalAffairsCore` targets; the app target uses automatic signing and bundle id `com.linotsai.100j.dev`.
+  - CI now validates the project with a generic iOS build and `CODE_SIGNING_ALLOWED=NO`.
 
 ## Verification
 
@@ -112,6 +116,16 @@ scripts/prod-check.sh
 
 Result: release verification passed; production check passed for `https://100j.linotsai.top`. Public and API health returned `{"status":"ok"}`; `100j-api.service`, Nginx, and certbot timer were active; latest backup was `/opt/100j/backups/100j-20260519-134704.dump`; recent API errors had no entries; production smoke passed with password redaction.
 
+iPhone Xcode project verification on 2026-05-19:
+
+```bash
+xcodebuild -list -project frontend/apple/PersonalAffairsApp.xcodeproj
+xcodebuild -project frontend/apple/PersonalAffairsApp.xcodeproj -scheme PersonalAffairsApp -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' -derivedDataPath /tmp/personal-affairs-xcodeproj-derived build
+xcodebuild -project frontend/apple/PersonalAffairsApp.xcodeproj -scheme PersonalAffairsApp -destination 'generic/platform=iOS' -derivedDataPath /tmp/personal-affairs-xcodeproj-derived CODE_SIGNING_ALLOWED=NO build
+```
+
+Result: project listed targets and schemes successfully; iOS Simulator build passed; generic iOS device compile passed with signing disabled.
+
 ## Decisions
 
 - Treat `AUDIT_v1.md` as the current production guidance file until superseded by a newer audit or explicit user instruction.
@@ -130,4 +144,4 @@ Result: release verification passed; production check passed for `https://100j.l
 
 ## Next Action
 
-Next useful action is credential-gated distribution: run `CODESIGN_IDENTITY=... NOTARIZE=1 NOTARY_PROFILE=... frontend/apple/scripts/package-macos-app.sh` after Apple Developer credentials are available, then create the App Store Connect/TestFlight app record for iOS. Continue short production soak with `scripts/prod-check.sh` after real client use.
+Next useful action is credential-gated distribution: use Xcode to open `frontend/apple/PersonalAffairsApp.xcodeproj`, select the `PersonalAffairsApp` target, choose the user's Apple ID / Team in Signing & Capabilities, and run on the user's iPhone. For macOS public distribution, run `CODESIGN_IDENTITY=... NOTARIZE=1 NOTARY_PROFILE=... frontend/apple/scripts/package-macos-app.sh` after Apple Developer credentials are available. Continue short production soak with `scripts/prod-check.sh` after real client use.
