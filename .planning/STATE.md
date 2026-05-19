@@ -44,6 +44,11 @@ Stopped frontend documents were removed to end the source-of-truth split.
   - HZ database backup and restore rehearsal scripts were added and exercised successfully.
   - Calendar query, grouping, sorting, and draft-to-request state moved into `PersonalAffairsCore/ViewState` for macOS and iOS.
   - macOS app packaging produces `frontend/apple/dist/100J.app` and a timestamped zip, with ad-hoc codesign verification.
+- P3 closeout slice on `codex/production-hardening`:
+  - `/agent/tools` now exposes all 16 supported Agent commands, including `archive_project`.
+  - Backend tests cover all Agent tools through API execution, including confirmation for `archive_project`.
+  - Swift repository tests cover task query mapping, project task routes, calendar merged fetching/sorting, and Agent execute/confirm request encoding.
+  - Inspector/layout constants and key surface opacity values moved into `AppTheme` tokens; regular inspector width is now 360.
 
 ## Verification
 
@@ -60,7 +65,7 @@ Latest Apple result: all passed on 2026-05-19 on `codex/production-hardening`.
 Notes:
 
 - `xcodebuild` printed `IDERunDestination: Supported platforms for the buildables in the current scheme is empty.`, but exited 0 and completed the iOS Simulator build.
-- macOS package produced: `frontend/apple/dist/100J.app` and `frontend/apple/dist/100J-macos-1.0-202605191352.zip`.
+- macOS package produced: `frontend/apple/dist/100J.app` and latest zip `frontend/apple/dist/100J-macos-1.0-202605191404.zip`.
 
 Latest backend checks on 2026-05-19:
 
@@ -70,7 +75,7 @@ cd backend
 .venv/bin/python -m pytest
 ```
 
-Result: `ruff` passed; `pytest` passed with 23 tests.
+Result: `ruff` passed; `pytest` passed with 24 tests.
 
 HZ database backup/restore rehearsal on 2026-05-19:
 
@@ -110,4 +115,4 @@ Result: deploy passed; HTTPS health passed; production smoke passed. Nginx, cert
 
 ## Next Action
 
-Next useful action is a short production soak after first real client use: monitor `journalctl -u 100j-api` and Nginx access/error logs, then continue the remaining P3 backlog from `AUDIT_v1.md` such as broader Agent tool coverage, repository tests, and release-signing/TestFlight work.
+Next useful action is a short production soak after first real client use: monitor `journalctl -u 100j-api` and Nginx access/error logs, then move toward release distribution work such as Developer ID notarization, TestFlight/App Store packaging, and crash/usage monitoring.

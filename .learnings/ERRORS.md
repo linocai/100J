@@ -258,6 +258,35 @@ For rehearsal, copy the selected backup to a postgres-owned temporary file under
 
 ---
 
+## [ERR-20260519-009] swift_urlprotocol_body_stream_in_tests
+
+**Logged**: 2026-05-19T14:04:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: tests
+
+### Summary
+Swift repository tests failed when inspecting POST request bodies because `URLProtocol` received the body as `httpBodyStream` instead of `httpBody`.
+
+### Error
+```text
+XCTUnwrap failed: expected non-nil value of type "Data"
+```
+
+### Context
+- Command: `swift test --scratch-path /tmp/personal-affairs-apple-build`
+- Test: `testAgentRepositoryEncodesExecuteAndConfirmRequests`
+- `APIClient` correctly set an encoded request body, but Foundation surfaced it to the stub protocol as a stream.
+
+### Suggested Fix
+Test helpers that inspect `URLRequest` bodies should read both `httpBody` and `httpBodyStream`.
+
+### Metadata
+- Reproducible: yes
+- Related Files: `frontend/apple/Tests/PersonalAffairsCoreTests/PersonalAffairsCoreTests.swift`
+
+---
+
 ## [ERR-20260518-001] swiftui_textcontenttype_macos_availability
 
 **Logged**: 2026-05-18T09:50:00+08:00

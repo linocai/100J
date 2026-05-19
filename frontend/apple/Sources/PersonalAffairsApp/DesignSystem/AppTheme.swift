@@ -24,32 +24,62 @@ enum AppTheme {
         static let xl: CGFloat = 24
     }
 
+    enum Layout {
+        static let minimumWindowWidth: CGFloat = 900
+        static let minimumWindowHeight: CGFloat = 720
+        static let inspectorVisibilityThreshold: CGFloat = 1180
+        static let wideWindowThreshold: CGFloat = 1400
+        static let inspectorRegularWidth: CGFloat = 360
+        static let inspectorWideWidth: CGFloat = 372
+        static let inspectorPopoverWidth: CGFloat = 360
+        static let inspectorPopoverHeight: CGFloat = 640
+        static let centerContentCompactThreshold: CGFloat = 900
+        static let centerContentRegularMaxWidth: CGFloat = 1120
+        static let centerContentWideMaxWidth: CGFloat = 1180
+        static let sidebarCompactWidth: CGFloat = 224
+        static let sidebarRegularWidth: CGFloat = 244
+        static let sidebarWideWidth: CGFloat = 260
+    }
+
+    enum Alpha {
+        static let sidebarSelection: CGFloat = 0.14
+        static let macOSSurfaceBase: CGFloat = 0.70
+        static let macOSSurfaceElevated: CGFloat = 0.78
+        static let macOSHairline: CGFloat = 0.72
+        static let iOSSurfaceBase: CGFloat = 0.76
+        static let iOSSurfaceElevated: CGFloat = 0.82
+        static let iOSHairline: CGFloat = 0.68
+        static let subtleSurface: CGFloat = 0.045
+        static let selectedSurface: CGFloat = 0.14
+        static let tertiaryText: CGFloat = 0.72
+    }
+
     enum Colors {
         #if os(macOS)
         static let windowBackground = Color(nsColor: .windowBackgroundColor)
         static let sidebarBackground = Color(nsColor: .underPageBackgroundColor)
-        static let sidebarSelection = Color(nsColor: .selectedContentBackgroundColor).opacity(0.14)
-        static let surfaceBase = Color(nsColor: .controlBackgroundColor).opacity(0.70)
-        static let surfaceElevated = Color(nsColor: .textBackgroundColor).opacity(0.78)
-        static let hairline = Color(nsColor: .separatorColor).opacity(0.72)
+        static let sidebarSelection = Color(nsColor: .selectedContentBackgroundColor).opacity(Alpha.sidebarSelection)
+        static let surfaceBase = Color(nsColor: .controlBackgroundColor).opacity(Alpha.macOSSurfaceBase)
+        static let surfaceElevated = Color(nsColor: .textBackgroundColor).opacity(Alpha.macOSSurfaceElevated)
+        static let hairline = Color(nsColor: .separatorColor).opacity(Alpha.macOSHairline)
         #else
         static let windowBackground = Color(uiColor: .systemGroupedBackground)
         static let sidebarBackground = Color(uiColor: .secondarySystemGroupedBackground)
         static let sidebarSelection = Color(uiColor: .tertiarySystemFill)
-        static let surfaceBase = Color(uiColor: .secondarySystemGroupedBackground).opacity(0.76)
-        static let surfaceElevated = Color(uiColor: .systemBackground).opacity(0.82)
-        static let hairline = Color(uiColor: .separator).opacity(0.68)
+        static let surfaceBase = Color(uiColor: .secondarySystemGroupedBackground).opacity(Alpha.iOSSurfaceBase)
+        static let surfaceElevated = Color(uiColor: .systemBackground).opacity(Alpha.iOSSurfaceElevated)
+        static let hairline = Color(uiColor: .separator).opacity(Alpha.iOSHairline)
         #endif
         static let sidebarSelectionBorder = Color.primary.opacity(0.10)
-        static let surfaceTinted = Color.primary.opacity(0.045)
-        static let surfaceSelected = companyAccent.opacity(0.14)
+        static let surfaceTinted = Color.primary.opacity(Alpha.subtleSurface)
+        static let surfaceSelected = companyAccent.opacity(Alpha.selectedSurface)
         static let separator = hairline
         static let surface = surfaceBase
         static let surfaceStrong = surfaceElevated
         static let surfaceSoft = surfaceTinted
         static let primaryText = Color.primary
         static let secondaryText = Color.secondary
-        static let tertiaryText = Color.secondary.opacity(0.72)
+        static let tertiaryText = Color.secondary.opacity(Alpha.tertiaryText)
         static let textPrimary = primaryText
         static let textSecondary = secondaryText
         static let textTertiary = tertiaryText

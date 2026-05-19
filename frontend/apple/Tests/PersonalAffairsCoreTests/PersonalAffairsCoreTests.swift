@@ -137,6 +137,114 @@ final class PersonalAffairsCoreTests: XCTestCase {
         XCTAssertEqual(seenCursors[1], "1")
     }
 
+    func testTaskRepositoryMapsSharedQueryToRequestParameters() async throws {
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .localOwner, tokenStore: InMemoryTokenStore(), session: Self.stubSession { request in
+            XCTAssertEqual(request.httpMethod, "GET")
+            XCTAssertEqual(request.url?.path, "/api/v1/tasks")
+            let query = Self.queryItems(from: request)
+            XCTAssertEqual(query["space_id"], "company")
+            XCTAssertEqual(query["project_scope"], "with_project")
+            XCTAssertEqual(query["status"], "active")
+            XCTAssertEqual(query["priority"], "high")
+            XCTAssertEqual(query["search"], "invoice")
+            XCTAssertEqual(query["limit"], "100")
+            return (200, #"{"items":[],"next_cursor":null}"#)
+        })
+        let repository = TaskRepository(api: client)
+
+        let items = try await repository.list(
+            query: TaskListQuery(
+                spaceId: "company",
+                projectScope: "with_project",
+                status: .active,
+                priority: .high,
+                search: "invoice"
+            )
+        )
+
+        XCTAssertEqual(items, [])
+    }
+
+    func testProjectRepositoryProjectTasksUsesNestedRouteAndStatusQuery() async throws {
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .localOwner, tokenStore: InMemoryTokenStore(), session: Self.stubSession { request in
+            XCTAssertEqual(request.httpMethod, "GET")
+            XCTAssertEqual(request.url?.path, "/api/v1/projects/project-1/tasks")
+            let query = Self.queryItems(from: request)
+            XCTAssertEqual(query["status"], "active")
+            XCTAssertEqual(query["limit"], "100")
+            return (200, #"{"items":[],"next_cursor":null}"#)
+        })
+        let repository = ProjectRepository(api: client)
+
+        let items = try await repository.tasks(projectId: "project-1", status: .active)
+
+        XCTAssertEqual(items, [])
+    }
+
+    func testCalendarRepositoryMergedFetchesBothSpacesAndSortsItems() async throws {
+        var seenSpaceIds: Set<String> = []
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .localOwner, tokenStore: InMemoryTokenStore(), session: Self.stubSession { request in
+            XCTAssertEqual(request.url?.path, "/api/v1/calendar-items")
+            let query = Self.queryItems(from: request)
+            XCTAssertEqual(query["from_date"], "2026-05-01")
+            XCTAssertEqual(query["to_date"], "2026-05-31")
+            let spaceId = try XCTUnwrap(query["space_id"])
+            seenSpaceIds.insert(spaceId)
+            if spaceId == "personal" {
+                return (200, """
+                {"items":[\(Self.calendarItemJSON(id: "later", spaceId: "personal", title: "Later", allDay: true, startDate: "2026-05-20", startAt: nil))],"next_cursor":null}
+                """)
+            }
+            return (200, """
+            {"items":[\(Self.calendarItemJSON(id: "earlier", spaceId: "company", title: "Earlier", allDay: true, startDate: "2026-05-18", startAt: nil))],"next_cursor":null}
+            """)
+        })
+        let repository = CalendarRepository(api: client)
+
+        let items = try await repository.merged(
+            personalSpaceId: "personal",
+            companySpaceId: "company",
+            fromDate: "2026-05-01",
+            toDate: "2026-05-31"
+        )
+
+        XCTAssertEqual(seenSpaceIds, ["personal", "company"])
+        XCTAssertEqual(items.map(\.id), ["earlier", "later"])
+    }
+
+    func testAgentRepositoryEncodesExecuteAndConfirmRequests() async throws {
+        var seenPaths: [String] = []
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: InMemoryTokenStore(accessToken: "token"), session: Self.stubSession { request in
+            seenPaths.append(request.url?.path ?? "")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer token")
+            let body = try Self.jsonBody(from: request)
+            if request.url?.path == "/api/v1/agent/commands" {
+                XCTAssertEqual(request.httpMethod, "POST")
+                XCTAssertEqual(body["command"] as? String, "create_task")
+                XCTAssertEqual(body["dry_run"] as? Bool, true)
+                let arguments = try XCTUnwrap(body["arguments"] as? [String: Any])
+                XCTAssertEqual(arguments["title"] as? String, "Draft")
+                return (200, #"{"status":"dry_run","result":null,"would_execute":{"command":"create_task"},"reason":null,"confirmation_token":null}"#)
+            }
+            XCTAssertEqual(request.url?.path, "/api/v1/agent/commands/confirm")
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(body["confirmation_token"] as? String, "confirm-token")
+            return (200, #"{"status":"success","result":{"type":"task","id":"task-1"},"would_execute":null,"reason":null,"confirmation_token":null}"#)
+        })
+        let repository = AgentRepository(api: client)
+
+        let dryRun = try await repository.execute(
+            command: "create_task",
+            arguments: ["title": .string("Draft")],
+            dryRun: true
+        )
+        let confirmed = try await repository.confirm(token: "confirm-token")
+
+        XCTAssertEqual(dryRun.status, "dry_run")
+        XCTAssertEqual(confirmed.result?["id"], .string("task-1"))
+        XCTAssertEqual(seenPaths, ["/api/v1/agent/commands", "/api/v1/agent/commands/confirm"])
+    }
+
     func testCaptureParserParsesChineseCalendarInput() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!
@@ -414,6 +522,74 @@ final class PersonalAffairsCoreTests: XCTestCase {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [StubURLProtocol.self]
         return URLSession(configuration: configuration)
+    }
+
+    private static func queryItems(from request: URLRequest) -> [String: String] {
+        let items = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        return Dictionary(uniqueKeysWithValues: items.compactMap { item in
+            item.value.map { (item.name, $0) }
+        })
+    }
+
+    private static func jsonBody(from request: URLRequest) throws -> [String: Any] {
+        let data: Data
+        if let httpBody = request.httpBody {
+            data = httpBody
+        } else {
+            let stream = try XCTUnwrap(request.httpBodyStream)
+            data = readAllData(from: stream)
+        }
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    private static func readAllData(from stream: InputStream) -> Data {
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        let bufferSize = 1024
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+        defer { buffer.deallocate() }
+
+        while stream.hasBytesAvailable {
+            let count = stream.read(buffer, maxLength: bufferSize)
+            if count <= 0 { break }
+            data.append(buffer, count: count)
+        }
+        return data
+    }
+
+    private static func calendarItemJSON(
+        id: String,
+        spaceId: String,
+        title: String,
+        allDay: Bool,
+        startDate: String?,
+        startAt: String?
+    ) -> String {
+        """
+        {
+          "id":"\(id)",
+          "user_id":"user-1",
+          "space_id":"\(spaceId)",
+          "project_id":null,
+          "related_task_id":null,
+          "title":"\(title)",
+          "description":null,
+          "type":"appointment",
+          "all_day":\(allDay ? "true" : "false"),
+          "start_date":\(startDate.map { "\"\($0)\"" } ?? "null"),
+          "end_date":null,
+          "start_at":\(startAt.map { "\"\($0)\"" } ?? "null"),
+          "end_at":null,
+          "timezone":"Asia/Shanghai",
+          "recurrence":"none",
+          "remind_at":null,
+          "source":"manual",
+          "created_at":"2026-05-18T00:00:00Z",
+          "updated_at":"2026-05-18T00:00:00Z",
+          "version":1
+        }
+        """
     }
 }
 

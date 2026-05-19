@@ -42,6 +42,7 @@ TOOLS = [
     {"name": "list_projects", "description": "List company projects.", "parameters_schema": {}},
     {"name": "create_project", "description": "Create a company project.", "parameters_schema": {}},
     {"name": "update_project", "description": "Update a company project.", "parameters_schema": {}},
+    {"name": "archive_project", "description": "Archive a company project.", "parameters_schema": {}},
     {
         "name": "list_calendar_items",
         "description": "List fixed-time or fixed-date calendar items.",

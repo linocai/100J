@@ -12,7 +12,7 @@ struct MacWorkbenchShellView: View {
     var body: some View {
         GeometryReader { geometry in
             let width = geometry.size.width
-            let showsInspector = width >= 1180
+            let showsInspector = width >= AppTheme.Layout.inspectorVisibilityThreshold
             let sidebarColumnWidth = sidebarWidth(for: width)
             let inspectorColumnWidth = showsInspector ? inspectorWidth(for: width) : 0
             let separatorWidth: CGFloat = showsInspector ? 2 : 1
@@ -60,7 +60,10 @@ struct MacWorkbenchShellView: View {
             }
             .background(AppBackgroundView())
         }
-        .frame(minWidth: 900, minHeight: 720)
+        .frame(
+            minWidth: AppTheme.Layout.minimumWindowWidth,
+            minHeight: AppTheme.Layout.minimumWindowHeight
+        )
         .sheet(isPresented: $showingQuickCapture) {
             QuickCaptureSheet(rawText: quickCaptureText) {
                 quickCaptureText = ""
@@ -70,7 +73,10 @@ struct MacWorkbenchShellView: View {
         .popover(isPresented: $showingInspectorPopover) {
             ContextInspectorView(selection: inspectorSelection)
                 .environmentObject(model)
-                .frame(width: 344, height: 640)
+                .frame(
+                    width: AppTheme.Layout.inspectorPopoverWidth,
+                    height: AppTheme.Layout.inspectorPopoverHeight
+                )
         }
     }
 
@@ -118,19 +124,27 @@ struct MacWorkbenchShellView: View {
     }
 
     private func sidebarWidth(for windowWidth: CGFloat) -> CGFloat {
-        if windowWidth >= 1400 { return 260 }
-        if windowWidth >= 1180 { return 244 }
-        return 224
+        if windowWidth >= AppTheme.Layout.wideWindowThreshold {
+            return AppTheme.Layout.sidebarWideWidth
+        }
+        if windowWidth >= AppTheme.Layout.inspectorVisibilityThreshold {
+            return AppTheme.Layout.sidebarRegularWidth
+        }
+        return AppTheme.Layout.sidebarCompactWidth
     }
 
     private func inspectorWidth(for windowWidth: CGFloat) -> CGFloat {
-        windowWidth >= 1400 ? 372 : 344
+        windowWidth >= AppTheme.Layout.wideWindowThreshold
+            ? AppTheme.Layout.inspectorWideWidth
+            : AppTheme.Layout.inspectorRegularWidth
     }
 
     private func contentMaxWidth(for layout: WorkbenchLayoutContext) -> CGFloat? {
         if model.selectedSection == .companyTasks { return nil }
-        if layout.centerWidth < 900 { return nil }
-        return layout.windowWidth >= 1400 ? 1180 : 1120
+        if layout.centerWidth < AppTheme.Layout.centerContentCompactThreshold { return nil }
+        return layout.windowWidth >= AppTheme.Layout.wideWindowThreshold
+            ? AppTheme.Layout.centerContentWideMaxWidth
+            : AppTheme.Layout.centerContentRegularMaxWidth
     }
 
     private var primaryAction: PrimaryActionDescriptor {

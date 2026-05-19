@@ -290,7 +290,7 @@ struct ContextInspectorView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
-        .background(Color.primary.opacity(0.045))
+        .background(AppTheme.Colors.surfaceTinted)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
     }
 
