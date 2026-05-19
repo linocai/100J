@@ -198,55 +198,6 @@ struct PersonalTasksView: View {
     }
 }
 
-struct LegacyTaskRow: View {
-    let task: TaskItem
-    let projectName: String?
-    let complete: () -> Void
-    let reopen: () -> Void
-    let archive: () -> Void
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Button(action: task.status == .done ? reopen : complete) {
-                Image(systemName: task.status == .done ? "checkmark.circle.fill" : "circle")
-            }
-            .buttonStyle(.borderless)
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text(task.title)
-                    .font(.headline)
-                    .strikethrough(task.status == .done)
-                if let description = task.description, !description.isEmpty {
-                    Text(description)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                HStack {
-                    PillView(text: task.priority.label, style: task.priority.pillStyle)
-                    PillView(text: task.status.label, style: task.status == .done ? .success : .neutralSubtle)
-                    if let dueDate = task.dueDate {
-                        PillView(text: "截止 \(dueDate)", style: .warningSubtle)
-                    }
-                    if let projectName {
-                        PillView(text: projectName, style: .company)
-                    }
-                    if task.source == "agent" {
-                        PillView(text: "Agent", style: .agent)
-                    }
-                }
-            }
-            Spacer()
-            Button(action: archive) {
-                Image(systemName: "archivebox")
-            }
-            .buttonStyle(.borderless)
-            .help("归档")
-        }
-        .padding(.vertical, 6)
-    }
-}
-
 struct TaskDraft {
     var title = ""
     var description = ""
