@@ -14,11 +14,14 @@ Domain names are case-insensitive, so this is the deployment target for `100J.li
 - SSH user: `deploy`
 - App directory: `/opt/100j/current`
 - Env file: `/opt/100j/env/100j.env`
-- Runtime: Docker Compose
+- Runtime: Python venv + systemd on HZ
 - API container: FastAPI + Alembic migrations
-- DB container: PostgreSQL 16, Docker volume `100j-postgres-data`
+- DB: server PostgreSQL 16 database `100j`
 - Local server port: `127.0.0.1:8020`
 - Public ingress: Nginx HTTPS reverse proxy
+
+The repository also includes `backend/Dockerfile` and `docker-compose.yml` as portable deployment
+materials. HZ uses systemd because Docker Hub image pulls can be unreliable from the server network.
 
 ## Production Environment
 
@@ -67,7 +70,9 @@ From the repo root:
 scripts/deploy-hz.sh
 ```
 
-The script rsyncs backend deployment files to `/opt/100j/current`, creates `/opt/100j/env/100j.env` if missing, rebuilds the Compose stack, runs Alembic migrations on container start, and checks local health.
+The script rsyncs backend deployment files to `/opt/100j/current`, creates `/opt/100j/env/100j.env` if missing, creates/updates the local PostgreSQL role and database, installs the backend plus the smoke-test extra into `/opt/100j/venv`, runs Alembic migrations through systemd, and checks local health.
+
+On HZ the script defaults pip to the Alibaba Cloud PyPI mirror. Override with `PIP_INDEX_URL`, `PIP_DEFAULT_TIMEOUT`, or `PIP_RETRIES` if the mirror or network changes.
 
 ## Nginx Reverse Proxy
 
@@ -116,16 +121,15 @@ The smoke test registers a disposable user and verifies spaces, CRUD paths, Agen
 ```bash
 ssh deploy@118.178.122.194
 cd /opt/100j/current
-ONEJ_ENV_FILE=/opt/100j/env/100j.env ONEJ_API_PORT=8020 docker compose --env-file /opt/100j/env/100j.env ps
-ONEJ_ENV_FILE=/opt/100j/env/100j.env ONEJ_API_PORT=8020 docker compose --env-file /opt/100j/env/100j.env logs --tail=100 api
-ONEJ_ENV_FILE=/opt/100j/env/100j.env ONEJ_API_PORT=8020 docker compose --env-file /opt/100j/env/100j.env logs --tail=100 db
+systemctl status 100j-api --no-pager
+journalctl -u 100j-api -n 100 --no-pager
+curl -fsS http://127.0.0.1:8020/health
 ```
 
 Restart:
 
 ```bash
-cd /opt/100j/current
-ONEJ_ENV_FILE=/opt/100j/env/100j.env ONEJ_API_PORT=8020 docker compose --env-file /opt/100j/env/100j.env up -d --build
+sudo systemctl restart 100j-api
 ```
 
-Rollback is currently redeploying the previous Git commit with `scripts/deploy-hz.sh`. The PostgreSQL volume is persistent and is not removed by normal restarts.
+Rollback is currently redeploying the previous Git commit with `scripts/deploy-hz.sh`. The PostgreSQL database is persistent and is not removed by normal restarts.

@@ -85,6 +85,122 @@ Use the HZ server Docker daemon for deployment builds, or start Docker Desktop l
 
 ---
 
+## [ERR-20260519-003] hz_deploy_opt_directory_permission
+
+**Logged**: 2026-05-19T13:27:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: infra
+
+### Summary
+HZ deployment script could not create `/opt/100j` as the non-root deploy user.
+
+### Error
+```text
+mkdir: cannot create directory '/opt/100j': Permission denied
+```
+
+### Context
+- Command: `scripts/deploy-hz.sh`
+- Remote: `deploy@118.178.122.194`
+- `/opt` is root-owned; app-specific directories need sudo creation and deploy ownership.
+
+### Suggested Fix
+Use `sudo install -d -o deploy -g deploy` for `/opt/100j/current` and `/opt/100j/env` before rsync.
+
+### Metadata
+- Reproducible: yes
+- Related Files: `scripts/deploy-hz.sh`
+
+---
+
+## [ERR-20260519-004] hz_pip_package_resolution_instability
+
+**Logged**: 2026-05-19T13:41:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: infra
+
+### Summary
+HZ deployment failed during backend dependency installation because pip temporarily could not resolve `cryptography>=43.0.0`.
+
+### Error
+```text
+ERROR: Could not find a version that satisfies the requirement cryptography>=43.0.0 (from personal-affairs-backend) (from versions: none)
+ERROR: No matching distribution found for cryptography>=43.0.0
+```
+
+### Context
+- Command: `scripts/deploy-hz.sh`
+- Remote: `deploy@118.178.122.194`
+- A follow-up `pip index versions cryptography` on the same host later succeeded, so this was source/network instability rather than an unsupported Python platform.
+
+### Suggested Fix
+Use the Alibaba Cloud PyPI mirror by default on HZ and set explicit pip timeout/retry values in the deployment script.
+
+### Metadata
+- Reproducible: unknown
+- Related Files: `scripts/deploy-hz.sh`, `deployment.md`
+
+---
+
+## [ERR-20260519-005] cors_origins_pydantic_settings_predecode
+
+**Logged**: 2026-05-19T13:46:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: backend
+
+### Summary
+`100j-api.service` failed in `ExecStartPre` because `pydantic-settings` tried to JSON-decode comma-style `CORS_ORIGINS` before the custom validator could split it.
+
+### Error
+```text
+pydantic_settings.exceptions.SettingsError: error parsing value for field "cors_origins" from source "EnvSettingsSource"
+```
+
+### Context
+- Command: `scripts/deploy-hz.sh`
+- Remote service: `100j-api.service`
+- `CORS_ORIGINS=https://100j.linotsai.top` is valid for the app's intended comma-separated config style, but list fields are pre-decoded by `pydantic-settings` unless disabled.
+
+### Suggested Fix
+Mark `cors_origins` with `NoDecode` and keep the validator responsible for both comma-separated strings and JSON arrays.
+
+### Metadata
+- Reproducible: yes
+- Related Files: `backend/app/core/config.py`
+
+---
+
+## [ERR-20260519-006] production_smoke_missing_httpx
+
+**Logged**: 2026-05-19T13:52:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: infra
+
+### Summary
+Production smoke verification on HZ failed because the runtime venv did not include `httpx`.
+
+### Error
+```text
+ModuleNotFoundError: No module named 'httpx'
+```
+
+### Context
+- Command: `/opt/100j/venv/bin/python scripts/phase4_smoke.py --base-url https://100j.linotsai.top --env prod`
+- `httpx` was only in the backend `dev` extra, while the HZ deployment installed the runtime package without extras.
+
+### Suggested Fix
+Add a small `smoke` optional dependency extra containing `httpx`, and have the HZ deploy script install `backend[smoke]`.
+
+### Metadata
+- Reproducible: yes
+- Related Files: `backend/pyproject.toml`, `scripts/deploy-hz.sh`
+
+---
+
 ## [ERR-20260518-001] swiftui_textcontenttype_macos_availability
 
 **Logged**: 2026-05-18T09:50:00+08:00

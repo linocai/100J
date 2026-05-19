@@ -6,7 +6,7 @@ Build Personal Affairs App v1 in phases: backend, macOS, iOS, local E2E testing,
 
 ## Current Position
 
-Phase 4 automated local verification was completed for the 2026-05-17 snapshot. A P0/P1 production-hardening slice is now complete on branch `codex/production-hardening`.
+Phase 4 automated local verification was completed for the 2026-05-17 snapshot. P0/P1 production hardening and the P2 / Phase 5 deployment slice are now complete on branch `codex/production-hardening`.
 
 As of 2026-05-19, `AUDIT_v1.md` is the highest-authority production guidance file. The active implementation documents are now:
 
@@ -32,6 +32,12 @@ Stopped frontend documents were removed to end the source-of-truth split.
   - iOS Personal / Company task flows consume shared query helpers.
   - Legacy macOS product-path UI was removed.
   - `frontend/apple/SHARING_RULES.md` records the no-duplicated-business-logic rule.
+- P2 / Phase 5 deployment slice on `codex/production-hardening`:
+  - Backend Dockerfile, Compose file, production env example, deployment docs, OpenAPI snapshot test, and CI workflow were added.
+  - macOS/iOS default release API URL now points to `https://100j.linotsai.top/api/v1`.
+  - Personal notes/tasks and Company workbench gained Cmd+F search affordances; ProjectOverviewStrip now has a "More" affordance.
+  - HZ cloud deployment is live at `https://100j.linotsai.top` behind Nginx HTTPS reverse proxy.
+  - HZ runtime uses server PostgreSQL 16, `/opt/100j/venv`, and `100j-api.service` managed by systemd.
 
 ## Verification
 
@@ -50,15 +56,26 @@ Notes:
 - `xcodebuild` printed `IDERunDestination: Supported platforms for the buildables in the current scheme is empty.`, but exited 0 and completed the iOS Simulator build.
 - Backend files were not changed in this hardening slice, so backend tests were not rerun.
 
-Backend Phase 4 checks:
+Latest backend checks on 2026-05-19:
 
 ```bash
 cd backend
 .venv/bin/ruff check .
 .venv/bin/python -m pytest
-DATABASE_URL=sqlite:////tmp/personal_affairs_phase4_migration.db .venv/bin/alembic upgrade head
-.venv/bin/python scripts/phase4_smoke.py --base-url http://127.0.0.1:8000
 ```
+
+Result: `ruff` passed; `pytest` passed with 18 tests.
+
+Production deployment checks on 2026-05-19:
+
+```bash
+scripts/deploy-hz.sh
+curl -fsS --resolve 100j.linotsai.top:443:118.178.122.194 https://100j.linotsai.top/health
+curl -fsS --resolve 100j.linotsai.top:443:118.178.122.194 https://100j.linotsai.top/api/v1/health
+ssh deploy@118.178.122.194 'cd /opt/100j/current/backend && /opt/100j/venv/bin/python scripts/phase4_smoke.py --base-url https://100j.linotsai.top --env prod'
+```
+
+Result: deploy passed; HTTPS health passed; production smoke passed. Nginx, certbot timer, and `100j-api.service` are active. Certbot issued the `100j.linotsai.top` certificate expiring on 2026-08-17 with automatic renewal configured.
 
 ## Decisions
 
@@ -72,7 +89,9 @@ DATABASE_URL=sqlite:////tmp/personal_affairs_phase4_migration.db .venv/bin/alemb
 - Use native SwiftUI instead of web UI.
 - Use scratch paths outside this repo for SwiftPM / Xcode derived data because the repository path contains `%`.
 - Keep macOS-specific `NavigationSplitView` / `HSplitView` surfaces behind `#if os(macOS)` and iOS-specific views behind `#if os(iOS)`.
+- HZ uses Python venv + systemd instead of Docker Compose because Docker Hub pulls from the server were unreliable; Dockerfile and Compose stay in the repo as portable deployment materials.
+- HZ pip installs default to the Alibaba Cloud PyPI mirror with explicit timeout/retry values.
 
 ## Next Action
 
-Next useful action is P2 from `AUDIT_v1.md`: Phase 5 deployment materials, OpenAPI schema snapshot test, Cmd+F search, and ProjectOverviewStrip "More" affordance.
+Next useful action is a short production soak: monitor `journalctl -u 100j-api` and Nginx access/error logs after first real client use, then move to the P3 backlog from `AUDIT_v1.md`.
