@@ -6,7 +6,7 @@ Build Personal Affairs App v1 in phases: backend, macOS, iOS, local E2E testing,
 
 ## Current Position
 
-Phase 4 automated local verification was completed for the 2026-05-17 snapshot. P0/P1 production hardening and the P2 / Phase 5 deployment slice are now complete on branch `codex/production-hardening`.
+Phase 4 automated local verification was completed for the 2026-05-17 snapshot. P0/P1 production hardening, P2 / Phase 5 deployment, and the first P3 production-soak slice are now complete on branch `codex/production-hardening`.
 
 As of 2026-05-19, `AUDIT_v1.md` is the highest-authority production guidance file. The active implementation documents are now:
 
@@ -38,6 +38,12 @@ Stopped frontend documents were removed to end the source-of-truth split.
   - Personal notes/tasks and Company workbench gained Cmd+F search affordances; ProjectOverviewStrip now has a "More" affordance.
   - HZ cloud deployment is live at `https://100j.linotsai.top` behind Nginx HTTPS reverse proxy.
   - HZ runtime uses server PostgreSQL 16, `/opt/100j/venv`, and `100j-api.service` managed by systemd.
+- P3 production-soak slice on `codex/production-hardening`:
+  - Backend payload limits now cap long task/project/calendar descriptions and note bodies.
+  - Agent dry runs now validate command arguments before returning `dry_run`; dangerous operations validate before requesting confirmation.
+  - HZ database backup and restore rehearsal scripts were added and exercised successfully.
+  - Calendar query, grouping, sorting, and draft-to-request state moved into `PersonalAffairsCore/ViewState` for macOS and iOS.
+  - macOS app packaging produces `frontend/apple/dist/100J.app` and a timestamped zip, with ad-hoc codesign verification.
 
 ## Verification
 
@@ -54,7 +60,7 @@ Latest Apple result: all passed on 2026-05-19 on `codex/production-hardening`.
 Notes:
 
 - `xcodebuild` printed `IDERunDestination: Supported platforms for the buildables in the current scheme is empty.`, but exited 0 and completed the iOS Simulator build.
-- Backend files were not changed in this hardening slice, so backend tests were not rerun.
+- macOS package produced: `frontend/apple/dist/100J.app` and `frontend/apple/dist/100J-macos-1.0-202605191352.zip`.
 
 Latest backend checks on 2026-05-19:
 
@@ -64,7 +70,16 @@ cd backend
 .venv/bin/python -m pytest
 ```
 
-Result: `ruff` passed; `pytest` passed with 18 tests.
+Result: `ruff` passed; `pytest` passed with 23 tests.
+
+HZ database backup/restore rehearsal on 2026-05-19:
+
+```bash
+scripts/hz-db-backup.sh
+scripts/hz-db-restore-rehearsal.sh
+```
+
+Result: backup created at `/opt/100j/backups/100j-20260519-134704.dump`; restore rehearsal passed with 10 public tables, 1 user, and Alembic version `0002_agent_pending_confirmations`; temporary rehearsal database was dropped.
 
 Production deployment checks on 2026-05-19:
 
@@ -91,7 +106,8 @@ Result: deploy passed; HTTPS health passed; production smoke passed. Nginx, cert
 - Keep macOS-specific `NavigationSplitView` / `HSplitView` surfaces behind `#if os(macOS)` and iOS-specific views behind `#if os(iOS)`.
 - HZ uses Python venv + systemd instead of Docker Compose because Docker Hub pulls from the server were unreliable; Dockerfile and Compose stay in the repo as portable deployment materials.
 - HZ pip installs default to the Alibaba Cloud PyPI mirror with explicit timeout/retry values.
+- HZ backup scripts keep deploy-owned dumps in `/opt/100j/backups`; restore rehearsal copies the selected dump to a postgres-owned temp file so the production backup directory can stay locked down.
 
 ## Next Action
 
-Next useful action is a short production soak: monitor `journalctl -u 100j-api` and Nginx access/error logs after first real client use, then move to the P3 backlog from `AUDIT_v1.md`.
+Next useful action is a short production soak after first real client use: monitor `journalctl -u 100j-api` and Nginx access/error logs, then continue the remaining P3 backlog from `AUDIT_v1.md` such as broader Agent tool coverage, repository tests, and release-signing/TestFlight work.

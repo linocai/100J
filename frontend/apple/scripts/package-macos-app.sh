@@ -12,6 +12,7 @@ BUILD_NUMBER="${BUILD_NUMBER:-$(date +%Y%m%d%H%M)}"
 ICON_SOURCE="${ICON_SOURCE:-/Users/linotsai/Pictures/GPT Image/rounded-j-appicon-v1.png}"
 DIST_DIR="$PROJECT_DIR/dist"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
+ZIP_PATH="$DIST_DIR/$APP_NAME-macos-$VERSION-$BUILD_NUMBER.zip"
 CONTENTS_DIR="$APP_BUNDLE/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
@@ -143,4 +144,8 @@ plutil -lint "$CONTENTS_DIR/Info.plist"
 codesign --force --deep --sign - "$APP_BUNDLE"
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 
+rm -f "$ZIP_PATH"
+(cd "$DIST_DIR" && ditto -c -k --keepParent "$APP_NAME.app" "$ZIP_PATH")
+
 echo "$APP_BUNDLE"
+echo "$ZIP_PATH"

@@ -225,6 +225,106 @@ final class PersonalAffairsCoreTests: XCTestCase {
         XCTAssertEqual(lanes[1].tasks.map(\.id), ["task-2"])
     }
 
+    func testCalendarScopeMapsToSharedQueries() {
+        XCTAssertEqual(
+            CalendarViewState.query(
+                filter: .all,
+                selectedProjectId: nil,
+                personalSpaceId: "personal",
+                companySpaceId: "company"
+            ),
+            .all(personalSpaceId: "personal", companySpaceId: "company")
+        )
+        XCTAssertEqual(
+            CalendarViewState.query(
+                filter: .personal,
+                selectedProjectId: nil,
+                personalSpaceId: "personal",
+                companySpaceId: "company"
+            ),
+            .personal(spaceId: "personal")
+        )
+        XCTAssertNil(
+            CalendarViewState.query(
+                filter: .project,
+                selectedProjectId: nil,
+                personalSpaceId: "personal",
+                companySpaceId: "company"
+            )
+        )
+        XCTAssertEqual(
+            CalendarViewState.query(
+                filter: .project,
+                selectedProjectId: "project-1",
+                personalSpaceId: "personal",
+                companySpaceId: "company"
+            ),
+            .project(companySpaceId: "company", projectId: "project-1")
+        )
+    }
+
+    func testCalendarViewStateSortsAndGroupsItemsByDay() {
+        let date = Date(timeIntervalSince1970: 1_779_033_600)
+        let allDay = makeCalendarItem(
+            id: "calendar-1",
+            spaceId: "personal",
+            title: "All day",
+            allDay: true,
+            startDate: "2026-05-18",
+            startAt: nil
+        )
+        let timed = makeCalendarItem(
+            id: "calendar-2",
+            spaceId: "company",
+            title: "Timed",
+            allDay: false,
+            startDate: nil,
+            startAt: date.addingTimeInterval(3_600)
+        )
+        let otherDay = makeCalendarItem(
+            id: "calendar-3",
+            spaceId: "company",
+            title: "Tomorrow",
+            allDay: true,
+            startDate: "2026-05-19",
+            startAt: nil
+        )
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!
+        let items = CalendarViewState.items(on: date, from: [otherDay, timed, allDay], calendar: calendar)
+
+        XCTAssertEqual(items.map(\.id), ["calendar-1", "calendar-2"])
+        XCTAssertEqual(CalendarViewState.sortedItems([otherDay, timed, allDay]).map(\.id), ["calendar-1", "calendar-2", "calendar-3"])
+    }
+
+    func testCalendarDraftBuildsCreateAndUpdateRequests() throws {
+        let date = try XCTUnwrap(CalendarViewState.parsedDateOnly("2026-05-18"))
+        let draft = CalendarDraftState(
+            spaceType: .company,
+            title: "Board review",
+            description: "  Prepare agenda  ",
+            type: .appointment,
+            allDay: true,
+            startDate: date,
+            recurrence: .monthly,
+            projectId: "project-1"
+        )
+
+        let create = draft.createRequest(spaceId: "company", timezone: "Asia/Shanghai")
+        XCTAssertEqual(create.spaceId, "company")
+        XCTAssertEqual(create.description, "Prepare agenda")
+        XCTAssertEqual(create.startDate, "2026-05-18")
+        XCTAssertNil(create.startAt)
+        XCTAssertEqual(create.projectId, "project-1")
+
+        let update = draft.updateRequest(timezone: "Asia/Shanghai")
+        XCTAssertEqual(update.description, "Prepare agenda")
+        XCTAssertEqual(update.startDate, "2026-05-18")
+        XCTAssertNil(update.startAt)
+        XCTAssertEqual(update.projectId, "project-1")
+    }
+
     private func makeTask(
         id: String,
         spaceId: String,
@@ -249,6 +349,39 @@ final class PersonalAffairsCoreTests: XCTestCase {
             source: "manual",
             completedAt: nil,
             archivedAt: nil,
+            createdAt: date,
+            updatedAt: date,
+            version: 1
+        )
+    }
+
+    private func makeCalendarItem(
+        id: String,
+        spaceId: String,
+        title: String,
+        allDay: Bool,
+        startDate: String?,
+        startAt: Date?
+    ) -> CalendarItem {
+        let date = Date(timeIntervalSince1970: 1_779_033_600)
+        return CalendarItem(
+            id: id,
+            userId: "user-1",
+            spaceId: spaceId,
+            projectId: nil,
+            relatedTaskId: nil,
+            title: title,
+            description: nil,
+            type: .appointment,
+            allDay: allDay,
+            startDate: startDate,
+            endDate: nil,
+            startAt: startAt,
+            endAt: nil,
+            timezone: "Asia/Shanghai",
+            recurrence: Recurrence.none,
+            remindAt: nil,
+            source: "manual",
             createdAt: date,
             updatedAt: date,
             version: 1

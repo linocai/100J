@@ -4,7 +4,7 @@ import SwiftUI
 struct GlobalCalendarView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.workbenchLayout) private var layout
-    @State private var filter = "all"
+    @State private var filter: CalendarScopeFilter = .all
     @State private var selectedProjectId: String?
     @State private var displayedMonth = Date()
     @State private var selectedDate = Calendar.current.startOfDay(for: Date())
@@ -34,17 +34,9 @@ struct GlobalCalendarView: View {
                 guard let space = targetSpace else { return }
                 await model.run {
                     _ = try await model.calendarRepository.create(
-                        CalendarItemCreateRequest(
+                        draft.createRequest(
                             spaceId: space.id,
-                            title: draft.title,
-                            description: draft.description.trimmedOrNil,
-                            type: draft.type,
-                            allDay: draft.allDay,
-                            startDate: draft.allDay ? draft.startDate.dayKey : nil,
-                            startAt: draft.allDay ? nil : draft.startAt,
-                            timezone: TimeZone.current.identifier,
-                            recurrence: draft.recurrence,
-                            projectId: draft.spaceType == .company ? draft.projectId : nil
+                            timezone: TimeZone.current.identifier
                         )
                     )
                     try await model.loadAllData()
@@ -82,7 +74,7 @@ struct GlobalCalendarView: View {
             filterPicker
                 .frame(width: min(320, max(240, layout.centerWidth * 0.32)))
 
-            if filter == "project" {
+            if filter == .project {
                 projectPicker
                     .frame(width: min(220, max(160, layout.centerWidth * 0.22)))
             }
@@ -94,7 +86,7 @@ struct GlobalCalendarView: View {
     private var verticalFilterBar: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
             filterPicker
-            if filter == "project" {
+            if filter == .project {
                 projectPicker
             }
             PillView(text: "待办不会自动进入日程", style: .warningSubtle)
@@ -103,10 +95,9 @@ struct GlobalCalendarView: View {
 
     private var filterPicker: some View {
         Picker("筛选", selection: $filter) {
-            Text("全部").tag("all")
-            Text("个人").tag("personal")
-            Text("公司").tag("company")
-            Text("项目").tag("project")
+            ForEach(CalendarScopeFilter.allCases) { scope in
+                Text(scope.label).tag(scope)
+            }
         }
         .pickerStyle(.segmented)
         .onChange(of: filter) { _ in Task { await reload() } }
@@ -172,7 +163,7 @@ struct GlobalCalendarView: View {
             .buttonStyle(.borderless)
             .help("上个月")
 
-            Text(Self.monthTitleFormatter.string(from: startOfMonth(displayedMonth)))
+            Text(Self.monthTitleFormatter.string(from: CalendarViewState.startOfMonth(displayedMonth)))
                 .font(.title3.weight(.semibold))
 
             Button {
@@ -207,7 +198,7 @@ struct GlobalCalendarView: View {
             .buttonStyle(.borderless)
             .help("上个月")
 
-            Text(Self.monthTitleFormatter.string(from: startOfMonth(displayedMonth)))
+            Text(Self.monthTitleFormatter.string(from: CalendarViewState.startOfMonth(displayedMonth)))
                 .font(.headline.weight(.semibold))
                 .lineLimit(1)
 
@@ -317,37 +308,23 @@ struct GlobalCalendarView: View {
     }
 
     private var sortedItems: [CalendarItem] {
-        sortedCalendarItems(model.calendarItems)
+        CalendarViewState.sortedItems(model.calendarItems)
     }
 
     private var selectedDayItems: [CalendarItem] {
-        items(on: selectedDate)
+        CalendarViewState.items(on: selectedDate, from: model.calendarItems)
     }
 
     private var agendaEmptyTitle: String {
-        filter == "project" && selectedProjectId == nil ? "先选择项目" : "这天没有固定日程"
+        filter == .project && selectedProjectId == nil ? "先选择项目" : "这天没有固定日程"
     }
 
     private var agendaEmptyMessage: String {
-        filter == "project" && selectedProjectId == nil ? "选择一个公司项目后，只显示这个项目的固定日程。" : "选择其他日期，或新建一条固定日程。"
+        filter == .project && selectedProjectId == nil ? "选择一个公司项目后，只显示这个项目的固定日程。" : "选择其他日期，或新建一条固定日程。"
     }
 
     private var monthDays: [Date?] {
-        let calendar = Calendar.current
-        let monthStart = startOfMonth(displayedMonth)
-        guard let dayRange = calendar.range(of: .day, in: .month, for: monthStart) else { return [] }
-        let leadingBlanks = (calendar.component(.weekday, from: monthStart) - calendar.firstWeekday + 7) % 7
-        var days: [Date?] = Array(repeating: nil, count: leadingBlanks)
-
-        for day in dayRange {
-            if let date = calendar.date(byAdding: .day, value: day - 1, to: monthStart) {
-                days.append(date)
-            }
-        }
-
-        let trailingBlanks = (7 - days.count % 7) % 7
-        days.append(contentsOf: Array(repeating: nil, count: trailingBlanks))
-        return days
+        CalendarViewState.monthDays(displayedMonth: displayedMonth)
     }
 
     private var weekdaySymbols: [String] {
@@ -359,7 +336,7 @@ struct GlobalCalendarView: View {
 
     @ViewBuilder
     private func dayCell(_ date: Date) -> some View {
-        let dayItems = items(on: date)
+        let dayItems = CalendarViewState.items(on: date, from: model.calendarItems)
         let isSelected = Calendar.current.isDate(date, inSameDayAs: selectedDate)
         let isToday = Calendar.current.isDateInToday(date)
 
@@ -413,13 +390,6 @@ struct GlobalCalendarView: View {
         .buttonStyle(.plain)
     }
 
-    private func items(on date: Date) -> [CalendarItem] {
-        sortedItems.filter { item in
-            guard let itemDate = calendarSortDate(item) else { return false }
-            return Calendar.current.isDate(itemDate, inSameDayAs: date)
-        }
-    }
-
     private func dayBackground(isSelected: Bool, isToday: Bool) -> Color {
         if isSelected {
             return AppTheme.Colors.companyAccent.opacity(0.14)
@@ -455,16 +425,14 @@ struct GlobalCalendarView: View {
         }
     }
 
-    private func startOfMonth(_ date: Date) -> Date {
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.year, .month], from: date)
-        return calendar.date(from: components) ?? calendar.startOfDay(for: date)
-    }
-
     private func changeMonth(by value: Int) {
-        let nextMonth = Calendar.current.date(byAdding: .month, value: value, to: startOfMonth(displayedMonth)) ?? displayedMonth
+        let nextMonth = Calendar.current.date(
+            byAdding: .month,
+            value: value,
+            to: CalendarViewState.startOfMonth(displayedMonth)
+        ) ?? displayedMonth
         displayedMonth = nextMonth
-        selectedDate = startOfMonth(nextMonth)
+        selectedDate = CalendarViewState.startOfMonth(nextMonth)
     }
 
     private func spaceStyle(_ spaceId: String) -> PillStyle {
@@ -472,22 +440,18 @@ struct GlobalCalendarView: View {
     }
 
     private func reload() async {
-        switch filter {
-        case "personal":
-            await model.reloadCalendar(filter: .personal)
-        case "company":
-            await model.reloadCalendar(filter: .company)
-        case "project":
-            if let selectedProjectId {
-                await model.reloadCalendar(filter: .project(selectedProjectId))
-            } else {
-                await MainActor.run {
-                    model.calendarItems = []
-                }
+        guard let query = CalendarViewState.query(
+            filter: filter,
+            selectedProjectId: selectedProjectId,
+            personalSpaceId: model.personalSpace?.id,
+            companySpaceId: model.companySpace?.id
+        ) else {
+            await MainActor.run {
+                model.calendarItems = []
             }
-        default:
-            await model.reloadCalendar(filter: .all)
+            return
         }
+        await model.reloadCalendar(query: query)
     }
 
     private func delete(_ item: CalendarItem) {
@@ -523,24 +487,12 @@ struct GlobalCalendarView: View {
     }()
 }
 
-private struct CalendarDraft {
-    var spaceType: SpaceType = .personal
-    var title = ""
-    var description = ""
-    var type: CalendarItemType = .appointment
-    var allDay = false
-    var startDate = Date()
-    var startAt = Date()
-    var recurrence: Recurrence = .none
-    var projectId: String?
-}
-
 private struct CalendarItemFormView: View {
     let projects: [Project]
-    let save: (CalendarDraft) async -> Void
+    let save: (CalendarDraftState) async -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var draft = CalendarDraft()
+    @State private var draft = CalendarDraftState()
 
     var body: some View {
         EditorSheetView(

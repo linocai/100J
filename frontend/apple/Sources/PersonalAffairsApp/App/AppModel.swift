@@ -264,33 +264,32 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func reloadCalendar(filter: CalendarFilter = .all) async {
+    func reloadCalendar(query: CalendarListQuery) async {
         await run {
-            guard let personalSpace = self.personalSpace, let companySpace = self.companySpace else { return }
             let window = self.calendarWindow()
-            switch filter {
-            case .all:
+            switch query {
+            case .all(let personalSpaceId, let companySpaceId):
                 self.calendarItems = try await self.calendarRepository.merged(
-                    personalSpaceId: personalSpace.id,
-                    companySpaceId: companySpace.id,
+                    personalSpaceId: personalSpaceId,
+                    companySpaceId: companySpaceId,
                     fromDate: window.fromDate,
                     toDate: window.toDate
                 )
-            case .personal:
+            case .personal(let spaceId):
                 self.calendarItems = try await self.calendarRepository.list(
-                    spaceId: personalSpace.id,
+                    spaceId: spaceId,
                     fromDate: window.fromDate,
                     toDate: window.toDate
                 )
-            case .company:
+            case .company(let spaceId):
                 self.calendarItems = try await self.calendarRepository.list(
-                    spaceId: companySpace.id,
+                    spaceId: spaceId,
                     fromDate: window.fromDate,
                     toDate: window.toDate
                 )
-            case .project(let projectId):
+            case .project(let companySpaceId, let projectId):
                 self.calendarItems = try await self.calendarRepository.list(
-                    spaceId: companySpace.id,
+                    spaceId: companySpaceId,
                     projectId: projectId,
                     fromDate: window.fromDate,
                     toDate: window.toDate
@@ -317,11 +316,4 @@ final class AppModel: ObservableObject {
         let to = calendar.date(byAdding: .day, value: 180, to: today) ?? today
         return (from.dayKey, to.dayKey)
     }
-}
-
-enum CalendarFilter: Hashable {
-    case all
-    case personal
-    case company
-    case project(String)
 }

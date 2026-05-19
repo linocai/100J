@@ -4,7 +4,7 @@ import SwiftUI
 
 struct IOSCalendarView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var filter = "all"
+    @State private var filter: CalendarScopeFilter = .all
     @State private var selectedProjectId: String?
     @State private var showingNewItem = false
     @State private var editingItem: CalendarItem?
@@ -18,15 +18,14 @@ struct IOSCalendarView: View {
 
                 Section {
                     Picker("筛选", selection: $filter) {
-                        Text("全部").tag("all")
-                        Text("个人").tag("personal")
-                        Text("公司").tag("company")
-                        Text("项目").tag("project")
+                        ForEach(CalendarScopeFilter.allCases) { scope in
+                            Text(scope.label).tag(scope)
+                        }
                     }
                     .pickerStyle(.segmented)
                     .onChange(of: filter) { _ in Task { await reload() } }
 
-                    if filter == "project" {
+                    if filter == .project {
                         Picker("项目", selection: $selectedProjectId) {
                             Text("选择").tag(Optional<String>.none)
                             ForEach(model.projects) { project in
@@ -81,17 +80,7 @@ struct IOSCalendarView: View {
                     await model.run {
                         _ = try await model.calendarRepository.update(
                             id: item.id,
-                            request: CalendarItemUpdateRequest(
-                                title: draft.title,
-                                description: draft.description.trimmedOrNil,
-                                type: draft.type,
-                                allDay: draft.allDay,
-                                startDate: draft.allDay ? draft.startDate.dayKey : nil,
-                                startAt: draft.allDay ? nil : draft.startAt,
-                                timezone: TimeZone.current.identifier,
-                                recurrence: draft.recurrence,
-                                projectId: draft.spaceType == .company ? draft.projectId : nil
-                            )
+                            request: draft.updateRequest(timezone: TimeZone.current.identifier)
                         )
                         await reload()
                     }
@@ -103,17 +92,9 @@ struct IOSCalendarView: View {
                     guard let space = targetSpace else { return }
                     await model.run {
                         _ = try await model.calendarRepository.create(
-                            CalendarItemCreateRequest(
+                            draft.createRequest(
                                 spaceId: space.id,
-                                title: draft.title,
-                                description: draft.description.trimmedOrNil,
-                                type: draft.type,
-                                allDay: draft.allDay,
-                                startDate: draft.allDay ? draft.startDate.dayKey : nil,
-                                startAt: draft.allDay ? nil : draft.startAt,
-                                timezone: TimeZone.current.identifier,
-                                recurrence: draft.recurrence,
-                                projectId: draft.spaceType == .company ? draft.projectId : nil
+                                timezone: TimeZone.current.identifier
                             )
                         )
                         try await model.loadAllData()
@@ -132,18 +113,18 @@ struct IOSCalendarView: View {
     }
 
     private func reload() async {
-        switch filter {
-        case "personal":
-            await model.reloadCalendar(filter: .personal)
-        case "company":
-            await model.reloadCalendar(filter: .company)
-        case "project":
-            if let selectedProjectId {
-                await model.reloadCalendar(filter: .project(selectedProjectId))
+        guard let query = CalendarViewState.query(
+            filter: filter,
+            selectedProjectId: selectedProjectId,
+            personalSpaceId: model.personalSpace?.id,
+            companySpaceId: model.companySpace?.id
+        ) else {
+            await MainActor.run {
+                model.calendarItems = []
             }
-        default:
-            await model.reloadCalendar(filter: .all)
+            return
         }
+        await model.reloadCalendar(query: query)
     }
 
     private func delete(_ item: CalendarItem) async {
@@ -153,48 +134,26 @@ struct IOSCalendarView: View {
         }
     }
 
-    private func draft(from item: CalendarItem) -> IOSCalendarDraft {
-        IOSCalendarDraft(
-            spaceType: item.spaceId == model.companySpace?.id ? .company : .personal,
-            title: item.title,
-            description: item.description ?? "",
-            type: item.type,
-            allDay: item.allDay,
-            startDate: parsedDateOnly(item.startDate) ?? Date(),
-            startAt: item.startAt ?? Date(),
-            recurrence: item.recurrence ?? .none,
-            projectId: item.projectId
-        )
+    private func draft(from item: CalendarItem) -> CalendarDraftState {
+        CalendarDraftState(item: item, companySpaceId: model.companySpace?.id)
     }
-}
-
-private struct IOSCalendarDraft {
-    var spaceType: SpaceType = .personal
-    var title = ""
-    var description = ""
-    var type: CalendarItemType = .appointment
-    var allDay = false
-    var startDate = Date()
-    var startAt = Date()
-    var recurrence: Recurrence = .none
-    var projectId: String?
 }
 
 private struct IOSCalendarItemForm: View {
     let title: String
     let projects: [Project]
     let allowsOwnershipChange: Bool
-    let save: (IOSCalendarDraft) async -> Void
+    let save: (CalendarDraftState) async -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var draft: IOSCalendarDraft
+    @State private var draft: CalendarDraftState
 
     init(
         title: String = "新建固定日程",
         projects: [Project],
-        initialDraft: IOSCalendarDraft = IOSCalendarDraft(),
+        initialDraft: CalendarDraftState = CalendarDraftState(),
         allowsOwnershipChange: Bool = true,
-        save: @escaping (IOSCalendarDraft) async -> Void
+        save: @escaping (CalendarDraftState) async -> Void
     ) {
         self.title = title
         self.projects = projects

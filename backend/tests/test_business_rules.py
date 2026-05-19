@@ -75,6 +75,44 @@ def test_note_can_only_belong_to_personal_space(client):
     assert response.status_code == 422
 
 
+def test_long_text_payloads_are_rejected(client):
+    headers, spaces = register_and_auth(client)
+
+    task = client.post(
+        "/api/v1/tasks",
+        headers=headers,
+        json={
+            "space_id": spaces["personal"]["id"],
+            "title": "Too much task text",
+            "description": "x" * 10_001,
+        },
+    )
+    assert task.status_code == 422
+
+    note = client.post(
+        "/api/v1/notes",
+        headers=headers,
+        json={
+            "space_id": spaces["personal"]["id"],
+            "body": "x" * 20_001,
+        },
+    )
+    assert note.status_code == 422
+
+    calendar = client.post(
+        "/api/v1/calendar-items",
+        headers=headers,
+        json={
+            "space_id": spaces["personal"]["id"],
+            "title": "Too much calendar text",
+            "description": "x" * 10_001,
+            "all_day": True,
+            "start_date": "2026-08-01",
+        },
+    )
+    assert calendar.status_code == 422
+
+
 def test_calendar_all_day_and_timed_validation(client):
     headers, spaces = register_and_auth(client)
 
@@ -150,4 +188,3 @@ def test_note_convert_to_task_keeps_note(client):
     assert payload["task"]["title"] == "Process idea"
     assert payload["note"]["id"] == note["id"]
     assert payload["note"]["linked_task_id"] == payload["task"]["id"]
-

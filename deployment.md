@@ -132,4 +132,25 @@ Restart:
 sudo systemctl restart 100j-api
 ```
 
+## Backup And Restore Rehearsal
+
+Create a production PostgreSQL backup on HZ:
+
+```bash
+scripts/hz-db-backup.sh
+```
+
+Backups are custom-format PostgreSQL dumps stored on the server under `/opt/100j/backups`.
+The script keeps the latest 14 dumps by default; override with `KEEP_BACKUPS`.
+
+Rehearse restoring the latest backup into a temporary database:
+
+```bash
+scripts/hz-db-restore-rehearsal.sh
+```
+
+The rehearsal restores into a fresh database named like `100j_restore_rehearsal_YYYYMMDD_HHMMSS`,
+checks public tables, users, and Alembic version, then drops the temporary database. Set
+`KEEP_REHEARSAL_DB=1` when you need to inspect the restored database manually.
+
 Rollback is currently redeploying the previous Git commit with `scripts/deploy-hz.sh`. The PostgreSQL database is persistent and is not removed by normal restarts.

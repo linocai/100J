@@ -201,6 +201,63 @@ Add a small `smoke` optional dependency extra containing `httpx`, and have the H
 
 ---
 
+## [ERR-20260519-007] hz_pg_dump_backup_dir_permissions
+
+**Logged**: 2026-05-19T13:46:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: infra
+
+### Summary
+HZ PostgreSQL backup script failed because `pg_dump` ran as the `postgres` user and tried to write directly into a deploy-owned backup directory.
+
+### Error
+```text
+pg_dump: error: could not open output file "/opt/100j/backups/100j-20260519-134631.dump": Permission denied
+```
+
+### Context
+- Command: `scripts/hz-db-backup.sh`
+- Remote: `deploy@118.178.122.194`
+- `/opt/100j/backups` is intentionally deploy-owned and mode `750`.
+
+### Suggested Fix
+Dump to a temporary file under `/tmp` as `postgres`, then install it into `/opt/100j/backups` with deploy ownership and mode `640`.
+
+### Metadata
+- Reproducible: yes
+- Related Files: `scripts/hz-db-backup.sh`
+
+---
+
+## [ERR-20260519-008] hz_pg_restore_backup_file_permissions
+
+**Logged**: 2026-05-19T13:48:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: infra
+
+### Summary
+HZ restore rehearsal failed because `pg_restore` ran as the `postgres` user and could not read a deploy-owned backup file.
+
+### Error
+```text
+pg_restore: error: could not open input file "/opt/100j/backups/100j-20260519-134704.dump": Permission denied
+```
+
+### Context
+- Command: `scripts/hz-db-restore-rehearsal.sh`
+- Backup files are intentionally stored as `deploy:deploy` with mode `640`.
+
+### Suggested Fix
+For rehearsal, copy the selected backup to a postgres-owned temporary file under `/tmp`, restore from that copy, then remove it in the cleanup trap.
+
+### Metadata
+- Reproducible: yes
+- Related Files: `scripts/hz-db-restore-rehearsal.sh`
+
+---
+
 ## [ERR-20260518-001] swiftui_textcontenttype_macos_availability
 
 **Logged**: 2026-05-18T09:50:00+08:00

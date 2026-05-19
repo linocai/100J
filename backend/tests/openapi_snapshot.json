@@ -272,6 +272,7 @@
           "description": {
             "anyOf": [
               {
+                "maxLength": 10000,
                 "type": "string"
               },
               {
@@ -629,6 +630,7 @@
           "description": {
             "anyOf": [
               {
+                "maxLength": 10000,
                 "type": "string"
               },
               {
@@ -921,6 +923,7 @@
       "NoteCreate": {
         "properties": {
           "body": {
+            "maxLength": 20000,
             "minLength": 1,
             "title": "Body",
             "type": "string"
@@ -1075,6 +1078,7 @@
           "body": {
             "anyOf": [
               {
+                "maxLength": 20000,
                 "type": "string"
               },
               {
@@ -1127,6 +1131,7 @@
           "description": {
             "anyOf": [
               {
+                "maxLength": 10000,
                 "type": "string"
               },
               {
@@ -1318,6 +1323,7 @@
           "description": {
             "anyOf": [
               {
+                "maxLength": 10000,
                 "type": "string"
               },
               {
@@ -1391,6 +1397,7 @@
           "description": {
             "anyOf": [
               {
+                "maxLength": 10000,
                 "type": "string"
               },
               {
@@ -1555,6 +1562,7 @@
           "description": {
             "anyOf": [
               {
+                "maxLength": 10000,
                 "type": "string"
               },
               {
@@ -1812,6 +1820,7 @@
           "description": {
             "anyOf": [
               {
+                "maxLength": 10000,
                 "type": "string"
               },
               {

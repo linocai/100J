@@ -60,6 +60,16 @@ Use the same scratch-path workaround if needed:
 swift test --scratch-path /tmp/personal-affairs-apple-build
 ```
 
+## Package macOS
+
+```bash
+frontend/apple/scripts/package-macos-app.sh
+```
+
+The script builds the macOS release executable with a scratch path under `/tmp`, creates
+`frontend/apple/dist/100J.app`, ad-hoc signs it for local distribution, verifies the signature,
+and writes a timestamped zip next to the app bundle.
+
 ## Run Backend First
 
 ```bash
