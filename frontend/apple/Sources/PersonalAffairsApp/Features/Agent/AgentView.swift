@@ -6,10 +6,6 @@ import SwiftUI
 struct AgentView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.workbenchLayout) private var layout
-    @State private var inputText = ""
-    @State private var pendingCommand: AgentCommandDraft?
-    @State private var pendingConfirmation: AgentConfirmationPrompt?
-    @State private var responseText = ""
     var onSelectAgentLog: (AgentActionLog) -> Void = { _ in }
 
     var body: some View {
@@ -64,18 +60,18 @@ struct AgentView: View {
                 .foregroundStyle(AppTheme.Colors.secondaryText)
 
             HStack(alignment: .bottom, spacing: AppTheme.Spacing.sm) {
-                TextField("例如：帮我把公司无项目任务整理一下 / 明天下午3点体检 / 灵感 旅行清单", text: $inputText, axis: .vertical)
+                TextField("例如：帮我把公司无项目任务整理一下 / 明天下午3点体检 / 灵感 旅行清单", text: $model.agentReview.inputText, axis: .vertical)
                     .lineLimit(2...5)
                     .textFieldStyle(.roundedBorder)
-                    .onSubmit(sendMessage)
+                    .onSubmit { model.composeAgentCommand() }
 
                 Button {
-                    sendMessage()
+                    model.composeAgentCommand()
                 } label: {
                     Label("发送", systemImage: "paperplane.fill")
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(!model.agentReview.canCompose)
             }
         }
         }
@@ -88,18 +84,20 @@ struct AgentView: View {
                     Text("Dry Run Preview")
                         .font(.headline.weight(.semibold))
                     Spacer()
-                    if pendingCommand != nil {
-                        Button("预演") { executePending(dryRun: true) }
-                            .font(.caption.weight(.semibold))
+                    if model.agentReview.pendingCommand != nil {
+                        Button("预演") {
+                            Task { await model.executeAgentCommand(dryRun: true) }
+                        }
+                        .font(.caption.weight(.semibold))
                     }
                 }
-                if let pendingCommand {
+                if let pendingCommand = model.agentReview.pendingCommand {
                     commandSummary(pendingCommand)
                 } else {
                     EmptyStateInline(title: "暂无预览", message: "输入一句话后，这里会出现将要执行的操作。")
                 }
-                if !responseText.isEmpty {
-                    Text(responseText)
+                if !model.agentReview.responseText.isEmpty {
+                    Text(model.agentReview.responseText)
                         .font(.system(.caption, design: .monospaced))
                         .foregroundStyle(AppTheme.Colors.secondaryText)
                         .padding(AppTheme.Spacing.md)
@@ -112,12 +110,12 @@ struct AgentView: View {
     }
 
     private var actionReviewSurface: some View {
-        SurfaceView(style: pendingConfirmation == nil ? .base : .warning) {
+        SurfaceView(style: model.agentReview.pendingConfirmation == nil ? .base : .warning) {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
             Text("Action Review")
                 .font(.headline.weight(.semibold))
 
-            if let pendingConfirmation {
+            if let pendingConfirmation = model.agentReview.pendingConfirmation {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
                     Text(pendingConfirmation.summary)
                         .font(.callout.weight(.semibold))
@@ -127,30 +125,27 @@ struct AgentView: View {
                 }
                 HStack {
                     Button {
-                        self.pendingConfirmation = nil
-                        pendingCommand = nil
-                        responseText = "已取消这次操作。"
+                        model.cancelAgentCommand()
                     } label: {
                         Label("取消", systemImage: "xmark")
                     }
                     Button {
-                        confirmBackendPrompt(pendingConfirmation)
+                        Task { await model.confirmAgentCommand() }
                     } label: {
                         Label("确认执行", systemImage: "checkmark.seal")
                     }
                     .buttonStyle(.borderedProminent)
                 }
-            } else if let pending = pendingCommand {
+            } else if let pending = model.agentReview.pendingCommand {
                 commandSummary(pending)
                 HStack {
                     Button {
-                        pendingCommand = nil
-                        responseText = "已取消这次操作。"
+                        model.cancelAgentCommand()
                     } label: {
                         Label("取消", systemImage: "xmark")
                     }
                     Button {
-                        executePending(dryRun: false)
+                        Task { await model.executeAgentCommand(dryRun: false) }
                     } label: {
                         Label("确认写入", systemImage: "checkmark.seal")
                     }
@@ -241,86 +236,5 @@ struct AgentView: View {
                 .foregroundStyle(AppTheme.Colors.secondaryText)
         }
     }
-
-    private func sendMessage() {
-        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-
-        inputText = ""
-
-        guard let intent = CaptureParser.parse(text) else {
-            responseText = "我没看懂这句话。可以试试“公司待办 跟进发票”或“明天下午3点公司会议”。"
-            pendingCommand = nil
-            pendingConfirmation = nil
-            return
-        }
-
-        guard let built = buildNaturalCommand(intent) else {
-            responseText = "当前空间还没加载完成。请先刷新数据，再试一次。"
-            pendingCommand = nil
-            pendingConfirmation = nil
-            return
-        }
-
-        pendingCommand = built
-        pendingConfirmation = nil
-        responseText = "已生成可审核操作。"
-    }
-
-    private func executePending(dryRun: Bool) {
-        guard let pendingCommand else { return }
-        Task {
-            await model.run {
-                let response = try await model.agentRepository.execute(
-                    command: pendingCommand.command,
-                    arguments: pendingCommand.arguments,
-                    dryRun: dryRun
-                )
-                responseText = render(response)
-                if let prompt = AgentConfirmationPrompt(response: response, draft: pendingCommand) {
-                    pendingConfirmation = prompt
-                } else if !dryRun {
-                    self.pendingCommand = nil
-                    pendingConfirmation = nil
-                }
-                try await model.loadAllData()
-            }
-        }
-    }
-
-    private func confirmBackendPrompt(_ prompt: AgentConfirmationPrompt) {
-        Task {
-            await model.run {
-                let response = try await model.agentRepository.confirm(token: prompt.token)
-                responseText = render(response)
-                pendingConfirmation = nil
-                pendingCommand = nil
-                try await model.loadAllData()
-            }
-        }
-    }
-}
-
-private extension AgentView {
-    func buildNaturalCommand(_ intent: ParsedCaptureIntent) -> AgentCommandDraft? {
-        AgentNaturalCommandBuilder.build(
-            intent: intent,
-            personalSpace: model.personalSpace,
-            companySpace: model.companySpace
-        )
-    }
-}
-
-private func render(_ response: AgentCommandResponse) -> String {
-    if let reason = response.reason {
-        return "状态：\(response.status)\n原因：\(reason)"
-    }
-    if let result = response.result {
-        return "状态：\(response.status)\n结果：\(result)"
-    }
-    if let wouldExecute = response.wouldExecute {
-        return "预演：\(wouldExecute)"
-    }
-    return "状态：\(response.status)"
 }
 #endif

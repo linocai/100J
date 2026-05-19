@@ -2,51 +2,52 @@ import SwiftUI
 
 struct AuthView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var isRegistering = false
-    @State private var email = ""
-    @State private var password = ""
-    @State private var displayName = ""
-    @State private var baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "http://127.0.0.1:8000/api/v1"
+    @State private var accessCode = ""
+    @State private var baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "https://100j.linotsai.top/api/v1"
+    @State private var showingAdvanced = false
 
     var body: some View {
         VStack(spacing: 24) {
             VStack(spacing: 6) {
-                Image(systemName: "sparkle.magnifyingglass")
+                Image(systemName: "key.icloud")
                     .font(.system(size: 44))
                     .foregroundStyle(Color.accentColor)
                 Text("100J")
                     .font(.largeTitle.weight(.semibold))
-                Text("登录你的个人事务工作台")
+                Text("连接你的个人云端工作台")
                     .foregroundStyle(.secondary)
-                Text("登录状态会安全保存在 Apple 钥匙串中")
+                Text("使用服务器上的云端访问码接入，登录状态会保存在 Apple 钥匙串中")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
 
             VStack(spacing: 12) {
-                AuthField(label: "邮箱") {
-                    TextField("name@example.com", text: $email)
+                AuthField(label: "云端访问码") {
+                    SecureField("输入云端访问码", text: $accessCode)
                         .textFieldStyle(.roundedBorder)
-                }
-                AuthField(label: "密码") {
-                    SecureField("密码", text: $password)
-                        .textFieldStyle(.roundedBorder)
-                }
-                if isRegistering {
-                    AuthField(label: "显示名称") {
-                        TextField("可选", text: $displayName)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                }
-                AuthField(label: "API Base URL") {
-                    TextField("http://127.0.0.1:8000/api/v1", text: $baseURL)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.caption)
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        #endif
                 }
 
-                HStack {
-                    Button(isRegistering ? "已有账号？" : "创建账号") {
-                        isRegistering.toggle()
+                DisclosureGroup("高级连接设置", isExpanded: $showingAdvanced) {
+                    AuthField(label: "API Base URL") {
+                        TextField("https://100j.linotsai.top/api/v1", text: $baseURL)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.caption)
+                            #if os(iOS)
+                            .textInputAutocapitalization(.never)
+                            .keyboardType(.URL)
+                            .autocorrectionDisabled()
+                            #endif
+                    }
+
+                    #if DEBUG
+                    Button("开发：进入本机 Owner") {
+                        model.updateBaseURL("http://127.0.0.1:8000/api/v1")
+                        model.updateAuthMode(.localOwner)
                     }
                     #if os(macOS)
                     .buttonStyle(.link)
@@ -54,7 +55,11 @@ struct AuthView: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(Color.accentColor)
                     #endif
+                    #endif
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
+                HStack {
                     Spacer()
 
                     Button {
@@ -64,11 +69,11 @@ struct AuthView: View {
                             ProgressView()
                                 .controlSize(.small)
                         } else {
-                            Text(isRegistering ? "注册" : "登录")
+                            Text("连接云端")
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(email.isEmpty || password.isEmpty || model.isLoading)
+                    .disabled(accessCode.trimmingCharacters(in: .whitespacesAndNewlines).count < 8 || model.isLoading)
                     .keyboardShortcut(.defaultAction)
                 }
                 .padding(.top, 4)
@@ -97,14 +102,11 @@ struct AuthView: View {
     }
 
     private func submit() {
-        guard !email.isEmpty, !password.isEmpty, !model.isLoading else { return }
+        let code = accessCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        let endpoint = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard code.count >= 8, !model.isLoading else { return }
         Task {
-            model.updateBaseURL(baseURL)
-            if isRegistering {
-                await model.register(email: email, password: password, displayName: displayName.trimmedOrNil)
-            } else {
-                await model.login(email: email, password: password)
-            }
+            await model.connectCloudOwner(accessCode: code, baseURL: endpoint.isEmpty ? nil : endpoint)
         }
     }
 }

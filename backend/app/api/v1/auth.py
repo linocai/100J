@@ -8,11 +8,12 @@ from app.core.security import decode_token
 from app.models import User
 from app.schemas.auth import (
     LoginRequest,
+    OwnerLoginRequest,
     RefreshRequest,
     RegisterRequest,
     TokenResponse,
 )
-from app.services.auth_service import authenticate_user, issue_tokens, register_user
+from app.services.auth_service import authenticate_owner_access_code, authenticate_user, issue_tokens, register_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -35,6 +36,12 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     return issue_tokens(user)
 
 
+@router.post("/owner-login", response_model=TokenResponse)
+def owner_login(payload: OwnerLoginRequest, db: Session = Depends(get_db)):
+    user = authenticate_owner_access_code(db, payload.access_code)
+    return issue_tokens(user)
+
+
 @router.post("/refresh", response_model=TokenResponse)
 def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):
     decoded = decode_token(payload.refresh_token, expected_type="refresh")
@@ -49,5 +56,4 @@ def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):
 @router.post("/logout")
 def logout():
     return {"status": "ok"}
-
 

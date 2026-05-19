@@ -52,7 +52,7 @@ struct IOSCalendarView: View {
                             }
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
-                                    Task { await delete(item) }
+                                    Task { await model.deleteCalendarItem(item) }
                                 } label: {
                                     Label("删除", systemImage: "trash")
                                 }
@@ -74,31 +74,15 @@ struct IOSCalendarView: View {
                 IOSCalendarItemForm(
                     title: "编辑固定日程",
                     projects: model.projects,
-                    initialDraft: draft(from: item),
+                    initialDraft: CalendarDraftState(item: item, companySpaceId: model.companySpace?.id),
                     allowsOwnershipChange: false
                 ) { draft in
-                    await model.run {
-                        _ = try await model.calendarRepository.update(
-                            id: item.id,
-                            request: draft.updateRequest(timezone: TimeZone.current.identifier)
-                        )
-                        await reload()
-                    }
+                    await model.updateCalendarItem(id: item.id, draft: draft)
                 }
             }
             .sheet(isPresented: $showingNewItem) {
                 IOSCalendarItemForm(projects: model.projects) { draft in
-                    let targetSpace = draft.spaceType == .personal ? model.personalSpace : model.companySpace
-                    guard let space = targetSpace else { return }
-                    await model.run {
-                        _ = try await model.calendarRepository.create(
-                            draft.createRequest(
-                                spaceId: space.id,
-                                timezone: TimeZone.current.identifier
-                            )
-                        )
-                        try await model.loadAllData()
-                    }
+                    await model.createCalendarItem(draft)
                 }
             }
             .refreshable {
@@ -119,23 +103,10 @@ struct IOSCalendarView: View {
             personalSpaceId: model.personalSpace?.id,
             companySpaceId: model.companySpace?.id
         ) else {
-            await MainActor.run {
-                model.calendarItems = []
-            }
+            model.calendarItems = []
             return
         }
         await model.reloadCalendar(query: query)
-    }
-
-    private func delete(_ item: CalendarItem) async {
-        await model.run {
-            _ = try await model.calendarRepository.delete(id: item.id)
-            try await model.loadAllData()
-        }
-    }
-
-    private func draft(from item: CalendarItem) -> CalendarDraftState {
-        CalendarDraftState(item: item, companySpaceId: model.companySpace?.id)
     }
 }
 

@@ -24,6 +24,14 @@ public struct LoginRequest: Encodable {
     }
 }
 
+public struct OwnerLoginRequest: Encodable {
+    public let accessCode: String
+
+    public init(accessCode: String) {
+        self.accessCode = accessCode
+    }
+}
+
 public struct RefreshRequest: Encodable {
     public let refreshToken: String
 
@@ -276,4 +284,3 @@ public struct AgentConfirmRequest: Encodable {
         self.confirmationToken = confirmationToken
     }
 }
-

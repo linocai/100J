@@ -41,11 +41,13 @@ JWT_ALGORITHM
 ACCESS_TOKEN_EXPIRE_MINUTES
 REFRESH_TOKEN_EXPIRE_DAYS
 LLM_KEY_ENCRYPTION_SECRET
+OWNER_CLOUD_ACCESS_CODE
 PENDING_CONFIRMATION_EXPIRE_MINUTES
 CORS_ORIGINS=https://100j.linotsai.top
 ```
 
-Use random production secrets for `JWT_SECRET_KEY`, `POSTGRES_PASSWORD`, and `LLM_KEY_ENCRYPTION_SECRET`.
+Use random production secrets for `JWT_SECRET_KEY`, `POSTGRES_PASSWORD`, `LLM_KEY_ENCRYPTION_SECRET`, and `OWNER_CLOUD_ACCESS_CODE`.
+The Apple apps use `OWNER_CLOUD_ACCESS_CODE` as the single-owner cloud access code, then store the returned JWT pair in Apple Keychain.
 
 ## Local Release Checks
 
@@ -115,6 +117,7 @@ cd backend
 ```
 
 The smoke test registers a disposable user and verifies spaces, CRUD paths, Agent confirmation, action logs, and token refresh.
+To verify the single-owner Apple login path without printing the secret, run the owner-login check from the server after sourcing `/opt/100j/env/100j.env`.
 
 For the full production check from a local workstation:
 

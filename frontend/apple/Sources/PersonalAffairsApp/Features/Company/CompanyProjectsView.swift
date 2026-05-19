@@ -1,41 +1,6 @@
 import PersonalAffairsCore
 import SwiftUI
 
-struct ProjectDraft {
-    var name = ""
-    var description = ""
-    var hasStartDate = false
-    var startDate = Date()
-    var hasTargetDate = false
-    var targetDate = Date()
-
-    init(
-        name: String = "",
-        description: String = "",
-        startDate: String? = nil,
-        targetDate: String? = nil
-    ) {
-        self.name = name
-        self.description = description
-        if let parsedStartDate = parsedDateOnly(startDate) {
-            self.hasStartDate = true
-            self.startDate = parsedStartDate
-        }
-        if let parsedTargetDate = parsedDateOnly(targetDate) {
-            self.hasTargetDate = true
-            self.targetDate = parsedTargetDate
-        }
-    }
-
-    var startDateString: String? {
-        hasStartDate ? startDate.dayKey : nil
-    }
-
-    var targetDateString: String? {
-        hasTargetDate ? targetDate.dayKey : nil
-    }
-}
-
 #if os(macOS)
 struct CompanyProjectsView: View {
     @EnvironmentObject private var model: AppModel
@@ -80,19 +45,7 @@ struct CompanyProjectsView: View {
         }
         .sheet(isPresented: $showingNewProject) {
             ProjectFormView { draft in
-                guard let space = model.companySpace else { return }
-                await model.run {
-                    _ = try await model.projectRepository.create(
-                        ProjectCreateRequest(
-                            spaceId: space.id,
-                            name: draft.name,
-                            description: draft.description.trimmedOrNil,
-                            startDate: draft.startDateString,
-                            targetDate: draft.targetDateString
-                        )
-                    )
-                    try await model.loadAllData()
-                }
+                await model.createProject(draft)
             }
         }
         .task {
@@ -139,45 +92,27 @@ struct CompanyProjectsView: View {
             projectTasks = []
             return
         }
-        await model.run {
-            projectTasks = try await model.projectRepository.tasks(projectId: projectId, status: .active)
-        }
+        projectTasks = await model.loadProjectTasks(projectId: projectId)
     }
 
     private func complete(_ project: Project) {
-        Task {
-            await model.run {
-                _ = try await model.projectRepository.complete(id: project.id)
-                try await model.loadAllData()
-            }
-        }
+        Task { await model.completeProject(project) }
     }
 
     private func archive(_ project: Project) {
-        Task {
-            await model.run {
-                _ = try await model.projectRepository.archive(id: project.id)
-                try await model.loadAllData()
-            }
-        }
+        Task { await model.archiveProject(project) }
     }
 
     private func completeTask(_ task: TaskItem) {
         Task {
-            await model.run {
-                _ = try await model.taskRepository.complete(id: task.id)
-                try await model.loadAllData()
-            }
+            await model.completeTask(task)
             await loadProjectTasks(task.projectId)
         }
     }
 
     private func archiveTask(_ task: TaskItem) {
         Task {
-            await model.run {
-                _ = try await model.taskRepository.archive(id: task.id)
-                try await model.loadAllData()
-            }
+            await model.archiveTask(task)
             await loadProjectTasks(task.projectId)
         }
     }

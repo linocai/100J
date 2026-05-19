@@ -1,14 +1,9 @@
 #if os(iOS)
-import Foundation
 import PersonalAffairsCore
 import SwiftUI
 
 struct IOSAgentView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var inputText = ""
-    @State private var pendingCommand: AgentCommandDraft?
-    @State private var pendingConfirmation: AgentConfirmationPrompt?
-    @State private var responseText = ""
     @State private var provider = "openai"
     @State private var apiKey = ""
 
@@ -22,33 +17,33 @@ struct IOSAgentView: View {
                 }
 
                 Section("指令") {
-                    TextField("例如：公司待办 跟进发票 / 明天下午3点公司会议", text: $inputText, axis: .vertical)
+                    TextField("例如：公司待办 跟进发票 / 明天下午3点公司会议", text: $model.agentReview.inputText, axis: .vertical)
                         .lineLimit(2...5)
                     Button {
-                        sendMessage()
+                        model.composeAgentCommand()
                     } label: {
                         Label("生成预览", systemImage: "sparkles")
                     }
-                    .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(!model.agentReview.canCompose)
                 }
 
-                if let pendingCommand {
+                if let pendingCommand = model.agentReview.pendingCommand {
                     Section("操作预览") {
                         commandSummary(pendingCommand)
                         Button {
-                            executePending(dryRun: true)
+                            Task { await model.executeAgentCommand(dryRun: true) }
                         } label: {
                             Label("预演", systemImage: "eye")
                         }
                         Button {
-                            executePending(dryRun: false)
+                            Task { await model.executeAgentCommand(dryRun: false) }
                         } label: {
                             Label("确认写入", systemImage: "checkmark.seal")
                         }
                     }
                 }
 
-                if let pendingConfirmation {
+                if let pendingConfirmation = model.agentReview.pendingConfirmation {
                     Section("二次确认") {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(pendingConfirmation.summary)
@@ -59,23 +54,21 @@ struct IOSAgentView: View {
                             IOSBadge(text: "后端要求确认", color: .orange)
                         }
                         Button(role: .cancel) {
-                            self.pendingConfirmation = nil
-                            pendingCommand = nil
-                            responseText = "已取消这次操作。"
+                            model.cancelAgentCommand()
                         } label: {
                             Label("取消", systemImage: "xmark")
                         }
                         Button {
-                            confirm(pendingConfirmation)
+                            Task { await model.confirmAgentCommand() }
                         } label: {
                             Label("确认执行", systemImage: "checkmark.seal")
                         }
                     }
                 }
 
-                if !responseText.isEmpty {
+                if !model.agentReview.responseText.isEmpty {
                     Section("响应") {
-                        Text(responseText)
+                        Text(model.agentReview.responseText)
                             .font(.system(.caption, design: .monospaced))
                     }
                 }
@@ -91,10 +84,8 @@ struct IOSAgentView: View {
                     SecureField("API Key", text: $apiKey)
                     Button("保存 Key") {
                         Task {
-                            await model.run {
-                                model.llmKey = try await model.agentRepository.saveLLMKey(provider: provider, apiKey: apiKey)
-                                apiKey = ""
-                            }
+                            await model.saveLLMKey(provider: provider, apiKey: apiKey)
+                            apiKey = ""
                         }
                     }
                     .disabled(provider.isEmpty || apiKey.isEmpty)
@@ -118,12 +109,12 @@ struct IOSAgentView: View {
             .navigationTitle("Agent")
             .navigationBarTitleDisplayMode(.inline)
             .refreshable {
-                await reload()
+                await model.reloadAgentSupport()
             }
             .overlay { IOSLoadingOverlay() }
             .iosErrorAlert()
             .task {
-                await reload()
+                await model.reloadAgentSupport()
             }
         }
     }
@@ -141,88 +132,5 @@ struct IOSAgentView: View {
                 .foregroundStyle(.secondary)
         }
     }
-
-    private func reload() async {
-        await model.run {
-            model.agentTools = try await model.agentRepository.tools()
-            model.agentLogs = try await model.agentRepository.logs()
-            model.llmKey = try await model.agentRepository.llmKey()
-        }
-    }
-
-    private func sendMessage() {
-        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        inputText = ""
-
-        guard let intent = CaptureParser.parse(text) else {
-            responseText = "我没看懂这句话。可以试试“公司待办 跟进发票”或“明天下午3点公司会议”。"
-            pendingCommand = nil
-            pendingConfirmation = nil
-            return
-        }
-
-        guard let draft = AgentNaturalCommandBuilder.build(
-            intent: intent,
-            personalSpace: model.personalSpace,
-            companySpace: model.companySpace
-        ) else {
-            responseText = "当前空间还没加载完成。请先刷新数据，再试一次。"
-            pendingCommand = nil
-            pendingConfirmation = nil
-            return
-        }
-
-        pendingCommand = draft
-        pendingConfirmation = nil
-        responseText = "已生成可审核操作。"
-    }
-
-    private func executePending(dryRun: Bool) {
-        guard let pendingCommand else { return }
-        Task {
-            await model.run {
-                let response = try await model.agentRepository.execute(
-                    command: pendingCommand.command,
-                    arguments: pendingCommand.arguments,
-                    dryRun: dryRun
-                )
-                responseText = renderIOSAgentResponse(response)
-                if let prompt = AgentConfirmationPrompt(response: response, draft: pendingCommand) {
-                    pendingConfirmation = prompt
-                } else if !dryRun {
-                    self.pendingCommand = nil
-                    pendingConfirmation = nil
-                }
-                try await model.loadAllData()
-            }
-        }
-    }
-
-    private func confirm(_ prompt: AgentConfirmationPrompt) {
-        Task {
-            await model.run {
-                let response = try await model.agentRepository.confirm(token: prompt.token)
-                responseText = renderIOSAgentResponse(response)
-                pendingConfirmation = nil
-                pendingCommand = nil
-                try await model.loadAllData()
-            }
-        }
-    }
-}
-
-private func renderIOSAgentResponse(_ response: AgentCommandResponse) -> String {
-    var lines = ["状态: \(response.status)"]
-    if let reason = response.reason {
-        lines.append("原因: \(reason)")
-    }
-    if let result = response.result {
-        lines.append("结果: \(result)")
-    }
-    if let wouldExecute = response.wouldExecute {
-        lines.append("预演: \(wouldExecute)")
-    }
-    return lines.joined(separator: "\n")
 }
 #endif

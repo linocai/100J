@@ -91,37 +91,12 @@ struct CompanyWorkbenchView: View {
         }
         .sheet(isPresented: $showingNewTask) {
             TaskFormView(title: "新建公司待办", projects: model.projects, allowsProject: true) { draft in
-                guard let space = model.companySpace else { return }
-                await model.run {
-                    _ = try await model.taskRepository.create(
-                        TaskCreateRequest(
-                            spaceId: space.id,
-                            projectId: draft.projectId,
-                            title: draft.title,
-                            description: draft.description.trimmedOrNil,
-                            priority: draft.priority,
-                            dueDate: draft.dueDateString
-                        )
-                    )
-                    try await model.loadAllData()
-                }
+                await model.createCompanyTask(draft)
             }
         }
         .sheet(isPresented: $showingNewProject) {
             WorkbenchProjectFormView { draft in
-                guard let space = model.companySpace else { return }
-                await model.run {
-                    _ = try await model.projectRepository.create(
-                        ProjectCreateRequest(
-                            spaceId: space.id,
-                            name: draft.name,
-                            description: draft.description.trimmedOrNil,
-                            startDate: draft.startDateString,
-                            targetDate: draft.targetDateString
-                        )
-                    )
-                    try await model.loadAllData()
-                }
+                await model.createProject(draft)
             }
         }
         .task {
@@ -336,16 +311,10 @@ private struct CompanyTaskLane: View {
 
     private func mutateTask(_ mutation: Mutation, _ task: TaskItem) {
         Task {
-            await model.run {
-                switch mutation {
-                case .complete:
-                    _ = try await model.taskRepository.complete(id: task.id)
-                case .reopen:
-                    _ = try await model.taskRepository.reopen(id: task.id)
-                case .archive:
-                    _ = try await model.taskRepository.archive(id: task.id)
-                }
-                try await model.loadAllData()
+            switch mutation {
+            case .complete: await model.completeTask(task)
+            case .reopen: await model.reopenTask(task)
+            case .archive: await model.archiveTask(task)
             }
         }
     }

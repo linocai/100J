@@ -18,6 +18,7 @@ final class AppModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var supportErrorMessage: String?
     @Published var selectedSection: AppSection? = .today
+    @Published var agentReview = AgentReviewSession()
 
     let api: APIClient
     let authRepository: AuthRepository
@@ -29,17 +30,21 @@ final class AppModel: ObservableObject {
     let agentRepository: AgentRepository
 
     init() {
-        #if DEBUG
-        let defaultBaseURL = "http://127.0.0.1:8000/api/v1"
-        #else
         let defaultBaseURL = "https://100j.linotsai.top/api/v1"
-        #endif
         let storedBaseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? defaultBaseURL
-        let storedAuthMode = UserDefaults.standard.string(forKey: "appAuthMode")
-            .flatMap(AppAuthMode.init(rawValue:)) ?? .localOwner
+        let storedAuthMode: AppAuthMode
+        if UserDefaults.standard.bool(forKey: "cloudOwnerDefaultMigrated") {
+            storedAuthMode = UserDefaults.standard.string(forKey: "appAuthMode")
+                .flatMap(AppAuthMode.init(rawValue:)) ?? .cloudJWT
+        } else {
+            storedAuthMode = .cloudJWT
+            UserDefaults.standard.set(true, forKey: "cloudOwnerDefaultMigrated")
+            UserDefaults.standard.set(AppAuthMode.cloudJWT.rawValue, forKey: "appAuthMode")
+            UserDefaults.standard.set(storedBaseURL, forKey: "apiBaseURL")
+        }
         self.authMode = storedAuthMode
         let api = APIClient(
-            baseURL: URL(string: storedBaseURL) ?? URL(string: "http://127.0.0.1:8000/api/v1")!,
+            baseURL: URL(string: storedBaseURL) ?? URL(string: defaultBaseURL)!,
             authMode: storedAuthMode
         )
         self.api = api
@@ -85,13 +90,15 @@ final class AppModel: ObservableObject {
         spaces.first { $0.id == spaceId }?.type.label ?? "未知空间"
     }
 
-    func updateBaseURL(_ value: String) {
+    @discardableResult
+    func updateBaseURL(_ value: String) -> Bool {
         guard let url = URL(string: value) else {
             errorMessage = "API Base URL 无效。"
-            return
+            return false
         }
         api.baseURL = url
         UserDefaults.standard.set(value, forKey: "apiBaseURL")
+        return true
     }
 
     func updateAuthMode(_ mode: AppAuthMode) {
@@ -133,6 +140,20 @@ final class AppModel: ObservableObject {
         updateAuthMode(.cloudJWT)
         await run {
             _ = try await self.authRepository.login(email: email, password: password)
+            self.currentUser = try await self.authRepository.me()
+            self.spaces = try await self.spaceRepository.list()
+            try await self.loadCoreData()
+            await self.loadSupportData()
+        }
+    }
+
+    func connectCloudOwner(accessCode: String, baseURL: String? = nil) async {
+        if let baseURL, !baseURL.isEmpty, !updateBaseURL(baseURL) {
+            return
+        }
+        updateAuthMode(.cloudJWT)
+        await run {
+            _ = try await self.authRepository.ownerLogin(accessCode: accessCode)
             self.currentUser = try await self.authRepository.me()
             self.spaces = try await self.spaceRepository.list()
             try await self.loadCoreData()
@@ -295,6 +316,217 @@ final class AppModel: ObservableObject {
                     toDate: window.toDate
                 )
             }
+        }
+    }
+
+    // MARK: - Task CRUD
+
+    func createPersonalTask(_ draft: TaskDraft) async {
+        guard let space = personalSpace else { return }
+        await run {
+            _ = try await self.taskRepository.create(draft.createRequest(spaceId: space.id, includesProject: false))
+            try await self.loadAllData()
+        }
+    }
+
+    func createCompanyTask(_ draft: TaskDraft) async {
+        guard let space = companySpace else { return }
+        await run {
+            _ = try await self.taskRepository.create(draft.createRequest(spaceId: space.id, includesProject: true))
+            try await self.loadAllData()
+        }
+    }
+
+    func createProjectTask(_ draft: TaskDraft, projectId: String) async {
+        guard let space = companySpace else { return }
+        var pinnedDraft = draft
+        pinnedDraft.projectId = projectId
+        await run {
+            _ = try await self.taskRepository.create(pinnedDraft.createRequest(spaceId: space.id, includesProject: true))
+            try await self.loadAllData()
+        }
+    }
+
+    func updateTask(id: String, draft: TaskDraft, includesProject: Bool) async {
+        await run {
+            _ = try await self.taskRepository.update(id: id, request: draft.updateRequest(includesProject: includesProject))
+            try await self.loadAllData()
+        }
+    }
+
+    func completeTask(_ task: TaskItem) async {
+        await run {
+            _ = try await self.taskRepository.complete(id: task.id)
+            try await self.loadAllData()
+        }
+    }
+
+    func reopenTask(_ task: TaskItem) async {
+        await run {
+            _ = try await self.taskRepository.reopen(id: task.id)
+            try await self.loadAllData()
+        }
+    }
+
+    func toggleTaskDone(_ task: TaskItem) async {
+        await run {
+            if task.status == .done {
+                _ = try await self.taskRepository.reopen(id: task.id)
+            } else {
+                _ = try await self.taskRepository.complete(id: task.id)
+            }
+            try await self.loadAllData()
+        }
+    }
+
+    func archiveTask(_ task: TaskItem) async {
+        await run {
+            _ = try await self.taskRepository.archive(id: task.id)
+            try await self.loadAllData()
+        }
+    }
+
+    // MARK: - Note CRUD
+
+    func createNote(_ draft: NoteDraft) async {
+        guard let space = personalSpace else { return }
+        await run {
+            _ = try await self.noteRepository.create(draft.createRequest(spaceId: space.id))
+            try await self.loadAllData()
+        }
+    }
+
+    func updateNote(id: String, draft: NoteDraft) async {
+        await run {
+            _ = try await self.noteRepository.update(id: id, request: draft.updateRequest())
+            try await self.loadAllData()
+        }
+    }
+
+    func archiveNote(_ note: Note) async {
+        await run {
+            _ = try await self.noteRepository.archive(id: note.id)
+            try await self.loadAllData()
+        }
+    }
+
+    func convertNoteToTask(_ note: Note) async {
+        await run {
+            let title = note.title?.trimmedOrNil ?? String(note.body.prefix(48))
+            _ = try await self.noteRepository.convertToTask(noteId: note.id, request: ConvertNoteToTaskRequest(title: title))
+            try await self.loadAllData()
+        }
+    }
+
+    // MARK: - Project CRUD
+
+    func createProject(_ draft: ProjectDraft) async {
+        guard let space = companySpace else { return }
+        await run {
+            _ = try await self.projectRepository.create(draft.createRequest(spaceId: space.id))
+            try await self.loadAllData()
+        }
+    }
+
+    func updateProject(id: String, draft: ProjectDraft) async {
+        await run {
+            _ = try await self.projectRepository.update(id: id, request: draft.updateRequest())
+            try await self.loadAllData()
+        }
+    }
+
+    func completeProject(_ project: Project) async {
+        await run {
+            _ = try await self.projectRepository.complete(id: project.id)
+            try await self.loadAllData()
+        }
+    }
+
+    func archiveProject(_ project: Project) async {
+        await run {
+            _ = try await self.projectRepository.archive(id: project.id)
+            try await self.loadAllData()
+        }
+    }
+
+    func loadProjectTasks(projectId: String, status: TaskStatus = .active) async -> [TaskItem] {
+        do {
+            return try await projectRepository.tasks(projectId: projectId, status: status)
+        } catch {
+            errorMessage = error.localizedDescription
+            return []
+        }
+    }
+
+    // MARK: - Calendar CRUD
+
+    func createCalendarItem(_ draft: CalendarDraftState) async {
+        let targetSpace = draft.spaceType == .personal ? personalSpace : companySpace
+        guard let space = targetSpace else { return }
+        await run {
+            _ = try await self.calendarRepository.create(draft.createRequest(spaceId: space.id))
+            try await self.loadAllData()
+        }
+    }
+
+    func updateCalendarItem(id: String, draft: CalendarDraftState) async {
+        await run {
+            _ = try await self.calendarRepository.update(id: id, request: draft.updateRequest())
+            try await self.loadAllData()
+        }
+    }
+
+    func deleteCalendarItem(_ item: CalendarItem) async {
+        await run {
+            _ = try await self.calendarRepository.delete(id: item.id)
+            try await self.loadAllData()
+        }
+    }
+
+    // MARK: - Agent
+
+    func composeAgentCommand() {
+        guard let text = agentReview.consumeInput() else { return }
+        _ = agentReview.compose(text: text, personalSpace: personalSpace, companySpace: companySpace)
+    }
+
+    func executeAgentCommand(dryRun: Bool) async {
+        guard let command = agentReview.pendingCommand else { return }
+        await run {
+            let response = try await self.agentRepository.execute(
+                command: command.command,
+                arguments: command.arguments,
+                dryRun: dryRun
+            )
+            self.agentReview.apply(response: response, dryRun: dryRun)
+            try await self.loadAllData()
+        }
+    }
+
+    func confirmAgentCommand() async {
+        guard let prompt = agentReview.pendingConfirmation else { return }
+        await run {
+            let response = try await self.agentRepository.confirm(token: prompt.token)
+            self.agentReview.apply(response: response, dryRun: false)
+            try await self.loadAllData()
+        }
+    }
+
+    func cancelAgentCommand() {
+        agentReview.cancel()
+    }
+
+    func reloadAgentSupport() async {
+        await run {
+            self.agentTools = try await self.agentRepository.tools()
+            self.agentLogs = try await self.agentRepository.logs()
+            self.llmKey = try await self.agentRepository.llmKey()
+        }
+    }
+
+    func saveLLMKey(provider: String, apiKey: String) async {
+        await run {
+            self.llmKey = try await self.agentRepository.saveLLMKey(provider: provider, apiKey: apiKey)
         }
     }
 

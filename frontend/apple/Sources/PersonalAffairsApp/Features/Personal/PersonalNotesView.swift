@@ -42,18 +42,7 @@ struct PersonalNotesView: View {
         }
         .sheet(isPresented: $showingNewNote) {
             NoteFormView { draft in
-                guard let space = model.personalSpace else { return }
-                await model.run {
-                    _ = try await model.noteRepository.create(
-                        NoteCreateRequest(
-                            spaceId: space.id,
-                            title: draft.title.trimmedOrNil,
-                            body: draft.body,
-                            type: draft.type
-                        )
-                    )
-                    model.notes = try await model.noteRepository.list(status: status, type: type, search: search.trimmedOrNil)
-                }
+                await model.createNote(draft)
             }
         }
         .task {
@@ -156,25 +145,11 @@ struct PersonalNotesView: View {
     }
 
     private func archive(_ note: Note) {
-        Task {
-            await model.run {
-                _ = try await model.noteRepository.archive(id: note.id)
-                model.notes = try await model.noteRepository.list(status: status, type: type, search: search.trimmedOrNil)
-            }
-        }
+        Task { await model.archiveNote(note) }
     }
 
     private func convert(_ note: Note) {
-        Task {
-            await model.run {
-                let title = note.title?.trimmedOrNil ?? String(note.body.prefix(48))
-                _ = try await model.noteRepository.convertToTask(
-                    noteId: note.id,
-                    request: ConvertNoteToTaskRequest(title: title, priority: .medium)
-                )
-                try await model.loadAllData()
-            }
-        }
+        Task { await model.convertNoteToTask(note) }
     }
 
     @ViewBuilder
@@ -189,12 +164,6 @@ struct PersonalNotesView: View {
         .accessibilityHidden(true)
         #endif
     }
-}
-
-struct NoteDraft {
-    var title = ""
-    var body = ""
-    var type: NoteType = .idea
 }
 
 private struct NoteFormView: View {

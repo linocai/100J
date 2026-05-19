@@ -47,19 +47,7 @@ struct PersonalTasksView: View {
         }
         .sheet(isPresented: $showingNewTask) {
             TaskFormView(title: "新建个人待办", projects: [], allowsProject: false) { draft in
-                guard let space = model.personalSpace else { return }
-                await model.run {
-                    _ = try await model.taskRepository.create(
-                        TaskCreateRequest(
-                            spaceId: space.id,
-                            title: draft.title,
-                            description: draft.description.trimmedOrNil,
-                            priority: draft.priority,
-                            dueDate: draft.dueDateString
-                        )
-                    )
-                    model.personalTasks = try await model.taskRepository.list(query: personalQuery(spaceId: space.id))
-                }
+                await model.createPersonalTask(draft)
             }
         }
         .task {
@@ -164,41 +152,15 @@ struct PersonalTasksView: View {
     }
 
     private func complete(_ task: TaskItem) {
-        Task {
-            await model.run {
-                _ = try await model.taskRepository.complete(id: task.id)
-                guard let space = model.personalSpace else { return }
-                model.personalTasks = try await model.taskRepository.list(query: personalQuery(spaceId: space.id))
-            }
-        }
+        Task { await model.completeTask(task) }
     }
 
     private func reopen(_ task: TaskItem) {
-        Task {
-            await model.run {
-                _ = try await model.taskRepository.reopen(id: task.id)
-                guard let space = model.personalSpace else { return }
-                model.personalTasks = try await model.taskRepository.list(query: personalQuery(spaceId: space.id))
-            }
-        }
+        Task { await model.reopenTask(task) }
     }
 
     private func archive(_ task: TaskItem) {
-        Task {
-            await model.run {
-                _ = try await model.taskRepository.archive(id: task.id)
-                guard let space = model.personalSpace else { return }
-                model.personalTasks = try await model.taskRepository.list(query: personalQuery(spaceId: space.id))
-            }
-        }
-    }
-
-    private func personalQuery(spaceId: String) -> TaskListQuery {
-        PersonalTasksViewState.query(
-            personalSpaceId: spaceId,
-            status: status,
-            search: search.trimmedOrNil
-        )
+        Task { await model.archiveTask(task) }
     }
 
     @ViewBuilder
@@ -212,35 +174,6 @@ struct PersonalTasksView: View {
         .frame(width: 0, height: 0)
         .accessibilityHidden(true)
         #endif
-    }
-}
-
-struct TaskDraft {
-    var title = ""
-    var description = ""
-    var priority: TaskPriority = .medium
-    var hasDueDate = false
-    var dueDate = Date()
-    var projectId: String?
-
-    init(
-        title: String = "",
-        description: String = "",
-        priority: TaskPriority = .medium,
-        dueDateString: String? = nil,
-        projectId: String? = nil
-    ) {
-        self.title = title
-        self.description = description
-        self.priority = priority
-        let parsedDueDate = parsedDateOnly(dueDateString)
-        self.hasDueDate = parsedDueDate != nil
-        self.dueDate = parsedDueDate ?? Date()
-        self.projectId = projectId
-    }
-
-    var dueDateString: String? {
-        hasDueDate ? dueDate.dayKey : nil
     }
 }
 

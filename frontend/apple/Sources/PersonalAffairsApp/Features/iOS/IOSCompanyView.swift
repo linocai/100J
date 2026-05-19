@@ -87,14 +87,14 @@ private struct IOSCompanyTasksList: View {
                         }
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
-                                Task { await archive(task) }
+                                Task { await model.archiveTask(task) }
                             } label: {
                                 Label("归档", systemImage: "archivebox")
                             }
                         }
                         .swipeActions(edge: .leading) {
                             Button {
-                                Task { await toggleDone(task) }
+                                Task { await model.toggleTaskDone(task) }
                             } label: {
                                 Label(task.status == .done ? "重新打开" : "完成", systemImage: task.status == .done ? "arrow.uturn.left" : "checkmark")
                             }
@@ -112,20 +112,7 @@ private struct IOSCompanyTasksList: View {
         }
         .sheet(isPresented: $showingNewTask) {
             IOSTaskForm(title: "新建公司待办", projects: model.projects, allowsProject: true) { draft in
-                guard let space = model.companySpace else { return }
-                await model.run {
-                    _ = try await model.taskRepository.create(
-                        TaskCreateRequest(
-                            spaceId: space.id,
-                            projectId: draft.projectId,
-                            title: draft.title,
-                            description: draft.description.trimmedOrNil,
-                            priority: draft.priority,
-                            dueDate: draft.dueDateString
-                        )
-                    )
-                    try await model.loadAllData()
-                }
+                await model.createCompanyTask(draft)
             }
         }
         .sheet(item: $editingTask) { task in
@@ -133,27 +120,9 @@ private struct IOSCompanyTasksList: View {
                 title: "编辑公司待办",
                 projects: model.projects,
                 allowsProject: true,
-                initialDraft: TaskDraft(
-                    title: task.title,
-                    description: task.description ?? "",
-                    priority: task.priority,
-                    dueDateString: task.dueDate,
-                    projectId: task.projectId
-                )
+                initialDraft: TaskDraft(task)
             ) { draft in
-                await model.run {
-                    _ = try await model.taskRepository.update(
-                        id: task.id,
-                        request: TaskUpdateRequest(
-                            projectId: draft.projectId,
-                            title: draft.title,
-                            description: draft.description.trimmedOrNil,
-                            priority: draft.priority,
-                            dueDate: draft.dueDateString
-                        )
-                    )
-                    await reload()
-                }
+                await model.updateTask(id: task.id, draft: draft, includesProject: true)
             }
         }
         .refreshable { await reload() }
@@ -166,34 +135,7 @@ private struct IOSCompanyTasksList: View {
     }
 
     private func reload() async {
-        await model.run {
-            guard let companySpace = model.companySpace else { return }
-            model.companyTasks = try await model.taskRepository.list(
-                query: taskScope.query(companySpaceId: companySpace.id, status: status)
-            )
-        }
-    }
-
-    private var taskScope: CompanyTaskScope {
-        CompanyTaskScope(pickerValue: scope, selectedProjectId: selectedProjectId)
-    }
-
-    private func toggleDone(_ task: TaskItem) async {
-        await model.run {
-            if task.status == .done {
-                _ = try await model.taskRepository.reopen(id: task.id)
-            } else {
-                _ = try await model.taskRepository.complete(id: task.id)
-            }
-            try await model.loadAllData()
-        }
-    }
-
-    private func archive(_ task: TaskItem) async {
-        await model.run {
-            _ = try await model.taskRepository.archive(id: task.id)
-            try await model.loadAllData()
-        }
+        await model.reloadCompanyTasks(status: status, projectScope: scope, projectId: selectedProjectId)
     }
 }
 
@@ -220,7 +162,7 @@ private struct IOSCompanyProjectsList: View {
                     }
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
-                            Task { await archive(project) }
+                            Task { await model.archiveProject(project) }
                         } label: {
                             Label("归档", systemImage: "archivebox")
                         }
@@ -234,7 +176,7 @@ private struct IOSCompanyProjectsList: View {
                         .tint(.blue)
 
                         Button {
-                            Task { await complete(project) }
+                            Task { await model.completeProject(project) }
                         } label: {
                             Label("完成", systemImage: "checkmark")
                         }
@@ -252,43 +194,12 @@ private struct IOSCompanyProjectsList: View {
         }
         .sheet(isPresented: $showingNewProject) {
             IOSProjectForm { draft in
-                guard let space = model.companySpace else { return }
-                await model.run {
-                    _ = try await model.projectRepository.create(
-                        ProjectCreateRequest(
-                            spaceId: space.id,
-                            name: draft.name,
-                            description: draft.description.trimmedOrNil,
-                            startDate: draft.startDateString,
-                            targetDate: draft.targetDateString
-                        )
-                    )
-                    model.projects = try await model.projectRepository.list(spaceId: space.id, status: .active)
-                }
+                await model.createProject(draft)
             }
         }
         .sheet(item: $editingProject) { project in
-            IOSProjectForm(
-                initialDraft: ProjectDraft(
-                    name: project.name,
-                    description: project.description ?? "",
-                    startDate: project.startDate ?? "",
-                    targetDate: project.targetDate ?? ""
-                )
-            ) { draft in
-                await model.run {
-                    _ = try await model.projectRepository.update(
-                        id: project.id,
-                        request: ProjectUpdateRequest(
-                            name: draft.name,
-                            description: draft.description.trimmedOrNil,
-                            startDate: draft.startDateString,
-                            targetDate: draft.targetDateString
-                        )
-                    )
-                    guard let space = model.companySpace else { return }
-                    model.projects = try await model.projectRepository.list(spaceId: space.id, status: .active)
-                }
+            IOSProjectForm(initialDraft: ProjectDraft(project)) { draft in
+                await model.updateProject(id: project.id, draft: draft)
             }
         }
         .refreshable {
@@ -296,22 +207,6 @@ private struct IOSCompanyProjectsList: View {
         }
         .task {
             await model.reloadProjects(status: .active)
-        }
-    }
-
-    private func complete(_ project: Project) async {
-        await model.run {
-            _ = try await model.projectRepository.complete(id: project.id)
-            guard let space = model.companySpace else { return }
-            model.projects = try await model.projectRepository.list(spaceId: space.id, status: .active)
-        }
-    }
-
-    private func archive(_ project: Project) async {
-        await model.run {
-            _ = try await model.projectRepository.archive(id: project.id)
-            guard let space = model.companySpace else { return }
-            model.projects = try await model.projectRepository.list(spaceId: space.id, status: .active)
         }
     }
 }
@@ -353,26 +248,12 @@ private struct IOSProjectDetail: View {
                 allowsProject: false,
                 initialDraft: TaskDraft(projectId: project.id)
             ) { draft in
-                guard let space = model.companySpace else { return }
-                await model.run {
-                    _ = try await model.taskRepository.create(
-                        TaskCreateRequest(
-                            spaceId: space.id,
-                            projectId: project.id,
-                            title: draft.title,
-                            description: draft.description.trimmedOrNil,
-                            priority: draft.priority,
-                            dueDate: draft.dueDateString
-                        )
-                    )
-                    tasks = try await model.projectRepository.tasks(projectId: project.id, status: .active)
-                }
+                await model.createProjectTask(draft, projectId: project.id)
+                tasks = await model.loadProjectTasks(projectId: project.id)
             }
         }
         .task {
-            await model.run {
-                tasks = try await model.projectRepository.tasks(projectId: project.id, status: .active)
-            }
+            tasks = await model.loadProjectTasks(projectId: project.id)
         }
     }
 }

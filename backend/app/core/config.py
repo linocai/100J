@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     local_owner_email: str = "owner@100j.app"
     local_owner_display_name: str = "100J Owner"
     local_owner_timezone: str = "Asia/Shanghai"
+    owner_cloud_access_code: str = ""
     pending_confirmation_expire_minutes: int = 15
     cors_origins: Annotated[List[str], NoDecode] = Field(default_factory=list)
 

@@ -16,8 +16,9 @@ cp .env.example .env
 Edit `.env` if your local PostgreSQL URL differs from the default.
 
 The default auth mode is `AUTH_MODE=local_owner`. In this mode the API lazily creates one
-local owner user plus Personal / Company spaces, and the Apple app can call local APIs without
-JWT login. Set `AUTH_MODE=jwt` when testing the cloud-style login/register flow.
+local owner user plus Personal / Company spaces, and local tools can call APIs without JWT login.
+For the cloud Apple apps, use `AUTH_MODE=jwt` with `OWNER_CLOUD_ACCESS_CODE`; the app exchanges
+that access code at `/api/v1/auth/owner-login` and stores the returned tokens in Apple Keychain.
 
 ## Database
 
@@ -75,14 +76,15 @@ Tests use in-memory SQLite and do not require a local PostgreSQL server.
 
 ## Production Deployment
 
-Production deployment is documented in `../deployment.md`. The HZ cloud deployment uses Docker
-Compose, PostgreSQL, `APP_ENV=production`, and `AUTH_MODE=jwt`.
+Production deployment is documented in `../deployment.md`. The HZ cloud deployment uses systemd,
+PostgreSQL, `APP_ENV=production`, and `AUTH_MODE=jwt`.
 
 Production secrets must be random and must not use the development defaults:
 
 - `JWT_SECRET_KEY`
 - `POSTGRES_PASSWORD`
 - `LLM_KEY_ENCRYPTION_SECRET`
+- `OWNER_CLOUD_ACCESS_CODE`
 
 `LLM_KEY_ENCRYPTION_SECRET` is hashed into the Fernet key material at runtime; use a high-entropy
 random value in production, not the example placeholder.

@@ -245,6 +245,24 @@ final class PersonalAffairsCoreTests: XCTestCase {
         XCTAssertEqual(seenPaths, ["/api/v1/agent/commands", "/api/v1/agent/commands/confirm"])
     }
 
+    func testAuthRepositoryEncodesOwnerLoginRequestAndStoresTokens() async throws {
+        let store = InMemoryTokenStore()
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, session: Self.stubSession { request in
+            XCTAssertEqual(request.url?.path, "/api/v1/auth/owner-login")
+            XCTAssertEqual(request.httpMethod, "POST")
+            let body = try Self.jsonBody(from: request)
+            XCTAssertEqual(body["access_code"] as? String, "owner-code-123")
+            return (200, #"{"access_token":"access","refresh_token":"refresh","token_type":"bearer"}"#)
+        })
+        let repository = AuthRepository(api: client)
+
+        let tokens = try await repository.ownerLogin(accessCode: "owner-code-123")
+
+        XCTAssertEqual(tokens.accessToken, "access")
+        XCTAssertEqual(store.accessToken, "access")
+        XCTAssertEqual(store.refreshToken, "refresh")
+    }
+
     func testCaptureParserParsesChineseCalendarInput() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!

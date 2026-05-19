@@ -67,14 +67,14 @@ private struct IOSPersonalTasksList: View {
                         }
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
-                                Task { await archive(task) }
+                                Task { await model.archiveTask(task) }
                             } label: {
                                 Label("归档", systemImage: "archivebox")
                             }
                         }
                         .swipeActions(edge: .leading) {
                             Button {
-                                Task { await toggleDone(task) }
+                                Task { await model.toggleTaskDone(task) }
                             } label: {
                                 Label(task.status == .done ? "重新打开" : "完成", systemImage: task.status == .done ? "arrow.uturn.left" : "checkmark")
                             }
@@ -92,19 +92,7 @@ private struct IOSPersonalTasksList: View {
         }
         .sheet(isPresented: $showingNewTask) {
             IOSTaskForm(title: "新建个人待办", projects: [], allowsProject: false) { draft in
-                guard let space = model.personalSpace else { return }
-                await model.run {
-                    _ = try await model.taskRepository.create(
-                        TaskCreateRequest(
-                            spaceId: space.id,
-                            title: draft.title,
-                            description: draft.description.trimmedOrNil,
-                            priority: draft.priority,
-                            dueDate: draft.dueDateString
-                        )
-                    )
-                    model.personalTasks = try await model.taskRepository.list(query: personalQuery(spaceId: space.id))
-                }
+                await model.createPersonalTask(draft)
             }
         }
         .sheet(item: $editingTask) { task in
@@ -112,27 +100,9 @@ private struct IOSPersonalTasksList: View {
                 title: "编辑个人待办",
                 projects: [],
                 allowsProject: false,
-                initialDraft: TaskDraft(
-                    title: task.title,
-                    description: task.description ?? "",
-                    priority: task.priority,
-                    dueDateString: task.dueDate,
-                    projectId: nil
-                )
+                initialDraft: TaskDraft(task)
             ) { draft in
-                await model.run {
-                    _ = try await model.taskRepository.update(
-                        id: task.id,
-                        request: TaskUpdateRequest(
-                            title: draft.title,
-                            description: draft.description.trimmedOrNil,
-                            priority: draft.priority,
-                            dueDate: draft.dueDateString
-                        )
-                    )
-                    guard let space = model.personalSpace else { return }
-                    model.personalTasks = try await model.taskRepository.list(query: personalQuery(spaceId: space.id))
-                }
+                await model.updateTask(id: task.id, draft: draft, includesProject: false)
             }
         }
         .refreshable {
@@ -141,30 +111,6 @@ private struct IOSPersonalTasksList: View {
         .task {
             await model.reloadPersonalTasks(status: status)
         }
-    }
-
-    private func toggleDone(_ task: TaskItem) async {
-        await model.run {
-            if task.status == .done {
-                _ = try await model.taskRepository.reopen(id: task.id)
-            } else {
-                _ = try await model.taskRepository.complete(id: task.id)
-            }
-            guard let space = model.personalSpace else { return }
-            model.personalTasks = try await model.taskRepository.list(query: personalQuery(spaceId: space.id))
-        }
-    }
-
-    private func archive(_ task: TaskItem) async {
-        await model.run {
-            _ = try await model.taskRepository.archive(id: task.id)
-            guard let space = model.personalSpace else { return }
-            model.personalTasks = try await model.taskRepository.list(query: personalQuery(spaceId: space.id))
-        }
-    }
-
-    private func personalQuery(spaceId: String) -> TaskListQuery {
-        PersonalTasksViewState.query(personalSpaceId: spaceId, status: status)
     }
 }
 
@@ -186,14 +132,14 @@ private struct IOSPersonalNotesList: View {
                         }
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
-                                Task { await archive(note) }
+                                Task { await model.archiveNote(note) }
                             } label: {
                                 Label("归档", systemImage: "archivebox")
                             }
                         }
                         .swipeActions(edge: .leading) {
                             Button {
-                                Task { await convert(note) }
+                                Task { await model.convertNoteToTask(note) }
                             } label: {
                                 Label("转待办", systemImage: "arrow.triangle.branch")
                             }
@@ -211,30 +157,12 @@ private struct IOSPersonalNotesList: View {
         }
         .sheet(isPresented: $showingNewNote) {
             IOSNoteForm { draft in
-                guard let space = model.personalSpace else { return }
-                await model.run {
-                    _ = try await model.noteRepository.create(
-                        NoteCreateRequest(spaceId: space.id, title: draft.title.trimmedOrNil, body: draft.body, type: draft.type)
-                    )
-                    model.notes = try await model.noteRepository.list(status: .active)
-                }
+                await model.createNote(draft)
             }
         }
         .sheet(item: $editingNote) { note in
-            IOSNoteForm(
-                initialDraft: NoteDraft(title: note.title ?? "", body: note.body, type: note.type)
-            ) { draft in
-                await model.run {
-                    _ = try await model.noteRepository.update(
-                        id: note.id,
-                        request: NoteUpdateRequest(
-                            title: draft.title.trimmedOrNil,
-                            body: draft.body,
-                            type: draft.type
-                        )
-                    )
-                    model.notes = try await model.noteRepository.list(status: .active)
-                }
+            IOSNoteForm(initialDraft: NoteDraft(note)) { draft in
+                await model.updateNote(id: note.id, draft: draft)
             }
         }
         .refreshable {
@@ -242,21 +170,6 @@ private struct IOSPersonalNotesList: View {
         }
         .task {
             await model.reloadNotes(status: .active)
-        }
-    }
-
-    private func archive(_ note: Note) async {
-        await model.run {
-            _ = try await model.noteRepository.archive(id: note.id)
-            model.notes = try await model.noteRepository.list(status: .active)
-        }
-    }
-
-    private func convert(_ note: Note) async {
-        await model.run {
-            let title = note.title?.trimmedOrNil ?? String(note.body.prefix(48))
-            _ = try await model.noteRepository.convertToTask(noteId: note.id, request: ConvertNoteToTaskRequest(title: title))
-            try await model.loadAllData()
         }
     }
 }

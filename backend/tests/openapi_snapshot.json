@@ -1126,6 +1126,20 @@
         "title": "NoteUpdate",
         "type": "object"
       },
+      "OwnerLoginRequest": {
+        "properties": {
+          "access_code": {
+            "minLength": 8,
+            "title": "Access Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_code"
+        ],
+        "title": "OwnerLoginRequest",
+        "type": "object"
+      },
       "ProjectCreate": {
         "properties": {
           "description": {
@@ -2357,6 +2371,47 @@
           }
         },
         "summary": "Logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/owner-login": {
+      "post": {
+        "operationId": "owner_login_api_v1_auth_owner_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnerLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Owner Login",
         "tags": [
           "auth"
         ]

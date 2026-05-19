@@ -8,6 +8,8 @@ Build Personal Affairs App v1 in phases: backend, macOS, iOS, local E2E testing,
 
 Phase 4 automated local verification was completed for the 2026-05-17 snapshot. P0/P1 production hardening, P2 / Phase 5 deployment, and the first P3 production-soak slice are now complete on branch `codex/production-hardening`.
 
+As of 2026-05-19 16:10 CST, the local implementation for single-owner cloud access-code login is complete and verified, but the HZ cloud deployment is blocked because SSH to `deploy@118.178.122.194` accepts TCP connections but times out during SSH banner exchange. Public HTTPS health still returns ok, and `/api/v1/auth/owner-login` still returns 404, so the new backend route is not live yet.
+
 As of 2026-05-19, `AUDIT_v1.md` is the highest-authority production guidance file. The active implementation documents are now:
 
 - `AUDIT_v1.md`
@@ -58,6 +60,11 @@ Stopped frontend documents were removed to end the source-of-truth split.
   - `frontend/apple/PersonalAffairsApp.xcodeproj` was added as an iPhone-ready Xcode project for real-device signing and Run.
   - The Xcode project has `PersonalAffairsApp` and `PersonalAffairsCore` targets; the app target uses automatic signing and bundle id `com.linotsai.100j.dev`.
   - CI now validates the project with a generic iOS build and `CODE_SIGNING_ALLOWED=NO`.
+- Single-owner cloud login local slice:
+  - Backend now has `/api/v1/auth/owner-login`, guarded by `OWNER_CLOUD_ACCESS_CODE`, which returns JWT tokens for the single local owner account and default spaces.
+  - macOS/iOS `AuthView` now asks for a cloud access code, not email/password, and exchanges it through shared `AuthRepository.ownerLogin`.
+  - Apple app defaults were moved to `https://100j.linotsai.top/api/v1` and `个人云端`; first run migrates old local-owner default to cloud mode.
+  - Deployment docs and `.env.example` now include `OWNER_CLOUD_ACCESS_CODE`.
 
 ## Verification
 
@@ -85,7 +92,19 @@ cd backend
 .venv/bin/python -m pytest
 ```
 
-Result: `ruff` passed; `pytest` passed with 24 tests.
+Result: latest `ruff` passed; latest `pytest` passed with 26 tests, including owner cloud access-code login.
+
+Latest Apple checks for the cloud-login slice on 2026-05-19:
+
+```bash
+cd frontend/apple
+swift build --scratch-path /tmp/personal-affairs-apple-cloud-build
+swift test --scratch-path /tmp/personal-affairs-apple-cloud-test
+xcodebuild -quiet -project frontend/apple/PersonalAffairsApp.xcodeproj -scheme PersonalAffairsApp -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' -derivedDataPath /tmp/personal-affairs-xcodeproj-cloud-derived CODE_SIGNING_ALLOWED=NO build
+xcodebuild -quiet -project frontend/apple/PersonalAffairsApp.xcodeproj -scheme PersonalAffairsApp -destination 'generic/platform=iOS' -derivedDataPath /tmp/personal-affairs-xcodeproj-cloud-generic-derived CODE_SIGNING_ALLOWED=NO build
+```
+
+Result: all passed. Swift tests executed 21 tests.
 
 HZ database backup/restore rehearsal on 2026-05-19:
 
@@ -144,4 +163,4 @@ Result: project listed targets and schemes successfully; iOS Simulator build pas
 
 ## Next Action
 
-Next useful action is credential-gated distribution: use Xcode to open `frontend/apple/PersonalAffairsApp.xcodeproj`, select the `PersonalAffairsApp` target, choose the user's Apple ID / Team in Signing & Capabilities, and run on the user's iPhone. For macOS public distribution, run `CODESIGN_IDENTITY=... NOTARIZE=1 NOTARY_PROFILE=... frontend/apple/scripts/package-macos-app.sh` after Apple Developer credentials are available. Continue short production soak with `scripts/prod-check.sh` after real client use.
+Next useful action is to restore SSH access to HZ, then rerun `scripts/deploy-hz.sh`. After deploy succeeds, verify `/api/v1/auth/owner-login` returns 401 for a wrong code and 200 with the server-side `OWNER_CLOUD_ACCESS_CODE` without printing the secret. Then use Xcode to open `frontend/apple/PersonalAffairsApp.xcodeproj`, select the `PersonalAffairsApp` target, choose the user's Apple ID / Team in Signing & Capabilities, and run on the user's iPhone.

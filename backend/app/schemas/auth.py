@@ -17,6 +17,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class OwnerLoginRequest(BaseModel):
+    access_code: str = Field(min_length=8)
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 
@@ -32,4 +36,3 @@ class UserRead(ORMModel):
     email: Optional[EmailStr] = None
     display_name: Optional[str] = None
     timezone: str
-

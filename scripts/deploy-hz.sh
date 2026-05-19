@@ -39,6 +39,7 @@ if [ ! -f "${REMOTE_ENV_FILE}" ]; then
   db_password="$(openssl rand -hex 24)"
   jwt_secret="$(openssl rand -hex 48)"
   llm_secret="$(openssl rand -hex 48)"
+  owner_access_code="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)"
   cat > "${REMOTE_ENV_FILE}" <<ENV_FILE
 APP_ENV=production
 AUTH_MODE=jwt
@@ -51,11 +52,17 @@ JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_DAYS=30
 LLM_KEY_ENCRYPTION_SECRET=${llm_secret}
+OWNER_CLOUD_ACCESS_CODE=${owner_access_code}
 PENDING_CONFIRMATION_EXPIRE_MINUTES=15
 CORS_ORIGINS=https://${DOMAIN}
 ENV_FILE
 fi
 chmod 600 "${REMOTE_ENV_FILE}"
+
+if ! grep -q '^OWNER_CLOUD_ACCESS_CODE=' "${REMOTE_ENV_FILE}"; then
+  owner_access_code="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)"
+  printf '\nOWNER_CLOUD_ACCESS_CODE=%s\n' "${owner_access_code}" >> "${REMOTE_ENV_FILE}"
+fi
 
 db_password="$(grep '^POSTGRES_PASSWORD=' "${REMOTE_ENV_FILE}" | cut -d= -f2-)"
 if grep -q '@db:5432' "${REMOTE_ENV_FILE}"; then

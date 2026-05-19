@@ -4,14 +4,14 @@ import SwiftUI
 
 struct IOSSettingsView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "http://127.0.0.1:8000/api/v1"
-    @State private var selectedAuthMode = UserDefaults.standard.string(forKey: "appAuthMode").flatMap(AppAuthMode.init(rawValue:)) ?? .localOwner
+    @State private var baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "https://100j.linotsai.top/api/v1"
+    @State private var selectedAuthMode = UserDefaults.standard.string(forKey: "appAuthMode").flatMap(AppAuthMode.init(rawValue:)) ?? .cloudJWT
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    IOSScreenHeader(title: "设置", subtitle: "本机服务、未来云端 API 和高级连接配置。")
+                    IOSScreenHeader(title: "设置", subtitle: "个人云端 API、同步状态和高级连接配置。")
                         .listRowInsets(EdgeInsets())
                         .listRowSeparator(.hidden)
                 }
@@ -44,11 +44,11 @@ struct IOSSettingsView: View {
                 }
 
                 Section("账号") {
-                    Text(model.authMode == .localOwner ? "本机 Owner 模式不使用 Keychain 或 Authorization header。" : "云端登录 token 保存在 Apple 钥匙串。")
+                    Text(model.authMode == .localOwner ? "本机 Owner 模式不使用 Keychain 或 Authorization header。" : "个人云端 token 保存在 Apple 钥匙串。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     if model.authMode == .cloudJWT {
-                        Button("退出登录", role: .destructive) {
+                        Button("退出个人云端", role: .destructive) {
                             Task { await model.logout() }
                         }
                     }

@@ -30,17 +30,7 @@ struct GlobalCalendarView: View {
         }
         .sheet(isPresented: $showingNewItem) {
             CalendarItemFormView(projects: model.projects) { draft in
-                let targetSpace = draft.spaceType == .personal ? model.personalSpace : model.companySpace
-                guard let space = targetSpace else { return }
-                await model.run {
-                    _ = try await model.calendarRepository.create(
-                        draft.createRequest(
-                            spaceId: space.id,
-                            timezone: TimeZone.current.identifier
-                        )
-                    )
-                    try await model.loadAllData()
-                }
+                await model.createCalendarItem(draft)
             }
         }
         .task { await reload() }
@@ -455,12 +445,7 @@ struct GlobalCalendarView: View {
     }
 
     private func delete(_ item: CalendarItem) {
-        Task {
-            await model.run {
-                _ = try await model.calendarRepository.delete(id: item.id)
-                try await model.loadAllData()
-            }
-        }
+        Task { await model.deleteCalendarItem(item) }
     }
 
     private static let monthTitleFormatter: DateFormatter = {

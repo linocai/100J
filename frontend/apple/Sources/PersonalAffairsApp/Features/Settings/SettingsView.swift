@@ -3,8 +3,8 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "http://127.0.0.1:8000/api/v1"
-    @State private var selectedAuthMode = UserDefaults.standard.string(forKey: "appAuthMode").flatMap(AppAuthMode.init(rawValue:)) ?? .localOwner
+    @State private var baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "https://100j.linotsai.top/api/v1"
+    @State private var selectedAuthMode = UserDefaults.standard.string(forKey: "appAuthMode").flatMap(AppAuthMode.init(rawValue:)) ?? .cloudJWT
     @State private var provider = "openai"
     @State private var apiKey = ""
     @State private var showingAdvanced = false
@@ -48,7 +48,7 @@ struct SettingsView: View {
                             .buttonStyle(.borderedProminent)
 
                             if model.authMode == .cloudJWT {
-                                Button("退出云端登录") {
+                                Button("退出个人云端") {
                                     Task { await model.logout() }
                                 }
                             }
@@ -85,7 +85,7 @@ struct SettingsView: View {
                             Button("保存 API URL") {
                                 model.updateBaseURL(baseURL)
                             }
-                            Text(model.authMode == .localOwner ? "本机 Owner 模式不使用 Keychain 或 Authorization header。" : "云端登录模式会使用 Apple 钥匙串保存 access token 与 refresh token。")
+                            Text(model.authMode == .localOwner ? "本机 Owner 模式不使用 Keychain 或 Authorization header。" : "个人云端模式会使用 Apple 钥匙串保存 access token 与 refresh token。")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             if let personal = model.personalSpace {

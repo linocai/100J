@@ -29,6 +29,17 @@ public final class AuthRepository {
         return tokens
     }
 
+    public func ownerLogin(accessCode: String) async throws -> TokenResponse {
+        let tokens: TokenResponse = try await api.send(
+            "/auth/owner-login",
+            method: .post,
+            body: OwnerLoginRequest(accessCode: accessCode),
+            response: TokenResponse.self
+        )
+        try api.tokenStore.save(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken)
+        return tokens
+    }
+
     public func logout() async throws {
         _ = try? await api.send("/auth/logout", method: .post, response: EmptyResponse.self)
         try api.tokenStore.clear()
@@ -38,4 +49,3 @@ public final class AuthRepository {
         try await api.send("/me", response: User.self)
     }
 }
-
