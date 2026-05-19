@@ -157,6 +157,123 @@ final class PersonalAffairsCoreTests: XCTestCase {
         XCTAssertEqual(CaptureParser.parse("新建项目 100J 发布")?.target, .companyProject)
     }
 
+    func testAgentConfirmationPromptUsesStructuredStateAndHidesTokenFromSummary() throws {
+        let draft = AgentCommandDraft(
+            intent: ParsedCaptureIntent(target: .companyProject, title: "发布准备"),
+            command: "archive_project",
+            arguments: ["project_id": .string("project-1")],
+            summary: "归档公司项目：发布准备"
+        )
+        let response = AgentCommandResponse(
+            status: "requires_confirmation",
+            result: nil,
+            wouldExecute: nil,
+            reason: "This action will archive an entire project.",
+            confirmationToken: "secret-token"
+        )
+
+        let prompt = try XCTUnwrap(AgentConfirmationPrompt(response: response, draft: draft))
+
+        XCTAssertEqual(prompt.token, "secret-token")
+        XCTAssertEqual(prompt.reason, "This action will archive an entire project.")
+        XCTAssertEqual(prompt.summary, "归档公司项目：发布准备")
+        XCTAssertFalse(prompt.summary.contains("secret-token"))
+    }
+
+    func testCompanyTaskScopeMapsToQueries() {
+        XCTAssertEqual(
+            CompanyTaskScope.all.query(companySpaceId: "company", status: .active),
+            TaskListQuery(spaceId: "company", status: .active)
+        )
+        XCTAssertEqual(
+            CompanyTaskScope.noProject.query(companySpaceId: "company", status: .done),
+            TaskListQuery(spaceId: "company", projectScope: "no_project", status: .done)
+        )
+        XCTAssertEqual(
+            CompanyTaskScope.withProject.query(companySpaceId: "company", status: .archived, search: "tax"),
+            TaskListQuery(spaceId: "company", projectScope: "with_project", status: .archived, search: "tax")
+        )
+        XCTAssertEqual(
+            CompanyTaskScope.project("project-1").query(companySpaceId: "company", status: .active),
+            TaskListQuery(projectId: "project-1", status: .active)
+        )
+    }
+
+    func testPersonalTaskQueryNeverIncludesProject() {
+        let query = PersonalTasksViewState.query(personalSpaceId: "personal", status: .active, search: "receipt")
+
+        XCTAssertEqual(query.spaceId, "personal")
+        XCTAssertNil(query.projectId)
+        XCTAssertNil(query.projectScope)
+        XCTAssertEqual(query.status, .active)
+        XCTAssertEqual(query.search, "receipt")
+    }
+
+    func testCompanyWorkbenchSeparatesNoProjectAndProjectTasks() {
+        let project = makeProject(id: "project-1", name: "Release")
+        let looseTask = makeTask(id: "task-1", spaceId: "company", projectId: nil, title: "Follow invoice")
+        let projectTask = makeTask(id: "task-2", spaceId: "company", projectId: "project-1", title: "Ship build")
+
+        let lanes = CompanyWorkbenchViewState.lanes(projects: [project], tasks: [looseTask, projectTask])
+
+        XCTAssertEqual(lanes.count, 2)
+        XCTAssertEqual(lanes[0].id, "no_project")
+        XCTAssertTrue(lanes[0].isInbox)
+        XCTAssertEqual(lanes[0].tasks.map(\.id), ["task-1"])
+        XCTAssertEqual(lanes[1].id, "project-1")
+        XCTAssertFalse(lanes[1].isInbox)
+        XCTAssertEqual(lanes[1].tasks.map(\.id), ["task-2"])
+    }
+
+    private func makeTask(
+        id: String,
+        spaceId: String,
+        projectId: String?,
+        title: String,
+        status: TaskStatus = .active,
+        priority: TaskPriority = .medium
+    ) -> TaskItem {
+        let date = Date(timeIntervalSince1970: 1_779_033_600)
+        return TaskItem(
+            id: id,
+            userId: "user-1",
+            spaceId: spaceId,
+            projectId: projectId,
+            title: title,
+            description: nil,
+            status: status,
+            priority: priority,
+            dueDate: nil,
+            remindAt: nil,
+            estimatedMinutes: nil,
+            source: "manual",
+            completedAt: nil,
+            archivedAt: nil,
+            createdAt: date,
+            updatedAt: date,
+            version: 1
+        )
+    }
+
+    private func makeProject(id: String, name: String) -> Project {
+        let date = Date(timeIntervalSince1970: 1_779_033_600)
+        return Project(
+            id: id,
+            userId: "user-1",
+            spaceId: "company",
+            name: name,
+            description: nil,
+            status: .active,
+            startDate: nil,
+            targetDate: nil,
+            completedAt: nil,
+            archivedAt: nil,
+            createdAt: date,
+            updatedAt: date,
+            version: 1
+        )
+    }
+
     private static func stubSession(
         handler: @escaping (URLRequest) throws -> (Int, String)
     ) -> URLSession {
