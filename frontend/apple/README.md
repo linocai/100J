@@ -70,6 +70,17 @@ The script builds the macOS release executable with a scratch path under `/tmp`,
 `frontend/apple/dist/100J.app`, ad-hoc signs it for local distribution, verifies the signature,
 and writes a timestamped zip next to the app bundle.
 
+For public macOS distribution, use Developer ID signing plus notarization:
+
+```bash
+CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+NOTARIZE=1 \
+NOTARY_PROFILE=100j-notary \
+frontend/apple/scripts/package-macos-app.sh
+```
+
+See `frontend/apple/RELEASE.md` for notarization, TestFlight, and crash-reporting handoff notes.
+
 ## Run Backend First
 
 ```bash
@@ -109,4 +120,10 @@ Verified commands:
 swift build --scratch-path /tmp/personal-affairs-apple-build
 swift test --scratch-path /tmp/personal-affairs-apple-build
 xcodebuild -quiet -scheme PersonalAffairsApp -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' -derivedDataPath /tmp/personal-affairs-xcode-derived build
+```
+
+From the repository root, the full release-candidate verification entrypoint is:
+
+```bash
+scripts/verify-release.sh
 ```

@@ -49,6 +49,11 @@ Stopped frontend documents were removed to end the source-of-truth split.
   - Backend tests cover all Agent tools through API execution, including confirmation for `archive_project`.
   - Swift repository tests cover task query mapping, project task routes, calendar merged fetching/sorting, and Agent execute/confirm request encoding.
   - Inspector/layout constants and key surface opacity values moved into `AppTheme` tokens; regular inspector width is now 360.
+- Release-candidate operations slice on `codex/production-hardening`:
+  - macOS packaging now supports Developer ID signing, hardened runtime, notarization, stapling, Gatekeeper assessment, and final re-zip when Apple credentials are supplied.
+  - `scripts/prod-check.sh` now checks HTTPS health, TLS certificate dates, HZ services, latest backup presence, recent API/Nginx errors, and production smoke.
+  - `scripts/verify-release.sh` is the one-command RC verification entrypoint for backend, Apple build/test, iOS simulator build, macOS package, and optional production check.
+  - `frontend/apple/RELEASE.md` documents macOS notarization, iOS TestFlight handoff, and crash/usage monitoring policy.
 
 ## Verification
 
@@ -65,7 +70,8 @@ Latest Apple result: all passed on 2026-05-19 on `codex/production-hardening`.
 Notes:
 
 - `xcodebuild` printed `IDERunDestination: Supported platforms for the buildables in the current scheme is empty.`, but exited 0 and completed the iOS Simulator build.
-- macOS package produced: `frontend/apple/dist/100J.app` and latest zip `frontend/apple/dist/100J-macos-1.0-202605191404.zip`.
+- macOS package produced: `frontend/apple/dist/100J.app` and latest zip `frontend/apple/dist/100J-macos-1.0-202605191413.zip`.
+- Public macOS distribution still requires the user's Apple Developer ID certificate/notary credentials; the repo now has the scripted release path, but no private signing material is stored.
 
 Latest backend checks on 2026-05-19:
 
@@ -97,6 +103,15 @@ ssh deploy@118.178.122.194 'cd /opt/100j/current/backend && /opt/100j/venv/bin/p
 
 Result: deploy passed; HTTPS health passed; production smoke passed. Nginx, certbot timer, and `100j-api.service` are active. Certbot issued the `100j.linotsai.top` certificate expiring on 2026-08-17 with automatic renewal configured.
 
+Release-candidate verification on 2026-05-19:
+
+```bash
+scripts/verify-release.sh
+scripts/prod-check.sh
+```
+
+Result: release verification passed; production check passed for `https://100j.linotsai.top`. Public and API health returned `{"status":"ok"}`; `100j-api.service`, Nginx, and certbot timer were active; latest backup was `/opt/100j/backups/100j-20260519-134704.dump`; recent API errors had no entries; production smoke passed with password redaction.
+
 ## Decisions
 
 - Treat `AUDIT_v1.md` as the current production guidance file until superseded by a newer audit or explicit user instruction.
@@ -115,4 +130,4 @@ Result: deploy passed; HTTPS health passed; production smoke passed. Nginx, cert
 
 ## Next Action
 
-Next useful action is a short production soak after first real client use: monitor `journalctl -u 100j-api` and Nginx access/error logs, then move toward release distribution work such as Developer ID notarization, TestFlight/App Store packaging, and crash/usage monitoring.
+Next useful action is credential-gated distribution: run `CODESIGN_IDENTITY=... NOTARIZE=1 NOTARY_PROFILE=... frontend/apple/scripts/package-macos-app.sh` after Apple Developer credentials are available, then create the App Store Connect/TestFlight app record for iOS. Continue short production soak with `scripts/prod-check.sh` after real client use.

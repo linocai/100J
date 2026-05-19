@@ -31,4 +31,5 @@ jobs:
         working-directory: frontend/apple
     steps:
       - uses: actions/checkout@v4
+      - run: swift build --scratch-path /tmp/personal-affairs-apple-build
       - run: swift test --scratch-path /tmp/personal-affairs-apple-build

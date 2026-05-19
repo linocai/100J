@@ -116,6 +116,16 @@ cd backend
 
 The smoke test registers a disposable user and verifies spaces, CRUD paths, Agent confirmation, action logs, and token refresh.
 
+For the full production check from a local workstation:
+
+```bash
+scripts/prod-check.sh
+```
+
+The check verifies public HTTPS health, TLS certificate dates, remote `100j-api.service`, Nginx,
+certbot timer, local server health, latest backup presence, recent API/Nginx errors, and the
+production smoke test.
+
 ## Operations
 
 ```bash
@@ -154,3 +164,17 @@ checks public tables, users, and Alembic version, then drops the temporary datab
 `KEEP_REHEARSAL_DB=1` when you need to inspect the restored database manually.
 
 Rollback is currently redeploying the previous Git commit with `scripts/deploy-hz.sh`. The PostgreSQL database is persistent and is not removed by normal restarts.
+
+## Release Candidate Verification
+
+Run the local release gate before distributing a new app build:
+
+```bash
+scripts/verify-release.sh
+```
+
+Set `RUN_PROD_CHECK=1` to include the HZ production check in the same run:
+
+```bash
+RUN_PROD_CHECK=1 scripts/verify-release.sh
+```

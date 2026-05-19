@@ -10,6 +10,14 @@ BUNDLE_ID="${BUNDLE_ID:-com.lino.100j}"
 VERSION="${VERSION:-1.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-$(date +%Y%m%d%H%M)}"
 ICON_SOURCE="${ICON_SOURCE:-/Users/linotsai/Pictures/GPT Image/rounded-j-appicon-v1.png}"
+CODESIGN_IDENTITY="${CODESIGN_IDENTITY:-${SIGN_IDENTITY:--}}"
+ENTITLEMENTS_PATH="${ENTITLEMENTS_PATH:-}"
+NOTARIZE="${NOTARIZE:-0}"
+NOTARY_PROFILE="${NOTARY_PROFILE:-}"
+APPLE_ID="${APPLE_ID:-}"
+APPLE_TEAM_ID="${APPLE_TEAM_ID:-}"
+APPLE_APP_SPECIFIC_PASSWORD="${APPLE_APP_SPECIFIC_PASSWORD:-}"
+STAPLE="${STAPLE:-1}"
 DIST_DIR="$PROJECT_DIR/dist"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 ZIP_PATH="$DIST_DIR/$APP_NAME-macos-$VERSION-$BUILD_NUMBER.zip"
@@ -19,6 +27,81 @@ RESOURCES_DIR="$CONTENTS_DIR/Resources"
 ICONSET_DIR="$RESOURCES_DIR/AppIcon.iconset"
 
 cd "$PROJECT_DIR"
+
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "Missing required command: $1" >&2
+    exit 1
+  fi
+}
+
+require_notarization_credentials() {
+  if [[ "$CODESIGN_IDENTITY" == "-" ]]; then
+    echo "NOTARIZE=1 requires CODESIGN_IDENTITY='Developer ID Application: ...'." >&2
+    exit 1
+  fi
+
+  if [[ -n "$NOTARY_PROFILE" ]]; then
+    return
+  fi
+
+  if [[ -z "$APPLE_ID" || -z "$APPLE_TEAM_ID" || -z "$APPLE_APP_SPECIFIC_PASSWORD" ]]; then
+    echo "NOTARIZE=1 requires either NOTARY_PROFILE or APPLE_ID, APPLE_TEAM_ID, and APPLE_APP_SPECIFIC_PASSWORD." >&2
+    exit 1
+  fi
+}
+
+create_zip() {
+  rm -f "$ZIP_PATH"
+  (cd "$DIST_DIR" && ditto -c -k --keepParent "$APP_NAME.app" "$ZIP_PATH")
+}
+
+codesign_app() {
+  local args=(--force --deep --sign "$CODESIGN_IDENTITY")
+  if [[ "$CODESIGN_IDENTITY" != "-" ]]; then
+    args+=(--options runtime --timestamp)
+  fi
+  if [[ -n "$ENTITLEMENTS_PATH" ]]; then
+    if [[ ! -f "$ENTITLEMENTS_PATH" ]]; then
+      echo "Missing entitlements file: $ENTITLEMENTS_PATH" >&2
+      exit 1
+    fi
+    args+=(--entitlements "$ENTITLEMENTS_PATH")
+  fi
+
+  codesign "${args[@]}" "$APP_BUNDLE"
+  codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
+}
+
+notarize_app() {
+  require_notarization_credentials
+  require_command xcrun
+
+  create_zip
+
+  if [[ -n "$NOTARY_PROFILE" ]]; then
+    xcrun notarytool submit "$ZIP_PATH" --keychain-profile "$NOTARY_PROFILE" --wait
+  else
+    xcrun notarytool submit "$ZIP_PATH" \
+      --apple-id "$APPLE_ID" \
+      --team-id "$APPLE_TEAM_ID" \
+      --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+      --wait
+  fi
+
+  if [[ "$STAPLE" == "1" ]]; then
+    xcrun stapler staple "$APP_BUNDLE"
+    xcrun stapler validate "$APP_BUNDLE"
+    create_zip
+  fi
+
+  spctl --assess --type execute --verbose=4 "$APP_BUNDLE"
+}
+
+if [[ "$NOTARIZE" == "1" ]]; then
+  require_notarization_credentials
+  require_command xcrun
+fi
 
 swift build \
   -c release \
@@ -141,11 +224,13 @@ PLIST
 printf "APPL????" > "$CONTENTS_DIR/PkgInfo"
 
 plutil -lint "$CONTENTS_DIR/Info.plist"
-codesign --force --deep --sign - "$APP_BUNDLE"
-codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
+codesign_app
 
-rm -f "$ZIP_PATH"
-(cd "$DIST_DIR" && ditto -c -k --keepParent "$APP_NAME.app" "$ZIP_PATH")
+if [[ "$NOTARIZE" == "1" ]]; then
+  notarize_app
+else
+  create_zip
+fi
 
 echo "$APP_BUNDLE"
 echo "$ZIP_PATH"
