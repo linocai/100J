@@ -1,16 +1,11 @@
-import PersonalAffairsCore
 import SwiftUI
 
 @main
 struct PersonalAffairsApp: App {
-    @StateObject private var model: AppModel
-
-    init() {
-        // 让 Keychain item 以 access group 作为稳定身份键 — 与
-        // PersonalAffairsApp.macOS.entitlements 的 keychain-access-groups 一致。
-        KeychainAccessGroup.configure("top.linotsai.app.PersonalAffairs")
-        _model = StateObject(wrappedValue: AppModel())
-    }
+    @StateObject private var model = AppModel()
+    // 注：v1.1.3 曾尝试通过 keychain-access-groups 让 Keychain 用 access group 作为
+    // 稳定身份键，但 ad-hoc 签名无 provisioning profile，taskgated 直接拒绝启动。
+    // 现在退一步只靠稳定的 designated requirement（codesign --identifier + -r）。
 
     var body: some Scene {
         WindowGroup {
