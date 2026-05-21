@@ -69,7 +69,7 @@ struct PersonalNotesView: View {
     }
 
     private var filterBar: some View {
-        SurfaceView(style: .subtle, padding: AppTheme.Spacing.md) {
+        GroupBox {
             ViewThatFits(in: .horizontal) {
                 horizontalFilterBar
                 verticalFilterBar

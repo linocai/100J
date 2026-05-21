@@ -50,7 +50,7 @@ struct CompanyWorkbenchView: View {
                     }
                 )
 
-                SurfaceView(style: .elevated) {
+                GroupBox {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {

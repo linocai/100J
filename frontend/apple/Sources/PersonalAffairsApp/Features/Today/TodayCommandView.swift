@@ -11,206 +11,150 @@ struct TodayCommandView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
-                SectionHeaderView(
-                    style: .hero,
-                    eyebrow: todayEyebrow,
-                    title: "今天不要排满，只挑最重要的三件事。",
-                    subtitle: "弹性待办在 Focus Stack；必须发生的时间进入 Fixed Schedule；Agent 只做整理和建议。",
-                    systemImage: "sparkle.magnifyingglass",
-                    accent: AppTheme.Colors.agentAccent
-                ) {
-                    HStack {
-                        Button {
-                            jumpToSection(.agent)
-                        } label: {
-                            Label("问 Agent", systemImage: "sparkles")
-                        }
-                        Button {
-                            jumpToSection(.calendar)
-                        } label: {
-                            Label("新建固定日程", systemImage: "calendar.badge.plus")
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                }
-
-                TodayMetricsPanel(
-                    personalCount: model.activePersonalTasks.count,
-                    companyCount: model.activeCompanyTasks.count,
-                    fixedCount: todayItems.count + upcomingItems.count,
-                    looseCount: model.noProjectCompanyTasks.count
-                )
-
-                if layout.usesWideColumns {
-                    HStack(alignment: .top, spacing: AppTheme.Spacing.lg) {
-                        focusStack
-                            .frame(minWidth: 0, maxWidth: .infinity, alignment: .topLeading)
-                        VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
-                            scheduleColumn
-                            agentSuggestionPanel
-                        }
-                        .frame(width: min(360, max(300, layout.centerWidth * 0.34)), alignment: .topLeading)
-                    }
-                } else {
-                    VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
-                        focusStack
-                        scheduleColumn
-                        agentSuggestionPanel
-                    }
-                }
-
-                looseEndsStrip
+            VStack(alignment: .leading, spacing: 18) {
+                header
+                topThreeSection
+                upcomingSection
+                looseEndsSection
             }
             .padding(layout.pagePadding)
         }
-    }
-
-    private var focusStack: some View {
-        SurfaceView(style: .elevated) {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Focus Stack")
-                            .font(.headline.weight(.semibold))
-                        Text("先处理少数弹性事项；截止日期只影响优先级，不会自动进入日历。")
-                            .font(.caption)
-                            .foregroundStyle(AppTheme.Colors.secondaryText)
-                    }
-                    Spacer()
-                    Button("查看全部") { jumpToSection(.personalTasks) }
-                        .font(.caption.weight(.semibold))
-                }
-
-                taskSection(
-                    title: "个人 Top 3",
-                    tasks: Array(sortedForFocus(model.activePersonalTasks).prefix(3)),
-                    spaceLabel: "个人",
-                    spaceStyle: .personal,
-                    empty: "个人焦点已清空。"
-                )
-                taskSection(
-                    title: "公司 Top 3",
-                    tasks: Array(sortedForFocus(model.activeCompanyTasks).prefix(3)),
-                    spaceLabel: "公司",
-                    spaceStyle: .company,
-                    empty: "公司焦点已清空。"
-                )
-            }
+        .onAppear {
+            model.todayViewModel.refresh()
         }
     }
 
-    private var scheduleColumn: some View {
-        FixedSchedulePanel(
-            selection: selection,
-            todayItems: todayItems,
-            upcomingItems: upcomingItems,
-            selectCalendarItem: selectCalendarItem,
-            showMore: { jumpToSection(.calendar) }
-        )
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(todayEyebrow)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text("Today")
+                    .font(.largeTitle.weight(.bold))
+                Text("只看三件焦点、接下来要发生的事，以及需要整理的尾巴。")
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button {
+                model.universalComposerViewModel.open()
+            } label: {
+                Label("新建", systemImage: "plus")
+            }
+            .buttonStyle(.borderedProminent)
+        }
     }
 
-    private var looseEndsStrip: some View {
-        SurfaceView(style: model.noProjectCompanyTasks.isEmpty ? .subtle : .warning) {
-            HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
-                Image(systemName: "tray")
-                    .foregroundStyle(AppTheme.Colors.warningAccent)
-                    .frame(width: 28, height: 28)
-                    .background(AppTheme.Colors.warningAccent.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.sm, style: .continuous))
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Company Loose Ends")
-                        .font(.callout.weight(.semibold))
-                    Text(model.noProjectCompanyTasks.isEmpty ? "无项目收件箱已清空。" : "\(model.noProjectCompanyTasks.count) 个公司任务还没有归入项目。")
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.Colors.secondaryText)
+    private var topThreeSection: some View {
+        GroupBox {
+            if model.todayViewModel.topThree.isEmpty {
+                EmptyStateInline(title: "暂无 Top 3", message: "按 ⌘K 捕捉一个真正要推进的事项。")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(model.todayViewModel.topThree) { task in
+                        TodayTaskRow(
+                            task: task,
+                            projectName: model.projectName(for: task.projectId),
+                            isSelected: selection == .task(task.id),
+                            select: { selectTask(task) },
+                            toggle: { Task { await model.toggleTaskDone(task) } }
+                        )
+                        Divider()
+                    }
                 }
+            }
+        } label: {
+            SectionLabel(title: "Top 3", subtitle: "今天最值得推进的三件事。", systemImage: "scope")
+        }
+    }
+
+    private var upcomingSection: some View {
+        GroupBox {
+            if model.todayViewModel.upcoming.isEmpty {
+                EmptyStateInline(title: "今天没有固定日程", message: "有固定时间才进入 Calendar。")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(model.todayViewModel.upcoming) { schedule in
+                        Button {
+                            selectCalendarItem(schedule.item)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Text(schedule.timeLabel)
+                                    .font(.callout.monospacedDigit())
+                                    .foregroundStyle(Color.indigo)
+                                    .frame(width: 54, alignment: .leading)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(schedule.item.title)
+                                        .font(.callout.weight(.semibold))
+                                    Text(schedule.item.type.label)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        Divider()
+                    }
+                }
+            }
+        } label: {
+            HStack {
+                SectionLabel(title: "接下来", subtitle: "固定时间和固定日期。", systemImage: "calendar")
                 Spacer()
-                Button("整理") { jumpToSection(.companyTasks) }
+                Button("打开 Calendar") { jumpToSection(.calendar) }
                     .font(.caption.weight(.semibold))
             }
         }
     }
 
-    private var agentSuggestionPanel: some View {
-        SurfaceView(style: .tinted(.agent)) {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                Label("Agent Suggestions", systemImage: "sparkles")
-                    .font(.headline.weight(.semibold))
-                suggestion("\(model.noProjectCompanyTasks.count) 个公司任务没有项目归属", action: "整理")
-                suggestion("\(upcomingItems.count) 个固定日程在未来一周", action: "查看")
-                suggestion("\(model.notes.filter { $0.linkedTaskId == nil }.count) 条灵感还没有转行动", action: "生成候选")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func taskSection(title: String, tasks: [TaskItem], spaceLabel: String, spaceStyle: PillStyle, empty: String) -> some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-            Text(title)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(AppTheme.Colors.tertiaryText)
-                .textCase(.uppercase)
-            if tasks.isEmpty {
-                EmptyStateInline(title: empty, message: "用 Quick Capture 记录新的弹性事项。")
+    private var looseEndsSection: some View {
+        GroupBox {
+            if model.todayViewModel.looseEnds.isEmpty {
+                EmptyStateInline(title: "Loose Ends 已清空", message: "无项目任务和未转行动的灵感会出现在这里。")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
             } else {
-                TaskCardList {
-                    ForEach(tasks) { task in
-                        TaskCardView(
-                            task: task,
-                            projectName: model.projectName(for: task.projectId),
-                            spaceStyle: spaceStyle,
-                            spaceLabel: spaceLabel,
-                            isSelected: selection == .task(task.id),
-                            compact: true,
-                            onSelect: { selectTask(task) },
-                            onComplete: { mutateTask(.complete, task) },
-                            onReopen: { mutateTask(.reopen, task) },
-                            onArchive: { mutateTask(.archive, task) }
-                        )
+                VStack(spacing: 0) {
+                    ForEach(model.todayViewModel.looseEnds) { item in
+                        Button {
+                            selectLooseEnd(item)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: item.kind == .task ? "tray" : "note.text")
+                                    .foregroundStyle(item.kind == .task ? Color.orange : Color.purple)
+                                    .frame(width: 24)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(item.title)
+                                        .font(.callout.weight(.semibold))
+                                        .lineLimit(2)
+                                    Text(item.subtitle)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        Divider()
                     }
                 }
             }
-        }
-    }
-
-    private func suggestion(_ text: String, action: String) -> some View {
-        HStack(alignment: .center, spacing: AppTheme.Spacing.sm) {
-            Circle()
-                .fill(AppTheme.Colors.agentAccent)
-                .frame(width: 6, height: 6)
-            Text(text)
-                .font(.caption)
-                .foregroundStyle(AppTheme.Colors.secondaryText)
-                .lineLimit(2)
-            Spacer(minLength: AppTheme.Spacing.sm)
-            Text(action)
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(AppTheme.Colors.agentAccent)
-        }
-    }
-
-    private var todayItems: [CalendarItem] {
-        let today = Date().dayKey
-        return sortedCalendarItems(model.calendarItems).filter { item in
-            if item.allDay {
-                return item.startDate == today
+        } label: {
+            HStack {
+                SectionLabel(title: "Loose Ends", subtitle: "还没归位的公司任务和灵感。", systemImage: "tray")
+                Spacer()
+                Button("整理") { jumpToSection(.plan) }
+                    .font(.caption.weight(.semibold))
             }
-            guard let startAt = item.startAt else { return false }
-            return Calendar.current.isDateInToday(startAt)
-        }
-    }
-
-    private var upcomingItems: [CalendarItem] {
-        let calendar = Calendar.current
-        let todayStart = calendar.startOfDay(for: Date())
-        let tomorrowStart = calendar.date(byAdding: .day, value: 1, to: todayStart) ?? todayStart
-        let upper = calendar.date(byAdding: .day, value: 7, to: todayStart) ?? todayStart
-
-        return sortedCalendarItems(model.calendarItems).filter { item in
-            guard let date = calendarSortDate(item) else { return false }
-            return date >= tomorrowStart && date <= upper
         }
     }
 
@@ -221,22 +165,76 @@ struct TodayCommandView: View {
         return formatter.string(from: Date())
     }
 
-    private enum Mutation {
-        case complete
-        case reopen
-        case archive
-    }
-
-    private func mutateTask(_ mutation: Mutation, _ task: TaskItem) {
-        Task {
-            switch mutation {
-            case .complete:
-                await model.completeTask(task)
-            case .reopen:
-                await model.reopenTask(task)
-            case .archive:
-                await model.archiveTask(task)
+    private func selectLooseEnd(_ item: TodayLooseEnd) {
+        switch item.kind {
+        case .task:
+            let taskID = item.id.replacingOccurrences(of: "task-", with: "")
+            if let task = model.companyTasks.first(where: { $0.id == taskID }) {
+                selectTask(task)
             }
+        case .note:
+            jumpToSection(.plan)
         }
+    }
+}
+
+private struct SectionLabel: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+
+    var body: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.headline.weight(.semibold))
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } icon: {
+            Image(systemName: systemImage)
+                .foregroundStyle(Color.indigo)
+        }
+    }
+}
+
+private struct TodayTaskRow: View {
+    let task: TaskItem
+    let projectName: String?
+    let isSelected: Bool
+    let select: () -> Void
+    let toggle: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Button(action: toggle) {
+                Image(systemName: task.status == .done ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(task.status == .done ? Color.green : .secondary)
+            }
+            .buttonStyle(.plain)
+
+            Button(action: select) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(task.title)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(isSelected ? Color.indigo : .primary)
+                        .lineLimit(2)
+                    WrappingHStack(spacing: 6, rowSpacing: 5) {
+                        PillView(text: task.priority.label, style: task.priority.pillStyle)
+                        if let dueDate = task.dueDate {
+                            PillView(text: "截止 \(dueDate)", style: .warningSubtle)
+                        }
+                        if let projectName {
+                            PillView(text: projectName, style: .company, systemImage: "folder")
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 10)
     }
 }

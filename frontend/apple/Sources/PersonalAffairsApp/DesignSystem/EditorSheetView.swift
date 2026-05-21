@@ -31,7 +31,7 @@ struct EditorSheetView<Content: View>: View {
     }
 
     var body: some View {
-        SurfaceView(style: .elevated, cornerRadius: AppTheme.Radius.xl, padding: AppTheme.Spacing.xl) {
+        GroupBox {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
                 SectionHeaderView(style: .page, title: title, subtitle: subtitle)
                 content

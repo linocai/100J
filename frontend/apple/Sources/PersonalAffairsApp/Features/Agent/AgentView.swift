@@ -52,7 +52,7 @@ struct AgentView: View {
     }
 
     private var commandComposerSurface: some View {
-        SurfaceView(style: .elevated) {
+        GroupBox {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
             Text("Command Composer")
                 .font(.headline.weight(.semibold))
@@ -79,7 +79,7 @@ struct AgentView: View {
     }
 
     private var dryRunPreviewSurface: some View {
-        SurfaceView(style: .subtle) {
+        GroupBox {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
                 HStack {
                     Text("Dry Run Preview")
@@ -111,7 +111,7 @@ struct AgentView: View {
     }
 
     private var actionReviewSurface: some View {
-        SurfaceView(style: model.agentReview.pendingConfirmation == nil ? .base : .warning) {
+        GroupBox {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
             Text("Action Review")
                 .font(.headline.weight(.semibold))
@@ -162,7 +162,7 @@ struct AgentView: View {
     }
 
     private var agentStatusSurface: some View {
-        SurfaceView(style: .tinted(.agent)) {
+        GroupBox {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
                 Label("Agent Layer", systemImage: "sparkles")
                     .font(.headline.weight(.semibold))
@@ -178,7 +178,7 @@ struct AgentView: View {
     }
 
     private var recentActionLogsSurface: some View {
-        SurfaceView(style: .inspector) {
+        GroupBox {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
                 Text("Recent Agent Actions")
                     .font(.headline.weight(.semibold))

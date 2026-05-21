@@ -1,80 +1,114 @@
+import PersonalAffairsCore
 import SwiftUI
 
 #if os(macOS)
+import AppKit
+
 struct MacWorkbenchShellView: View {
     @EnvironmentObject private var model: AppModel
     @State private var inspectorSelection: InspectorSelection?
-    @State private var quickCaptureText = ""
-    @State private var showingQuickCapture = false
-    @State private var showingInspectorPopover = false
-    @FocusState private var isQuickCaptureFocused: Bool
+    @State private var isInspectorPresented = false
+    @State private var showingSettings = false
+    @State private var searchText = ""
 
     var body: some View {
-        GeometryReader { geometry in
-            let width = geometry.size.width
-            let showsInspector = width >= AppTheme.Layout.inspectorVisibilityThreshold
-            let sidebarColumnWidth = sidebarWidth(for: width)
-            let inspectorColumnWidth = showsInspector ? inspectorWidth(for: width) : 0
-            let separatorWidth: CGFloat = showsInspector ? 1 : 0
-            let centerWidth = max(0, width - sidebarColumnWidth - inspectorColumnWidth - separatorWidth)
-            let layout = WorkbenchLayoutContext(
-                windowWidth: width,
-                centerWidth: centerWidth,
-                showsInspector: showsInspector
+        NavigationSplitView {
+            MacSidebarView(
+                selection: $model.selectedSection,
+                openSettings: { showingSettings = true },
+                switchAccount: switchAccount,
+                openAbout: openAbout
             )
-            VStack(spacing: 0) {
-                CommandTopBar(
-                    quickCaptureText: $quickCaptureText,
-                    isQuickCaptureFocused: $isQuickCaptureFocused,
-                    primaryAction: primaryAction,
-                    showsInspectorButton: !showsInspector,
-                    onSubmitQuickCapture: openQuickCapture,
-                    onPrimaryAction: runPrimaryAction,
-                    onToggleInspector: { showingInspectorPopover.toggle() }
-                )
-                .environment(\.workbenchLayout, layout)
-
-                horizontalHairline
-
-                HStack(spacing: 0) {
-                    MacSidebarView(selection: $model.selectedSection)
-                        .frame(width: sidebarColumnWidth)
-
-                    currentWorkspace
-                        .frame(minWidth: 0, maxWidth: contentMaxWidth(for: layout), maxHeight: .infinity)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color.clear)
-                        .layoutPriority(1)
-                        .environment(\.workbenchLayout, layout)
-
-                    if showsInspector {
-                        verticalHairline
-                        ContextInspectorView(selection: inspectorSelection)
-                            .frame(width: inspectorColumnWidth)
-                            .environment(\.workbenchLayout, layout)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .background(AppBackgroundView())
+            .navigationSplitViewColumnWidth(min: 220, ideal: 248, max: 280)
+        } detail: {
+            detailContainer
         }
         .frame(
             minWidth: AppTheme.Layout.minimumWindowWidth,
             minHeight: AppTheme.Layout.minimumWindowHeight
         )
-        .sheet(isPresented: $showingQuickCapture) {
-            QuickCaptureSheet(rawText: quickCaptureText) {
-                quickCaptureText = ""
-            }
-            .environmentObject(model)
+        .toolbar { shellToolbar }
+        .searchable(text: $searchText, placement: .toolbar, prompt: "搜索或输入一句命令")
+        .onSubmit(of: .search, submitSearch)
+        .sheet(isPresented: composerPresented) {
+            UniversalComposerView(vm: model.universalComposerViewModel)
+                .environmentObject(model)
+                .frame(width: 620, height: 380)
+                .presentationBackground(.thinMaterial)
         }
-        .popover(isPresented: $showingInspectorPopover) {
+        .sheet(isPresented: $showingSettings) {
+            SettingsView()
+                .environmentObject(model)
+                .frame(width: 560, height: 620)
+        }
+        .sheet(item: confirmationPrompt) { prompt in
+            AgentConfirmationSheet(
+                prompt: prompt,
+                onConfirm: { Task { await model.confirmAgentCommand() } },
+                onCancel: { model.cancelAgentCommand() },
+                onExpired: {
+                    model.cancelAgentCommand()
+                    model.errorMessage = "token 已过期，请重新发送指令。"
+                }
+            )
+            .frame(width: 480)
+            .presentationBackground(.regularMaterial)
+        }
+        .background(keyboardShortcuts)
+    }
+
+    private var detailContainer: some View {
+        GeometryReader { geometry in
+            let layout = WorkbenchLayoutContext(
+                windowWidth: geometry.size.width,
+                centerWidth: geometry.size.width,
+                showsInspector: isInspectorPresented
+            )
+            currentWorkspace
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.clear)
+                .environment(\.workbenchLayout, layout)
+        }
+        .navigationTitle((model.selectedSection ?? .today).title)
+        .inspector(isPresented: $isInspectorPresented) {
             ContextInspectorView(selection: inspectorSelection)
                 .environmentObject(model)
-                .frame(
-                    width: AppTheme.Layout.inspectorPopoverWidth,
-                    height: AppTheme.Layout.inspectorPopoverHeight
-                )
+                .frame(minWidth: 300, idealWidth: 340, maxWidth: 420, maxHeight: .infinity)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var shellToolbar: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            HStack(spacing: 8) {
+                Image(systemName: (model.selectedSection ?? .today).systemImage)
+                    .foregroundStyle(Color.indigo)
+                Text((model.selectedSection ?? .today).title)
+                    .font(.headline.weight(.semibold))
+            }
+        }
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button {
+                model.universalComposerViewModel.open()
+            } label: {
+                Label("Universal Composer", systemImage: "sparkles")
+            }
+            .help("Universal Composer (⌘K)")
+
+            Button {
+                isInspectorPresented.toggle()
+            } label: {
+                Label("Inspector", systemImage: "sidebar.right")
+            }
+            .keyboardShortcut("0", modifiers: [.command, .option])
+            .help("切换 Inspector (⌥⌘0)")
+
+            Button {
+                Task { await model.refreshAll() }
+            } label: {
+                Label("刷新", systemImage: "arrow.clockwise")
+            }
+            .disabled(model.isLoading)
         }
     }
 
@@ -86,22 +120,20 @@ struct MacWorkbenchShellView: View {
                 selection: inspectorSelection,
                 selectTask: { inspectorSelection = .task($0.id) },
                 selectCalendarItem: { inspectorSelection = .calendarItem($0.id) },
-                jumpToSection: { model.selectedSection = $0 }
+                jumpToSection: jump
             )
-        case .personalTasks:
-            PersonalTasksView(selection: inspectorSelection, onSelectTask: { inspectorSelection = .task($0.id) })
-        case .personalNotes:
-            PersonalNotesView(selection: inspectorSelection, onSelectNote: { inspectorSelection = .note($0.id) })
-        case .companyTasks:
-            CompanyWorkbenchView(
+        case .plan, .personalTasks, .personalNotes, .companyTasks, .companyProjects:
+            PlanView(
                 selection: inspectorSelection,
                 selectTask: { inspectorSelection = .task($0.id) },
-                selectProject: { inspectorSelection = .project($0.id) }
+                selectProject: { inspectorSelection = .project($0.id) },
+                selectNote: { inspectorSelection = .note($0.id) }
             )
-        case .companyProjects:
-            CompanyProjectsView(selection: inspectorSelection, onSelectProject: { inspectorSelection = .project($0.id) })
         case .calendar:
-            GlobalCalendarView(selection: inspectorSelection, onSelectCalendarItem: { inspectorSelection = .calendarItem($0.id) })
+            GlobalCalendarView(
+                selection: inspectorSelection,
+                onSelectCalendarItem: { inspectorSelection = .calendarItem($0.id) }
+            )
         case .agent:
             AgentView(onSelectAgentLog: { inspectorSelection = .agentLog($0.id) })
         case .settings:
@@ -109,93 +141,68 @@ struct MacWorkbenchShellView: View {
         }
     }
 
-    private var horizontalHairline: some View {
-        Rectangle()
-            .fill(Color.primary.opacity(0.06))
-            .frame(height: 1)
+    private var composerPresented: Binding<Bool> {
+        Binding(
+            get: { model.universalComposerViewModel.isOpen },
+            set: { newValue in
+                if newValue {
+                    model.universalComposerViewModel.open()
+                } else {
+                    model.universalComposerViewModel.close()
+                }
+            }
+        )
     }
 
-    private var verticalHairline: some View {
-        Rectangle()
-            .fill(Color.primary.opacity(0.06))
-            .frame(width: 1)
+    private var confirmationPrompt: Binding<AgentConfirmationPrompt?> {
+        Binding(
+            get: { model.agentReview.pendingConfirmation },
+            set: { newValue in
+                if newValue == nil, model.agentReview.pendingConfirmation != nil {
+                    model.cancelAgentCommand()
+                }
+            }
+        )
     }
 
-    private func sidebarWidth(for windowWidth: CGFloat) -> CGFloat {
-        if windowWidth >= AppTheme.Layout.wideWindowThreshold {
-            return AppTheme.Layout.sidebarWideWidth
+    @ViewBuilder
+    private var keyboardShortcuts: some View {
+        Button("Universal Composer") {
+            model.universalComposerViewModel.open()
         }
-        if windowWidth >= AppTheme.Layout.inspectorVisibilityThreshold {
-            return AppTheme.Layout.sidebarRegularWidth
-        }
-        return AppTheme.Layout.sidebarCompactWidth
+        .keyboardShortcut("k", modifiers: .command)
+        .opacity(0)
+        .frame(width: 0, height: 0)
+        .accessibilityHidden(true)
     }
 
-    private func inspectorWidth(for windowWidth: CGFloat) -> CGFloat {
-        windowWidth >= AppTheme.Layout.wideWindowThreshold
-            ? AppTheme.Layout.inspectorWideWidth
-            : AppTheme.Layout.inspectorRegularWidth
+    private func submitSearch() {
+        let text = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        model.universalComposerViewModel.open(prefill: text)
+        searchText = ""
     }
 
-    private func contentMaxWidth(for layout: WorkbenchLayoutContext) -> CGFloat? {
-        if model.selectedSection == .companyTasks { return nil }
-        if layout.centerWidth < AppTheme.Layout.centerContentCompactThreshold { return nil }
-        return layout.windowWidth >= AppTheme.Layout.wideWindowThreshold
-            ? AppTheme.Layout.centerContentWideMaxWidth
-            : AppTheme.Layout.centerContentRegularMaxWidth
-    }
-
-    private var primaryAction: PrimaryActionDescriptor {
-        switch model.selectedSection ?? .today {
-        case .today:
-            return PrimaryActionDescriptor(title: "New Capture", systemImage: "plus")
-        case .personalTasks:
-            return PrimaryActionDescriptor(title: "Personal Task", systemImage: "checklist")
-        case .personalNotes:
-            return PrimaryActionDescriptor(title: "New Idea", systemImage: "lightbulb")
-        case .companyTasks:
-            return PrimaryActionDescriptor(title: "Company Task", systemImage: "rectangle.3.group")
-        case .companyProjects:
-            return PrimaryActionDescriptor(title: "New Project", systemImage: "folder.badge.plus")
-        case .calendar:
-            return PrimaryActionDescriptor(title: "Event", systemImage: "calendar.badge.plus")
-        case .agent:
-            return PrimaryActionDescriptor(title: "Send", systemImage: "paperplane")
-        case .settings:
-            return PrimaryActionDescriptor(title: "Refresh", systemImage: "arrow.clockwise")
+    private func jump(_ section: AppSection) {
+        switch section {
+        case .personalTasks, .personalNotes, .companyTasks, .companyProjects:
+            model.selectedSection = .plan
+        default:
+            model.selectedSection = section
         }
     }
 
-    private func runPrimaryAction() {
-        switch model.selectedSection ?? .today {
-        case .personalTasks:
-            quickCaptureText = "个人待办 "
-            openQuickCapture()
-        case .personalNotes:
-            quickCaptureText = "灵感 "
-            openQuickCapture()
-        case .companyTasks:
-            quickCaptureText = "公司待办 "
-            openQuickCapture()
-        case .companyProjects:
-            quickCaptureText = "新项目 "
-            openQuickCapture()
-        case .calendar:
-            quickCaptureText = "固定日程 "
-            openQuickCapture()
-        case .agent:
-            model.selectedSection = .agent
-            isQuickCaptureFocused = true
-        case .settings:
-            Task { await model.refreshAll() }
-        case .today:
-            openQuickCapture()
+    private func switchAccount() {
+        if model.authMode == .localOwner {
+            model.updateAuthMode(.cloudJWT)
+        } else {
+            Task { await model.logout() }
         }
     }
 
-    private func openQuickCapture() {
-        isQuickCaptureFocused = false
-        showingQuickCapture = true
+    private func openAbout() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(nil)
     }
 }
 #endif

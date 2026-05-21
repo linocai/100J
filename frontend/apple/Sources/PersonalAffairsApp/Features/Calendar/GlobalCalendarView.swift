@@ -16,7 +16,7 @@ struct GlobalCalendarView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
                 header
-                SurfaceView(style: .elevated) {
+                GroupBox {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
                         filterBar
                         Text("有截止日期的待办仍然属于待办；只有固定日期 / 固定时间事项进入日历。")

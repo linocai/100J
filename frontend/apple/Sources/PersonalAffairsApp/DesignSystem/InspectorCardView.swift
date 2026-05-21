@@ -35,7 +35,7 @@ struct InspectorCardView<Content: View>: View {
     }
 
     var body: some View {
-        SurfaceView(style: .inspector, padding: AppTheme.Spacing.md) {
+        GroupBox {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
                 HStack(alignment: .firstTextBaseline, spacing: AppTheme.Spacing.sm) {
                     if let systemImage {

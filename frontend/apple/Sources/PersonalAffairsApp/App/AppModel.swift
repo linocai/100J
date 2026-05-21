@@ -1,6 +1,17 @@
 import Foundation
 import PersonalAffairsCore
 
+#if canImport(AuthenticationServices)
+import AuthenticationServices
+#endif
+
+enum AppSyncStatus: Equatable {
+    case offline
+    case syncing
+    case synced
+    case error
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var authMode: AppAuthMode
@@ -19,6 +30,7 @@ final class AppModel: ObservableObject {
     @Published var supportErrorMessage: String?
     @Published var selectedSection: AppSection? = .today
     @Published var agentReview = AgentReviewSession()
+    @Published var menuBarCaptureText = ""
 
     private let api: APIClient
     private let authRepository: AuthRepository
@@ -121,6 +133,12 @@ final class AppModel: ObservableObject {
         activeCompanyTasks.filter { $0.projectId == nil }
     }
 
+    var syncStatus: AppSyncStatus {
+        if isLoading { return .syncing }
+        if errorMessage != nil || supportErrorMessage != nil { return .error }
+        return isAuthenticated ? .synced : .offline
+    }
+
     func projectName(for projectId: String?) -> String? {
         guard let projectId else { return nil }
         return projects.first { $0.id == projectId }?.name ?? "未知项目"
@@ -181,6 +199,68 @@ final class AppModel: ObservableObject {
         updateAuthMode(.cloudJWT)
         await run {
             _ = try await self.authRepository.login(email: email, password: password)
+            self.currentUser = try await self.authRepository.me()
+            self.spaces = try await self.spaceRepository.list()
+            try await self.loadCoreData()
+            await self.loadSupportData()
+        }
+    }
+
+    #if canImport(AuthenticationServices)
+    func handleAppleSignIn(_ result: Result<ASAuthorization, Error>) async {
+        guard case .success(let authorization) = result else {
+            if case .failure(let error) = result {
+                errorMessage = error.localizedDescription
+            } else {
+                errorMessage = "无法完成 Apple 登录。"
+            }
+            return
+        }
+        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+              let tokenData = credential.identityToken,
+              let idToken = String(data: tokenData, encoding: .utf8)
+        else {
+            errorMessage = "无法获取 Apple 身份令牌。"
+            return
+        }
+        updateAuthMode(.cloudJWT)
+        await run {
+            _ = try await self.authRepository.signInWithApple(
+                idToken: idToken,
+                email: credential.email,
+                fullName: credential.fullName?.formatted(),
+                bundleId: Bundle.main.bundleIdentifier ?? "top.linotsai.100j"
+            )
+            self.currentUser = try await self.authRepository.me()
+            self.spaces = try await self.spaceRepository.list()
+            try await self.loadCoreData()
+            await self.loadSupportData()
+        }
+    }
+    #endif
+
+    func requestEmailOTP(email: String) async {
+        let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard cleanEmail.contains("@") else {
+            errorMessage = "请输入有效邮箱。"
+            return
+        }
+        updateAuthMode(.cloudJWT)
+        await run {
+            try await self.authRepository.requestEmailOTP(email: cleanEmail)
+        }
+    }
+
+    func verifyEmailOTP(email: String, code: String) async {
+        let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard cleanEmail.contains("@"), cleanCode.count == 6 else {
+            errorMessage = "请输入邮箱和 6 位验证码。"
+            return
+        }
+        updateAuthMode(.cloudJWT)
+        await run {
+            _ = try await self.authRepository.verifyEmailOTP(email: cleanEmail, code: cleanCode)
             self.currentUser = try await self.authRepository.me()
             self.spaces = try await self.spaceRepository.list()
             try await self.loadCoreData()
@@ -597,6 +677,29 @@ final class AppModel: ObservableObject {
             await self.agentViewModel.saveLLMKey(provider: provider, apiKey: apiKey)
             try self.throwIfViewModelError(self.agentViewModel.lastError)
             self.syncAgentSupportFromViewModel()
+        }
+    }
+
+    @discardableResult
+    func submitUniversalComposer() async -> Bool {
+        guard let draft = await universalComposerViewModel.submit() else {
+            errorMessage = "还没能解析这句输入。可以试试“个人待办 买牛奶”或“明天下午3点公司会议”。"
+            return false
+        }
+        agentReview.pendingCommand = draft
+        agentReview.pendingConfirmation = nil
+        agentReview.responseText = "已生成可审核操作。"
+        selectedSection = .agent
+        universalComposerViewModel.close()
+        return true
+    }
+
+    func submitMenuBarCapture() async {
+        let text = menuBarCaptureText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        universalComposerViewModel.input = text
+        if await submitUniversalComposer() {
+            menuBarCaptureText = ""
         }
     }
 

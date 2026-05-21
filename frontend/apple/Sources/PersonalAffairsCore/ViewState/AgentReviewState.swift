@@ -25,12 +25,23 @@ public struct AgentConfirmationPrompt: Identifiable, Equatable {
     public let reason: String
     public let summary: String
     public let command: String
+    public let resources: [String]
+    public let expiresAt: Date
 
-    public init(token: String, reason: String, summary: String, command: String) {
+    public init(
+        token: String,
+        reason: String,
+        summary: String,
+        command: String,
+        resources: [String] = [],
+        expiresAt: Date = Date().addingTimeInterval(15 * 60)
+    ) {
         self.token = token
         self.reason = reason
         self.summary = summary
         self.command = command
+        self.resources = resources
+        self.expiresAt = expiresAt
     }
 
     public init?(response: AgentCommandResponse, draft: AgentCommandDraft?) {
@@ -43,6 +54,22 @@ public struct AgentConfirmationPrompt: Identifiable, Equatable {
         self.reason = response.reason ?? "这条操作需要二次确认。"
         self.summary = draft?.summary ?? "确认执行 Agent 操作"
         self.command = draft?.command ?? "agent_command"
+        self.resources = Self.resources(from: draft)
+        self.expiresAt = Date().addingTimeInterval(15 * 60)
+    }
+
+    private static func resources(from draft: AgentCommandDraft?) -> [String] {
+        guard let draft else { return [] }
+        var values = [draft.intent.target.label]
+        if case let .string(title)? = draft.arguments["title"] {
+            values.append(title)
+        } else if case let .string(name)? = draft.arguments["name"] {
+            values.append(name)
+        }
+        if case let .string(spaceID)? = draft.arguments["space_id"] {
+            values.append("space:\(spaceID.prefix(8))")
+        }
+        return values
     }
 }
 
@@ -167,4 +194,3 @@ public extension ParsedCaptureTarget {
         }
     }
 }
-

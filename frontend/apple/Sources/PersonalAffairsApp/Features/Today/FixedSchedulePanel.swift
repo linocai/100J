@@ -10,7 +10,7 @@ struct FixedSchedulePanel: View {
     let showMore: () -> Void
 
     var body: some View {
-        SurfaceView(style: .elevated) {
+        GroupBox {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 3) {

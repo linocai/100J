@@ -263,6 +263,60 @@ final class PersonalAffairsCoreTests: XCTestCase {
         XCTAssertEqual(store.refreshToken, "refresh")
     }
 
+    func testAuthRepositoryEncodesAppleSignInAndStoresTokens() async throws {
+        let store = InMemoryTokenStore()
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, session: Self.stubSession { request in
+            XCTAssertEqual(request.url?.path, "/api/v1/auth/apple")
+            XCTAssertEqual(request.httpMethod, "POST")
+            let body = try Self.jsonBody(from: request)
+            XCTAssertEqual(body["id_token"] as? String, "apple-token")
+            XCTAssertEqual(body["bundle_id"] as? String, "top.linotsai.100j")
+            XCTAssertEqual(body["email"] as? String, "user@example.com")
+            XCTAssertEqual(body["full_name"] as? String, "Lino Tsai")
+            return (200, #"{"access_token":"apple-access","refresh_token":"apple-refresh","token_type":"bearer"}"#)
+        })
+        let repository = AuthRepository(api: client)
+
+        let tokens = try await repository.signInWithApple(
+            idToken: "apple-token",
+            email: "user@example.com",
+            fullName: "Lino Tsai",
+            bundleId: "top.linotsai.100j"
+        )
+
+        XCTAssertEqual(tokens.accessToken, "apple-access")
+        XCTAssertEqual(store.accessToken, "apple-access")
+        XCTAssertEqual(store.refreshToken, "apple-refresh")
+    }
+
+    func testAuthRepositoryEncodesEmailOTPFlowAndStoresTokens() async throws {
+        var seenPaths: [String] = []
+        let store = InMemoryTokenStore()
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, session: Self.stubSession { request in
+            seenPaths.append(request.url?.path ?? "")
+            let body = try Self.jsonBody(from: request)
+            if request.url?.path == "/api/v1/auth/email-otp/request" {
+                XCTAssertEqual(request.httpMethod, "POST")
+                XCTAssertEqual(body["email"] as? String, "otp@example.com")
+                return (204, "")
+            }
+            XCTAssertEqual(request.url?.path, "/api/v1/auth/email-otp/verify")
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(body["email"] as? String, "otp@example.com")
+            XCTAssertEqual(body["code"] as? String, "123456")
+            return (200, #"{"access_token":"otp-access","refresh_token":"otp-refresh","token_type":"bearer"}"#)
+        })
+        let repository = AuthRepository(api: client)
+
+        try await repository.requestEmailOTP(email: "otp@example.com")
+        let tokens = try await repository.verifyEmailOTP(email: "otp@example.com", code: "123456")
+
+        XCTAssertEqual(tokens.accessToken, "otp-access")
+        XCTAssertEqual(store.accessToken, "otp-access")
+        XCTAssertEqual(store.refreshToken, "otp-refresh")
+        XCTAssertEqual(seenPaths, ["/api/v1/auth/email-otp/request", "/api/v1/auth/email-otp/verify"])
+    }
+
     func testOwnerLoginUnauthorizedKeepsServerMessage() async throws {
         let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: InMemoryTokenStore(), session: Self.stubSession { request in
             XCTAssertEqual(request.url?.path, "/api/v1/auth/owner-login")

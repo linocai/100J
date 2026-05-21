@@ -74,7 +74,7 @@ struct PersonalTasksView: View {
     }
 
     private var filterBar: some View {
-        SurfaceView(style: .subtle, padding: AppTheme.Spacing.md) {
+        GroupBox {
             ViewThatFits(in: .horizontal) {
                 horizontalFilterBar
                 verticalFilterBar
@@ -124,7 +124,7 @@ struct PersonalTasksView: View {
     }
 
     private var focusPreview: some View {
-        SurfaceView(style: .tinted(.personal)) {
+        GroupBox {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
                 HStack {
                     Text("个人 Focus Preview")

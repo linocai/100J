@@ -19,12 +19,24 @@ struct PersonalAffairsApp: App {
         .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(after: .newItem) {
+                Button("Universal Composer") {
+                    model.universalComposerViewModel.open()
+                }
+                .keyboardShortcut("k", modifiers: .command)
+
                 Button("刷新") {
                     Task { await model.refreshAll() }
                 }
                 .keyboardShortcut("r")
             }
         }
+        #endif
+
+        #if os(macOS)
+        MenuBarExtra("100J", systemImage: "circle.hexagongrid.fill") {
+            MenuBarPanel(model: model)
+        }
+        .menuBarExtraStyle(.window)
         #endif
     }
 }

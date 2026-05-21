@@ -2,6 +2,7 @@ import Foundation
 
 enum AppSection: String, CaseIterable, Identifiable, Hashable {
     case today
+    case plan
     case personalTasks
     case personalNotes
     case companyTasks
@@ -14,12 +15,13 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
 
     var title: String {
         switch self {
-        case .today: return "今日指挥台"
+        case .today: return "Today"
+        case .plan: return "Plan"
         case .personalTasks: return "个人待办"
         case .personalNotes: return "灵感 / 备忘"
         case .companyTasks: return "公司工作台"
         case .companyProjects: return "项目"
-        case .calendar: return "固定日程"
+        case .calendar: return "Calendar"
         case .agent: return "Agent"
         case .settings: return "设置"
         }
@@ -27,7 +29,8 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
 
     var systemImage: String {
         switch self {
-        case .today: return "sparkle.magnifyingglass"
+        case .today: return "sun.max"
+        case .plan: return "square.grid.2x2"
         case .personalTasks: return "checklist"
         case .personalNotes: return "note.text"
         case .companyTasks: return "rectangle.3.group"

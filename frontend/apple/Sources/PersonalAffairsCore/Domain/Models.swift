@@ -5,6 +5,8 @@ public struct User: Codable, Identifiable, Equatable {
     public let email: String?
     public let displayName: String?
     public let timezone: String
+    public let avatarURL: String?
+    public let locale: String?
 }
 
 public struct Space: Codable, Identifiable, Equatable {
@@ -117,4 +119,3 @@ public struct DeleteResponse: Codable, Equatable {
     public let id: String
     public let deletedAt: Date
 }
-

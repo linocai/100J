@@ -6,7 +6,7 @@ Build Personal Affairs App v1 in phases: backend, macOS, iOS, local E2E testing,
 
 ## Current Position
 
-v1.1 Phase 0 complete, starting Phase 1 backend.
+v1.1 Phase 0, P1, P2, and P3 are complete on branch `codex/production-hardening`.
 
 As of 2026-05-21, `v1.1_final_plan.md` is the highest-authority v1.1 construction plan, with `新前端面板演示.html` as the visual and interaction reference. The missing old frontend blueprint files from Phase 0.1 are intentionally skipped because they are not present in the current repository.
 
@@ -70,6 +70,17 @@ Stopped frontend documents were removed to end the source-of-truth split.
   - Apple app defaults were moved to `https://100j.linotsai.top/api/v1` and `个人云端`; first run migrates old local-owner default to cloud mode.
   - Deployment docs and `.env.example` now include `OWNER_CLOUD_ACCESS_CODE`.
   - HZ deployment was refreshed after SSH recovered; wrong access code returns 401, server-side configured access code returns 200, and `/me` returns `owner@100j.app`.
+- v1.1 P1/P2 slice on `codex/production-hardening`:
+  - Backend gained Apple sign-in, Email OTP, device registration, auth rate limits, v1.1 DB/Pydantic length constraints, Alembic `0003_v11_auth_and_limits.py`, and refreshed OpenAPI snapshot.
+  - Apple shared layer gained `PersonalAffairsCore/ViewModels/` for personal/company tasks, projects, notes, calendar, Agent, Today, Plan, and Universal Composer.
+  - `AppModel` now delegates business flows through shared ViewModels; `frontend/apple/SHARING_RULES.md` records the v1.1 sharing red lines.
+- v1.1 P3 macOS slice on `codex/production-hardening`:
+  - macOS shell now uses `NavigationSplitView` with exactly four sidebar entries: Today, Plan, Calendar, Agent, plus a bottom avatar menu for Settings / switch account / logout / About.
+  - Login is Apple-first with Email OTP fallback and access-code self-host path hidden under a disclosure group.
+  - Today is reduced to the three v1.1 sections: Top 3, 接下来, Loose Ends.
+  - Plan is a single segmented view for personal/company/projects/notes.
+  - Universal Composer is global via `⌘K`; Agent confirmation is a global countdown sheet; Menu Bar Extra shows Top 3, quick capture, and sync status.
+  - `SurfaceView(style:)`, custom `CommandTopBar`, and `QuickCaptureBar` usage were removed; `AppBackgroundView` now returns `EmptyView`.
 
 ## Verification
 
@@ -110,6 +121,18 @@ xcodebuild -quiet -project frontend/apple/PersonalAffairsApp.xcodeproj -scheme P
 ```
 
 Result: all passed. Swift tests executed 21 tests.
+
+Latest Apple checks for v1.1 P3 on 2026-05-21:
+
+```bash
+cd frontend/apple
+swift build --scratch-path /tmp/personal-affairs-apple-p3-build
+swift test --scratch-path /tmp/personal-affairs-apple-p3-test
+xcodebuild -project PersonalAffairsApp.xcodeproj -scheme PersonalAffairsApp -destination 'generic/platform=iOS' -derivedDataPath /tmp/personal-affairs-xcode-p3-derived CODE_SIGNING_ALLOWED=NO build
+rg -n "SurfaceView\\(style:" frontend/apple/Sources/PersonalAffairsApp -g '*.swift'
+```
+
+Result: Swift build passed; Swift tests passed with 28 tests; generic iOS Xcode build passed with signing disabled; `SurfaceView(style:)` grep returned no matches.
 
 HZ database backup/restore rehearsal on 2026-05-19:
 
@@ -179,4 +202,4 @@ Result: project listed targets and schemes successfully; iOS Simulator build pas
 
 ## Next Action
 
-Next useful action is to use Xcode to open `frontend/apple/PersonalAffairsApp.xcodeproj`, select the `PersonalAffairsApp` target, choose the user's Apple ID / Team in Signing & Capabilities, and run on the user's iPhone. On the login screen, enter the server-side `OWNER_CLOUD_ACCESS_CODE` from `/opt/100j/env/100j.env`.
+Next useful action is v1.1 P4 iOS rewrite from `v1.1_final_plan.md`, using the P2 shared ViewModels and the P3 macOS IA as the behavioral reference.

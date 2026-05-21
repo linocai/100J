@@ -136,7 +136,7 @@ struct SoftSurfaceView<Content: View>: View {
     }
 
     var body: some View {
-        SurfaceView(style: .subtle) {
+        SurfaceView {
             content
         }
     }

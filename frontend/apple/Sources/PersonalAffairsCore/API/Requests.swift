@@ -32,6 +32,38 @@ public struct OwnerLoginRequest: Encodable {
     }
 }
 
+public struct AppleSignInRequest: Encodable {
+    public let idToken: String
+    public let bundleId: String
+    public let email: String?
+    public let fullName: String?
+
+    public init(idToken: String, bundleId: String, email: String? = nil, fullName: String? = nil) {
+        self.idToken = idToken
+        self.bundleId = bundleId
+        self.email = email
+        self.fullName = fullName
+    }
+}
+
+public struct EmailRequest: Encodable {
+    public let email: String
+
+    public init(email: String) {
+        self.email = email
+    }
+}
+
+public struct EmailOTPVerifyRequest: Encodable {
+    public let email: String
+    public let code: String
+
+    public init(email: String, code: String) {
+        self.email = email
+        self.code = code
+    }
+}
+
 public struct RefreshRequest: Encodable {
     public let refreshToken: String
 
