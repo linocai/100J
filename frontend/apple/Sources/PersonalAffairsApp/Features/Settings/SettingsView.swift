@@ -1,6 +1,11 @@
 import PersonalAffairsCore
 import SwiftUI
 
+#if os(macOS)
+import AppKit
+import UniformTypeIdentifiers
+#endif
+
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
     @State private var baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "https://100j.linotsai.top/api/v1"
@@ -8,6 +13,7 @@ struct SettingsView: View {
     @State private var provider = "openai"
     @State private var apiKey = ""
     @State private var showingAdvanced = false
+    @State private var exportedDiagnosticsURL: URL?
 
     var body: some View {
         ScrollView {
@@ -94,6 +100,26 @@ struct SettingsView: View {
                                 LabeledContent("公司空间", value: company.id)
                             }
                         }
+
+                        Section("反馈与帮助") {
+                            Link("联系作者", destination: FeedbackSupport.mailURL)
+                            Link("GitHub Issues", destination: FeedbackSupport.issuesURL)
+                            #if os(macOS)
+                            Button("导出诊断包") {
+                                exportDiagnosticsWithSavePanel()
+                            }
+                            #else
+                            Button("准备诊断包") {
+                                exportDiagnosticsForSharing()
+                            }
+                            if let exportedDiagnosticsURL {
+                                ShareLink("分享诊断包", item: exportedDiagnosticsURL)
+                            }
+                            #endif
+                            Text("诊断包只包含最近 24 小时的脱敏事件，不包含 token、headers、请求正文或 LLM Key。")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     #if os(macOS)
                     .formStyle(.grouped)
@@ -125,4 +151,31 @@ struct SettingsView: View {
                 .foregroundStyle(AppTheme.Colors.successAccent)
         }
     }
+
+    #if os(macOS)
+    private func exportDiagnosticsWithSavePanel() {
+        do {
+            let sourceURL = try DiagnosticLogger.shared.exportLast24Hours()
+            let panel = NSSavePanel()
+            panel.nameFieldStringValue = sourceURL.lastPathComponent
+            panel.allowedContentTypes = [.zip]
+            guard panel.runModal() == .OK, let destinationURL = panel.url else { return }
+            if FileManager.default.fileExists(atPath: destinationURL.path) {
+                try FileManager.default.removeItem(at: destinationURL)
+            }
+            try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+            exportedDiagnosticsURL = destinationURL
+        } catch {
+            model.supportErrorMessage = UserFacingMessage.translate(error)
+        }
+    }
+    #else
+    private func exportDiagnosticsForSharing() {
+        do {
+            exportedDiagnosticsURL = try DiagnosticLogger.shared.exportLast24Hours()
+        } catch {
+            model.supportErrorMessage = UserFacingMessage.translate(error)
+        }
+    }
+    #endif
 }

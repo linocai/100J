@@ -29,8 +29,10 @@ public final class InMemoryTokenStore: TokenStore {
 }
 
 public final class KeychainTokenStore: TokenStore {
-    public static let defaultService = "com.lino.100j.auth"
+    public static let defaultService = "top.linotsai.app.PersonalAffairs.auth"
     public static let legacyService = "PersonalAffairsApp"
+    // Legacy keychain service retained only to migrate existing local sessions.
+    public static let legacyMacService = "com.lino.100j.auth"
 
     private let service: String
     private let legacyServices: [String]
@@ -39,7 +41,7 @@ public final class KeychainTokenStore: TokenStore {
 
     public init(
         service: String = KeychainTokenStore.defaultService,
-        legacyServices: [String] = [KeychainTokenStore.legacyService]
+        legacyServices: [String] = [KeychainTokenStore.legacyService, KeychainTokenStore.legacyMacService]
     ) {
         self.service = service
         self.legacyServices = legacyServices.filter { $0 != service }

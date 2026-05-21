@@ -1,6 +1,6 @@
 import Foundation
 
-public struct RegisterRequest: Encodable {
+public struct RegisterRequest: Codable {
     public let email: String
     public let password: String
     public let displayName: String?
@@ -14,7 +14,7 @@ public struct RegisterRequest: Encodable {
     }
 }
 
-public struct LoginRequest: Encodable {
+public struct LoginRequest: Codable {
     public let email: String
     public let password: String
 
@@ -24,7 +24,7 @@ public struct LoginRequest: Encodable {
     }
 }
 
-public struct OwnerLoginRequest: Encodable {
+public struct OwnerLoginRequest: Codable {
     public let accessCode: String
 
     public init(accessCode: String) {
@@ -32,7 +32,7 @@ public struct OwnerLoginRequest: Encodable {
     }
 }
 
-public struct AppleSignInRequest: Encodable {
+public struct AppleSignInRequest: Codable {
     public let idToken: String
     public let bundleId: String
     public let email: String?
@@ -46,7 +46,7 @@ public struct AppleSignInRequest: Encodable {
     }
 }
 
-public struct EmailRequest: Encodable {
+public struct EmailRequest: Codable {
     public let email: String
 
     public init(email: String) {
@@ -54,7 +54,7 @@ public struct EmailRequest: Encodable {
     }
 }
 
-public struct EmailOTPVerifyRequest: Encodable {
+public struct EmailOTPVerifyRequest: Codable {
     public let email: String
     public let code: String
 
@@ -64,7 +64,7 @@ public struct EmailOTPVerifyRequest: Encodable {
     }
 }
 
-public struct RefreshRequest: Encodable {
+public struct RefreshRequest: Codable {
     public let refreshToken: String
 
     public init(refreshToken: String) {
@@ -72,7 +72,7 @@ public struct RefreshRequest: Encodable {
     }
 }
 
-public struct TaskCreateRequest: Encodable {
+public struct TaskCreateRequest: Codable {
     public var spaceId: String
     public var projectId: String?
     public var title: String
@@ -103,7 +103,7 @@ public struct TaskCreateRequest: Encodable {
     }
 }
 
-public struct TaskUpdateRequest: Encodable {
+public struct TaskUpdateRequest: Codable {
     public var projectId: String?
     public var title: String?
     public var description: String?
@@ -134,7 +134,7 @@ public struct TaskUpdateRequest: Encodable {
     }
 }
 
-public struct ProjectCreateRequest: Encodable {
+public struct ProjectCreateRequest: Codable {
     public var spaceId: String
     public var name: String
     public var description: String?
@@ -150,7 +150,7 @@ public struct ProjectCreateRequest: Encodable {
     }
 }
 
-public struct ProjectUpdateRequest: Encodable {
+public struct ProjectUpdateRequest: Codable {
     public var name: String?
     public var description: String?
     public var startDate: String?
@@ -166,7 +166,7 @@ public struct ProjectUpdateRequest: Encodable {
     }
 }
 
-public struct CalendarItemCreateRequest: Encodable {
+public struct CalendarItemCreateRequest: Codable {
     public var spaceId: String
     public var title: String
     public var description: String?
@@ -215,7 +215,7 @@ public struct CalendarItemCreateRequest: Encodable {
     }
 }
 
-public struct CalendarItemUpdateRequest: Encodable {
+public struct CalendarItemUpdateRequest: Codable {
     public var title: String?
     public var description: String?
     public var type: CalendarItemType?
@@ -247,7 +247,7 @@ public struct CalendarItemUpdateRequest: Encodable {
     }
 }
 
-public struct NoteCreateRequest: Encodable {
+public struct NoteCreateRequest: Codable {
     public var spaceId: String
     public var title: String?
     public var body: String
@@ -261,7 +261,7 @@ public struct NoteCreateRequest: Encodable {
     }
 }
 
-public struct NoteUpdateRequest: Encodable {
+public struct NoteUpdateRequest: Codable {
     public var title: String?
     public var body: String?
     public var type: NoteType?
@@ -275,7 +275,7 @@ public struct NoteUpdateRequest: Encodable {
     }
 }
 
-public struct ConvertNoteToTaskRequest: Encodable {
+public struct ConvertNoteToTaskRequest: Codable {
     public var title: String
     public var priority: TaskPriority
     public var dueDate: String?
@@ -287,7 +287,7 @@ public struct ConvertNoteToTaskRequest: Encodable {
     }
 }
 
-public struct LLMKeyRequest: Encodable {
+public struct LLMKeyRequest: Codable {
     public var provider: String
     public var apiKey: String
 
@@ -297,7 +297,7 @@ public struct LLMKeyRequest: Encodable {
     }
 }
 
-public struct AgentCommandRequest: Encodable {
+public struct AgentCommandRequest: Codable {
     public var command: String
     public var arguments: [String: JSONValue]
     public var dryRun: Bool
@@ -309,7 +309,7 @@ public struct AgentCommandRequest: Encodable {
     }
 }
 
-public struct AgentConfirmRequest: Encodable {
+public struct AgentConfirmRequest: Codable {
     public var confirmationToken: String
 
     public init(confirmationToken: String) {

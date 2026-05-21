@@ -47,7 +47,7 @@ public struct WidgetSnapshot: Codable, Equatable {
 }
 
 public enum WidgetSnapshotStore {
-    public static let appGroupID = "group.com.linotsai.100j"
+    public static let appGroupID = "group.top.linotsai.app.PersonalAffairs"
     private static let key = "oneHundredJ.widgetSnapshot.v1"
 
     public static func save(_ snapshot: WidgetSnapshot) {

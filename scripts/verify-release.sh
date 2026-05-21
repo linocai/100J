@@ -6,6 +6,7 @@ RUN_APPLE="${RUN_APPLE:-1}"
 RUN_XCODEBUILD="${RUN_XCODEBUILD:-1}"
 RUN_PACKAGE="${RUN_PACKAGE:-1}"
 RUN_PROD_CHECK="${RUN_PROD_CHECK:-0}"
+NOTARIZE="${NOTARIZE:-0}"
 SCRATCH_PATH="${SCRATCH_PATH:-/tmp/personal-affairs-apple-build}"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-/tmp/personal-affairs-xcode-derived}"
 IOS_DESTINATION="${IOS_DESTINATION:-platform=iOS Simulator,name=iPhone 17,OS=26.5}"
@@ -40,7 +41,7 @@ fi
 
 if [[ "$RUN_PACKAGE" == "1" ]]; then
   section "macOS package"
-  "$ROOT_DIR/frontend/apple/scripts/package-macos-app.sh"
+  NOTARIZE="$NOTARIZE" "$ROOT_DIR/frontend/apple/scripts/package-macos-app.sh"
 fi
 
 if [[ "$RUN_PROD_CHECK" == "1" ]]; then

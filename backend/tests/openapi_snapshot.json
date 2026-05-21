@@ -1633,6 +1633,38 @@
         "title": "RegisterRequest",
         "type": "object"
       },
+      "SeedDemoResponse": {
+        "properties": {
+          "calendar_items": {
+            "items": {
+              "$ref": "#/components/schemas/CalendarItemRead"
+            },
+            "title": "Calendar Items",
+            "type": "array"
+          },
+          "created": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Created",
+            "type": "object"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/TaskRead"
+            },
+            "title": "Tasks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tasks",
+          "calendar_items",
+          "created"
+        ],
+        "title": "SeedDemoResponse",
+        "type": "object"
+      },
       "SpaceListResponse": {
         "properties": {
           "items": {
@@ -3192,6 +3224,29 @@
           }
         ],
         "summary": "Me"
+      }
+    },
+    "/api/v1/me/seed-demo": {
+      "post": {
+        "operationId": "seed_demo_data_api_v1_me_seed_demo_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeedDemoResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Seed Demo Data"
       }
     },
     "/api/v1/notes": {

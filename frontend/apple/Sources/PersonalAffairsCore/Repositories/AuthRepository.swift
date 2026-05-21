@@ -79,4 +79,12 @@ public final class AuthRepository {
     public func me() async throws -> User {
         try await api.send("/me", response: User.self)
     }
+
+    public func seedDemo() async throws -> SeedDemoResponse {
+        try await api.send(
+            "/me/seed-demo",
+            method: .post,
+            response: SeedDemoResponse.self
+        )
+    }
 }

@@ -15,7 +15,7 @@ class CalendarItem(IdMixin, TimestampMixin, Base):
             name="ck_calendar_items_type",
         ),
         CheckConstraint("recurrence in ('none', 'yearly', 'monthly')", name="ck_calendar_items_recurrence"),
-        CheckConstraint("source in ('manual', 'agent')", name="ck_calendar_items_source"),
+        CheckConstraint("source in ('manual', 'agent', 'seed_demo')", name="ck_calendar_items_source"),
         CheckConstraint("length(title) <= 200", name="ck_calendar_title_len"),
         CheckConstraint("description is null or length(description) <= 8000", name="ck_calendar_desc_len"),
         Index("idx_calendar_items_user_space", "user_id", "space_id"),

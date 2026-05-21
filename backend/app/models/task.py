@@ -12,7 +12,7 @@ class Task(IdMixin, TimestampMixin, Base):
     __table_args__ = (
         CheckConstraint("status in ('active', 'done', 'archived')", name="ck_tasks_status"),
         CheckConstraint("priority in ('low', 'medium', 'high', 'urgent')", name="ck_tasks_priority"),
-        CheckConstraint("source in ('manual', 'agent')", name="ck_tasks_source"),
+        CheckConstraint("source in ('manual', 'agent', 'seed_demo')", name="ck_tasks_source"),
         CheckConstraint("length(title) <= 200", name="ck_tasks_title_len"),
         CheckConstraint("description is null or length(description) <= 8000", name="ck_tasks_desc_len"),
         Index("idx_tasks_user_space", "user_id", "space_id"),

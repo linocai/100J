@@ -6,6 +6,7 @@ struct IOSSettingsSheet: View {
     @EnvironmentObject private var model: AppModel
     @State private var baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "https://100j.linotsai.top/api/v1"
     @State private var selectedAuthMode = UserDefaults.standard.string(forKey: "appAuthMode").flatMap(AppAuthMode.init(rawValue:)) ?? .cloudJWT
+    @State private var diagnosticsURL: URL?
 
     var body: some View {
         NavigationStack {
@@ -62,6 +63,20 @@ struct IOSSettingsSheet: View {
                         LabeledContent("公司", value: company.id)
                     }
                 }
+
+                Section("反馈与帮助") {
+                    Link("联系作者", destination: FeedbackSupport.mailURL)
+                    Link("GitHub Issues", destination: FeedbackSupport.issuesURL)
+                    Button("准备诊断包") {
+                        exportDiagnosticsForSharing()
+                    }
+                    if let diagnosticsURL {
+                        ShareLink("分享诊断包", item: diagnosticsURL)
+                    }
+                    Text("诊断包只包含最近 24 小时的脱敏事件，不包含 token、headers、请求正文或 LLM Key。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
             .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.inline)
@@ -75,6 +90,14 @@ struct IOSSettingsSheet: View {
                     selectedAuthMode = newValue
                 }
             }
+        }
+    }
+
+    private func exportDiagnosticsForSharing() {
+        do {
+            diagnosticsURL = try DiagnosticLogger.shared.exportLast24Hours()
+        } catch {
+            model.supportErrorMessage = UserFacingMessage.translate(error)
         }
     }
 }

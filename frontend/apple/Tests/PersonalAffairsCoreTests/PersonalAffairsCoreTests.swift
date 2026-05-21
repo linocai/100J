@@ -270,7 +270,7 @@ final class PersonalAffairsCoreTests: XCTestCase {
             XCTAssertEqual(request.httpMethod, "POST")
             let body = try Self.jsonBody(from: request)
             XCTAssertEqual(body["id_token"] as? String, "apple-token")
-            XCTAssertEqual(body["bundle_id"] as? String, "top.linotsai.100j")
+            XCTAssertEqual(body["bundle_id"] as? String, "top.linotsai.app.PersonalAffairs")
             XCTAssertEqual(body["email"] as? String, "user@example.com")
             XCTAssertEqual(body["full_name"] as? String, "Lino Tsai")
             return (200, #"{"access_token":"apple-access","refresh_token":"apple-refresh","token_type":"bearer"}"#)
@@ -281,12 +281,35 @@ final class PersonalAffairsCoreTests: XCTestCase {
             idToken: "apple-token",
             email: "user@example.com",
             fullName: "Lino Tsai",
-            bundleId: "top.linotsai.100j"
+            bundleId: "top.linotsai.app.PersonalAffairs"
         )
 
         XCTAssertEqual(tokens.accessToken, "apple-access")
         XCTAssertEqual(store.accessToken, "apple-access")
         XCTAssertEqual(store.refreshToken, "apple-refresh")
+    }
+
+    func testAuthRepositorySeedDemoUsesMeRouteAndDecodesResponse() async throws {
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: InMemoryTokenStore(accessToken: "access"), session: Self.stubSession { request in
+            XCTAssertEqual(request.url?.path, "/api/v1/me/seed-demo")
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access")
+            return (200, """
+            {
+              "tasks":[\(Self.taskJSON(id: "task-1", spaceId: "personal", projectId: nil, title: "整理今天的 Top 3"))],
+              "calendar_items":[\(Self.calendarItemJSON(id: "calendar-1", spaceId: "company", title: "公司周会", allDay: true, startDate: "2026-05-19", startAt: nil))],
+              "created":{"tasks":5,"calendar_items":2}
+            }
+            """)
+        })
+        let repository = AuthRepository(api: client)
+
+        let response = try await repository.seedDemo()
+
+        XCTAssertEqual(response.tasks.map(\.id), ["task-1"])
+        XCTAssertEqual(response.calendarItems.map(\.id), ["calendar-1"])
+        XCTAssertEqual(response.created["tasks"], 5)
+        XCTAssertEqual(response.created["calendar_items"], 2)
     }
 
     func testAuthRepositoryEncodesEmailOTPFlowAndStoresTokens() async throws {
@@ -333,6 +356,150 @@ final class PersonalAffairsCoreTests: XCTestCase {
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
+    }
+
+    func testAPIClientRefreshesTokenAndRetriesNonAuthUnauthorized() async throws {
+        var seenPaths: [String] = []
+        let store = InMemoryTokenStore(accessToken: "old-access", refreshToken: "refresh-token")
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, session: Self.stubSession { request in
+            seenPaths.append(request.url?.path ?? "")
+            if request.url?.path == "/api/v1/auth/refresh" {
+                let body = try Self.jsonBody(from: request)
+                XCTAssertEqual(body["refresh_token"] as? String, "refresh-token")
+                return (200, #"{"access_token":"new-access","refresh_token":"new-refresh","token_type":"bearer"}"#)
+            }
+            if seenPaths.count == 1 {
+                XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer old-access")
+                return (401, #"{"error":{"code":"unauthorized","message":"expired","details":{}}}"#)
+            }
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer new-access")
+            return (200, #"{"items":[],"next_cursor":null}"#)
+        })
+
+        let tasks: [TaskItem] = try await client.fetchAll("/tasks")
+
+        XCTAssertEqual(tasks, [])
+        XCTAssertEqual(seenPaths, ["/api/v1/tasks", "/api/v1/auth/refresh", "/api/v1/tasks"])
+        XCTAssertEqual(store.accessToken, "new-access")
+        XCTAssertEqual(store.refreshToken, "new-refresh")
+    }
+
+    func testAPIClientClearsTokensWhenRefreshFails() async throws {
+        let store = InMemoryTokenStore(accessToken: "old-access", refreshToken: "refresh-token")
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, session: Self.stubSession { request in
+            if request.url?.path == "/api/v1/auth/refresh" {
+                return (401, #"{"error":{"code":"unauthorized","message":"refresh expired","details":{}}}"#)
+            }
+            return (401, #"{"error":{"code":"unauthorized","message":"expired","details":{}}}"#)
+        })
+
+        do {
+            let _: [TaskItem] = try await client.fetchAll("/tasks")
+            XCTFail("Expected expired session")
+        } catch APIClientError.unauthorized {
+            XCTAssertNil(store.accessToken)
+            XCTAssertNil(store.refreshToken)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testAPIClientClearsTokensWhenRetryAlsoReturnsUnauthorized() async throws {
+        var refreshCount = 0
+        let store = InMemoryTokenStore(accessToken: "old-access", refreshToken: "refresh-token")
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, session: Self.stubSession { request in
+            if request.url?.path == "/api/v1/auth/refresh" {
+                refreshCount += 1
+                return (200, #"{"access_token":"new-access","refresh_token":"new-refresh","token_type":"bearer"}"#)
+            }
+            return (401, #"{"error":{"code":"unauthorized","message":"expired","details":{}}}"#)
+        })
+
+        do {
+            let _: [TaskItem] = try await client.fetchAll("/tasks")
+            XCTFail("Expected expired session")
+        } catch APIClientError.unauthorized {
+            XCTAssertEqual(refreshCount, 1)
+            XCTAssertNil(store.accessToken)
+            XCTAssertNil(store.refreshToken)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testUserFacingMessageTranslations() {
+        XCTAssertEqual(
+            UserFacingMessage.translate(APIClientError.server(code: "rate_limited", message: "raw")),
+            "操作太频繁，请稍后再试。"
+        )
+        XCTAssertEqual(
+            UserFacingMessage.translate(APIClientError.server(code: "conflict", message: "raw")),
+            "数据已变化，请刷新后再试。"
+        )
+        XCTAssertEqual(
+            UserFacingMessage.translate(APIClientError.network("offline")),
+            "网络暂时不可用。离线写入会在联网后自动同步。"
+        )
+    }
+
+    func testWidgetSnapshotStoreUsesProductionAppGroup() {
+        XCTAssertEqual(WidgetSnapshotStore.appGroupID, "group.top.linotsai.app.PersonalAffairs")
+    }
+
+    func testMutationQueuePersistsAndReplaysFIFO() async throws {
+        let fileURL = Self.temporaryQueueURL()
+        let queue = MutationQueue(fileURL: fileURL, diagnostics: DiagnosticLogger(directoryURL: fileURL.deletingLastPathComponent()))
+        _ = try await queue.enqueue(try PendingMutation.taskCreate(TaskCreateRequest(spaceId: "personal", title: "Offline task")))
+        _ = try await queue.enqueue(PendingMutation.projectComplete(id: "project-1"))
+
+        let restored = MutationQueue(fileURL: fileURL, diagnostics: DiagnosticLogger(directoryURL: fileURL.deletingLastPathComponent()))
+        let pending = await restored.allPending()
+        XCTAssertEqual(pending.map(\.kind), [.taskCreate, .projectComplete])
+
+        var seen: [String] = []
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: InMemoryTokenStore(accessToken: "access"), session: Self.stubSession { request in
+            seen.append(request.url?.path ?? "")
+            return (204, "")
+        })
+        let result = await restored.replay(using: client)
+
+        XCTAssertEqual(seen, ["/api/v1/tasks", "/api/v1/projects/project-1/complete"])
+        XCTAssertEqual(result.succeeded, 2)
+        XCTAssertEqual(result.remaining, 0)
+        let remainingCount = await restored.pendingCount()
+        XCTAssertEqual(remainingCount, 0)
+    }
+
+    func testMutationQueueKeepsNetworkFailuresForNextReplay() async throws {
+        let fileURL = Self.temporaryQueueURL()
+        let queue = MutationQueue(fileURL: fileURL, diagnostics: DiagnosticLogger(directoryURL: fileURL.deletingLastPathComponent()))
+        _ = try await queue.enqueue(try PendingMutation.noteCreate(NoteCreateRequest(spaceId: "personal", body: "Offline note")))
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: InMemoryTokenStore(accessToken: "access"), session: Self.stubSession { _ in
+            throw URLError(.notConnectedToInternet)
+        })
+
+        let result = await queue.replay(using: client)
+
+        XCTAssertEqual(result.succeeded, 0)
+        XCTAssertEqual(result.remaining, 1)
+        let remainingCount = await queue.pendingCount()
+        XCTAssertEqual(remainingCount, 1)
+    }
+
+    func testMutationQueueDropsPermanentReplayFailure() async throws {
+        let fileURL = Self.temporaryQueueURL()
+        let queue = MutationQueue(fileURL: fileURL, diagnostics: DiagnosticLogger(directoryURL: fileURL.deletingLastPathComponent()))
+        _ = try await queue.enqueue(try PendingMutation.calendarCreate(CalendarItemCreateRequest(spaceId: "personal", title: "Bad calendar")))
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: InMemoryTokenStore(accessToken: "access"), session: Self.stubSession { _ in
+            (422, #"{"error":{"code":"validation_error","message":"bad payload","details":{}}}"#)
+        })
+
+        let result = await queue.replay(using: client)
+
+        XCTAssertEqual(result.droppedPermanent, 1)
+        XCTAssertEqual(result.remaining, 0)
+        let remainingCount = await queue.pendingCount()
+        XCTAssertEqual(remainingCount, 0)
     }
 
     func testCaptureParserParsesChineseCalendarInput() throws {
@@ -619,6 +786,12 @@ final class PersonalAffairsCoreTests: XCTestCase {
         return URLSession(configuration: configuration)
     }
 
+    private static func temporaryQueueURL() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("100j-tests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("mutation-queue.json")
+    }
+
     private static func queryItems(from request: URLRequest) -> [String: String] {
         let items = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
         return Dictionary(uniqueKeysWithValues: items.compactMap { item in
@@ -680,6 +853,35 @@ final class PersonalAffairsCoreTests: XCTestCase {
           "recurrence":"none",
           "remind_at":null,
           "source":"manual",
+          "created_at":"2026-05-18T00:00:00Z",
+          "updated_at":"2026-05-18T00:00:00Z",
+          "version":1
+        }
+        """
+    }
+
+    private static func taskJSON(
+        id: String,
+        spaceId: String,
+        projectId: String?,
+        title: String
+    ) -> String {
+        """
+        {
+          "id":"\(id)",
+          "user_id":"user-1",
+          "space_id":"\(spaceId)",
+          "project_id":\(projectId.map { "\"\($0)\"" } ?? "null"),
+          "title":"\(title)",
+          "description":null,
+          "status":"active",
+          "priority":"medium",
+          "due_date":null,
+          "remind_at":null,
+          "estimated_minutes":null,
+          "source":"manual",
+          "completed_at":null,
+          "archived_at":null,
           "created_at":"2026-05-18T00:00:00Z",
           "updated_at":"2026-05-18T00:00:00Z",
           "version":1

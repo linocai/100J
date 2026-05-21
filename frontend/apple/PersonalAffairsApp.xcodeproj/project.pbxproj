@@ -316,6 +316,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Sources/PersonalAffairsApp/Resources/PersonalAffairsApp.iOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1.11;
 				DEVELOPMENT_ASSET_PATHS = "";
@@ -332,7 +333,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.linotsai.100j.dev;
+				PRODUCT_BUNDLE_IDENTIFIER = top.linotsai.app.PersonalAffairs;
 				PRODUCT_MODULE_NAME = PersonalAffairsApp;
 				PRODUCT_NAME = 100J;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -347,6 +348,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Sources/PersonalAffairsApp/Resources/PersonalAffairsApp.iOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1.11;
 				DEVELOPMENT_ASSET_PATHS = "";
@@ -363,7 +365,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.linotsai.100j.dev;
+				PRODUCT_BUNDLE_IDENTIFIER = top.linotsai.app.PersonalAffairs;
 				PRODUCT_MODULE_NAME = PersonalAffairsApp;
 				PRODUCT_NAME = 100J;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

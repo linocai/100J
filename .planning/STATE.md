@@ -88,6 +88,13 @@ Stopped frontend documents were removed to end the source-of-truth split.
   - Calendar create/edit supports `remind_at`, and iOS schedules local notifications from refreshed calendar items.
   - `OneHundredJWidgets` SwiftPM target renders Top 3 and Agenda widgets from an AppGroup snapshot without network access.
   - `CreateTaskIntent`, `AskAgentIntent`, and `PersonalAffairsShortcuts` were added for Siri/Shortcuts entrypoints.
+- v1.1 P5 productionization slice on `codex/production-hardening`:
+  - Backend gained authenticated, idempotent `POST /api/v1/me/seed-demo` with fixed 5-task / 2-calendar seed data and OpenAPI snapshot coverage.
+  - Apple login flow now gates authenticated users through `onboardingCompleted.v1.1` three-screen onboarding with optional seed demo import.
+  - `PersonalAffairsCore` gained a persistent FIFO `MutationQueue`, unified `UserFacingMessage`, sanitized `DiagnosticLogger`, and 24h diagnostics zip export.
+  - `AppModel` now enqueues offline task/note/calendar/project writes with optimistic local updates, replays via `NWPathMonitor`, drops permanent replay failures, and hardens non-auth 401 refresh retry/token clearing.
+  - Settings gained feedback/help links and diagnostics export/share.
+  - Production identifiers are now `top.linotsai.app.PersonalAffairs` and `group.top.linotsai.app.PersonalAffairs`; iOS/macOS entitlements and package scripts were updated. Legacy keychain service remains only for local session migration.
 
 ## Verification
 
@@ -152,6 +159,24 @@ rg -n "Repository|repository|AuthRepository|TaskRepository|CalendarRepository|No
 ```
 
 Result: Swift build passed; Swift tests passed with 28 tests; generic iOS Xcode build passed with signing disabled and AppIntents metadata extraction; iOS Feature repository grep returned no matches.
+
+Latest checks for v1.1 P5 on 2026-05-21:
+
+```bash
+cd backend
+.venv/bin/ruff check .
+.venv/bin/python -m pytest
+
+cd frontend/apple
+swift build --scratch-path /tmp/personal-affairs-apple-p5-build
+swift test --scratch-path /tmp/personal-affairs-apple-p5-test
+xcodebuild -project PersonalAffairsApp.xcodeproj -scheme PersonalAffairsApp -destination 'generic/platform=iOS' -derivedDataPath /tmp/personal-affairs-xcode-p5-derived CODE_SIGNING_ALLOWED=NO build
+cd ../..
+SCRATCH_PATH=/tmp/personal-affairs-apple-p5-package-build VERSION=1.1-p5 frontend/apple/scripts/package-macos-app.sh
+rg -n "Repository|repository|AuthRepository|TaskRepository|CalendarRepository|NoteRepository|ProjectRepository|AgentRepository" frontend/apple/Sources/PersonalAffairsApp/Features/iOS -g '*.swift'
+```
+
+Result: backend ruff passed; backend pytest passed with 40 tests; Swift build passed; Swift tests passed with 37 tests; generic iOS Xcode build passed with signing disabled and production bundle id; macOS ad-hoc package produced `frontend/apple/dist/100J.app` and `frontend/apple/dist/100J-macos-1.1-p5-202605211437.zip`; iOS Feature repository grep returned no matches.
 
 HZ database backup/restore rehearsal on 2026-05-19:
 
@@ -221,4 +246,4 @@ Result: project listed targets and schemes successfully; iOS Simulator build pas
 
 ## Next Action
 
-Next useful action is v1.1 Phase 5 productionization from `v1.1_final_plan.md`: onboarding, offline mutation queue, token-refresh hardening, E2E/smoke, deployment, and TestFlight handoff.
+Next useful action is Phase 6 from `v1.1_final_plan.md`: HZ deployment, production smoke, TestFlight handoff/upload, and real notarization submission when Apple credentials are available.

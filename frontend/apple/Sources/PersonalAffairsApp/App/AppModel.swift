@@ -1,6 +1,10 @@
 import Foundation
 import PersonalAffairsCore
 
+#if canImport(Network)
+import Network
+#endif
+
 #if canImport(AuthenticationServices)
 import AuthenticationServices
 #endif
@@ -32,6 +36,8 @@ final class AppModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var supportErrorMessage: String?
+    @Published var pendingMutationCount = 0
+    @Published var isNetworkReachable = true
     @Published var selectedSection: AppSection? = .today
     @Published var agentReview = AgentReviewSession()
     @Published var menuBarCaptureText = ""
@@ -45,6 +51,13 @@ final class AppModel: ObservableObject {
     private let calendarRepository: CalendarRepository
     private let noteRepository: NoteRepository
     private let agentRepository: AgentRepository
+    private let mutationQueue: MutationQueue
+    private let diagnostics: DiagnosticLogger
+    private var isReplayingMutations = false
+    #if canImport(Network)
+    private let pathMonitor = NWPathMonitor()
+    private let pathMonitorQueue = DispatchQueue(label: "top.linotsai.app.PersonalAffairs.network")
+    #endif
 
     lazy var personalTasksViewModel = PersonalTasksViewModel(repo: taskRepository) { [weak self] in
         self?.personalSpace
@@ -112,6 +125,18 @@ final class AppModel: ObservableObject {
         self.calendarRepository = CalendarRepository(api: api)
         self.noteRepository = NoteRepository(api: api)
         self.agentRepository = AgentRepository(api: api)
+        self.mutationQueue = MutationQueue()
+        self.diagnostics = .shared
+        startNetworkMonitor()
+        Task {
+            await syncPendingMutationCount()
+        }
+    }
+
+    deinit {
+        #if canImport(Network)
+        pathMonitor.cancel()
+        #endif
     }
 
     var isAuthenticated: Bool {
@@ -141,6 +166,7 @@ final class AppModel: ObservableObject {
     var syncStatus: AppSyncStatus {
         if isLoading { return .syncing }
         if errorMessage != nil || supportErrorMessage != nil { return .error }
+        if !isNetworkReachable { return .offline }
         return isAuthenticated ? .synced : .offline
     }
 
@@ -234,7 +260,7 @@ final class AppModel: ObservableObject {
                 idToken: idToken,
                 email: credential.email,
                 fullName: credential.fullName?.formatted(),
-                bundleId: Bundle.main.bundleIdentifier ?? "top.linotsai.100j"
+                bundleId: Bundle.main.bundleIdentifier ?? "top.linotsai.app.PersonalAffairs"
             )
             self.currentUser = try await self.authRepository.me()
             self.spaces = try await self.spaceRepository.list()
@@ -329,6 +355,16 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func seedDemo() async -> Bool {
+        var succeeded = false
+        await run {
+            _ = try await self.authRepository.seedDemo()
+            try await self.loadAllData()
+            succeeded = true
+        }
+        return succeeded
+    }
+
     func loadAllData() async throws {
         try await loadCoreData()
         await loadSupportData()
@@ -369,7 +405,7 @@ final class AppModel: ObservableObject {
         supportErrorMessage = nil
         await agentViewModel.reloadSupport()
         if let error = agentViewModel.lastError {
-            supportErrorMessage = error.localizedDescription
+            supportErrorMessage = UserFacingMessage.translate(error)
         }
         syncAgentSupportFromViewModel()
     }
@@ -438,100 +474,109 @@ final class AppModel: ObservableObject {
 
     func createPersonalTask(_ draft: TaskDraft) async {
         await run {
-            await self.personalTasksViewModel.create(draft)
-            try self.throwIfViewModelError(self.personalTasksViewModel.lastError)
-            try await self.loadAllData()
+            guard let space = self.personalSpace else { return }
+            let request = draft.createRequest(spaceId: space.id, includesProject: false)
+            do {
+                _ = try await self.taskRepository.create(request)
+                try await self.loadAllData()
+            } catch let error as APIClientError where error.isNetworkFailure {
+                try await self.queueOfflineMutation(try PendingMutation.taskCreate(request)) {
+                    self.personalTasks.append(self.makeOptimisticTask(request: request))
+                }
+            }
         }
     }
 
     func createCompanyTask(_ draft: TaskDraft) async {
         await run {
-            await self.companyTasksViewModel.create(draft)
-            try self.throwIfViewModelError(self.companyTasksViewModel.lastError)
-            try await self.loadAllData()
+            guard let space = self.companySpace else { return }
+            let request = draft.createRequest(spaceId: space.id, includesProject: true)
+            do {
+                _ = try await self.taskRepository.create(request)
+                try await self.loadAllData()
+            } catch let error as APIClientError where error.isNetworkFailure {
+                try await self.queueOfflineMutation(try PendingMutation.taskCreate(request)) {
+                    self.companyTasks.append(self.makeOptimisticTask(request: request))
+                }
+            }
         }
     }
 
     func createProjectTask(_ draft: TaskDraft, projectId: String) async {
         await run {
-            await self.companyTasksViewModel.createProjectTask(draft, projectId: projectId)
-            try self.throwIfViewModelError(self.companyTasksViewModel.lastError)
-            try await self.loadAllData()
+            guard let space = self.companySpace else { return }
+            var pinnedDraft = draft
+            pinnedDraft.projectId = projectId
+            let request = pinnedDraft.createRequest(spaceId: space.id, includesProject: true)
+            do {
+                _ = try await self.taskRepository.create(request)
+                try await self.loadAllData()
+            } catch let error as APIClientError where error.isNetworkFailure {
+                try await self.queueOfflineMutation(try PendingMutation.taskCreate(request)) {
+                    self.companyTasks.append(self.makeOptimisticTask(request: request))
+                }
+            }
         }
     }
 
     func updateTask(id: String, draft: TaskDraft, includesProject: Bool) async {
         await run {
-            if includesProject {
-                await self.companyTasksViewModel.update(id: id, draft: draft)
-                try self.throwIfViewModelError(self.companyTasksViewModel.lastError)
-            } else {
-                await self.personalTasksViewModel.update(id: id, draft: draft)
-                try self.throwIfViewModelError(self.personalTasksViewModel.lastError)
+            let request = draft.updateRequest(includesProject: includesProject)
+            do {
+                _ = try await self.taskRepository.update(id: id, request: request)
+                try await self.loadAllData()
+            } catch let error as APIClientError where error.isNetworkFailure {
+                try await self.queueOfflineMutation(try PendingMutation.taskUpdate(id: id, request: request)) {
+                    self.applyTaskUpdate(id: id, request: request)
+                }
             }
-            try await self.loadAllData()
         }
     }
 
     func completeTask(_ task: TaskItem) async {
         await run {
-            if task.spaceId == self.personalSpace?.id {
-                await self.personalTasksViewModel.complete(task)
-                try self.throwIfViewModelError(self.personalTasksViewModel.lastError)
-            } else {
-                await self.companyTasksViewModel.complete(task)
-                try self.throwIfViewModelError(self.companyTasksViewModel.lastError)
+            do {
+                _ = try await self.taskRepository.complete(id: task.id)
+                try await self.loadAllData()
+            } catch let error as APIClientError where error.isNetworkFailure {
+                try await self.queueOfflineMutation(try PendingMutation.taskStatus(id: task.id, status: .done)) {
+                    self.applyTaskStatus(id: task.id, status: .done)
+                }
             }
-            try await self.loadAllData()
         }
     }
 
     func reopenTask(_ task: TaskItem) async {
         await run {
-            if task.spaceId == self.personalSpace?.id {
-                await self.personalTasksViewModel.reopen(task)
-                try self.throwIfViewModelError(self.personalTasksViewModel.lastError)
-            } else {
-                await self.companyTasksViewModel.reopen(task)
-                try self.throwIfViewModelError(self.companyTasksViewModel.lastError)
+            do {
+                _ = try await self.taskRepository.reopen(id: task.id)
+                try await self.loadAllData()
+            } catch let error as APIClientError where error.isNetworkFailure {
+                try await self.queueOfflineMutation(try PendingMutation.taskStatus(id: task.id, status: .active)) {
+                    self.applyTaskStatus(id: task.id, status: .active)
+                }
             }
-            try await self.loadAllData()
         }
     }
 
     func toggleTaskDone(_ task: TaskItem) async {
-        await run {
-            if task.status == .done {
-                if task.spaceId == self.personalSpace?.id {
-                    await self.personalTasksViewModel.reopen(task)
-                    try self.throwIfViewModelError(self.personalTasksViewModel.lastError)
-                } else {
-                    await self.companyTasksViewModel.reopen(task)
-                    try self.throwIfViewModelError(self.companyTasksViewModel.lastError)
-                }
-            } else {
-                if task.spaceId == self.personalSpace?.id {
-                    await self.personalTasksViewModel.complete(task)
-                    try self.throwIfViewModelError(self.personalTasksViewModel.lastError)
-                } else {
-                    await self.companyTasksViewModel.complete(task)
-                    try self.throwIfViewModelError(self.companyTasksViewModel.lastError)
-                }
-            }
-            try await self.loadAllData()
+        if task.status == .done {
+            await reopenTask(task)
+        } else {
+            await completeTask(task)
         }
     }
 
     func archiveTask(_ task: TaskItem) async {
         await run {
-            if task.spaceId == self.personalSpace?.id {
-                await self.personalTasksViewModel.archive(task)
-                try self.throwIfViewModelError(self.personalTasksViewModel.lastError)
-            } else {
-                await self.companyTasksViewModel.archive(task)
-                try self.throwIfViewModelError(self.companyTasksViewModel.lastError)
+            do {
+                _ = try await self.taskRepository.archive(id: task.id)
+                try await self.loadAllData()
+            } catch let error as APIClientError where error.isNetworkFailure {
+                try await self.queueOfflineMutation(PendingMutation.taskArchive(id: task.id)) {
+                    self.applyTaskStatus(id: task.id, status: .archived)
+                }
             }
-            try await self.loadAllData()
         }
     }
 
@@ -539,25 +584,43 @@ final class AppModel: ObservableObject {
 
     func createNote(_ draft: NoteDraft) async {
         await run {
-            await self.notesViewModel.create(draft)
-            try self.throwIfViewModelError(self.notesViewModel.lastError)
-            try await self.loadAllData()
+            guard let space = self.personalSpace else { return }
+            let request = draft.createRequest(spaceId: space.id)
+            do {
+                _ = try await self.noteRepository.create(request)
+                try await self.loadAllData()
+            } catch let error as APIClientError where error.isNetworkFailure {
+                try await self.queueOfflineMutation(try PendingMutation.noteCreate(request)) {
+                    self.notes.append(self.makeOptimisticNote(request: request))
+                }
+            }
         }
     }
 
     func updateNote(id: String, draft: NoteDraft) async {
         await run {
-            await self.notesViewModel.update(id: id, draft: draft)
-            try self.throwIfViewModelError(self.notesViewModel.lastError)
-            try await self.loadAllData()
+            let request = draft.updateRequest()
+            do {
+                _ = try await self.noteRepository.update(id: id, request: request)
+                try await self.loadAllData()
+            } catch let error as APIClientError where error.isNetworkFailure {
+                try await self.queueOfflineMutation(try PendingMutation.noteUpdate(id: id, request: request)) {
+                    self.applyNoteUpdate(id: id, request: request)
+                }
+            }
         }
     }
 
     func archiveNote(_ note: Note) async {
         await run {
-            await self.notesViewModel.archive(note)
-            try self.throwIfViewModelError(self.notesViewModel.lastError)
-            try await self.loadAllData()
+            do {
+                _ = try await self.noteRepository.archive(id: note.id)
+                try await self.loadAllData()
+            } catch let error as APIClientError where error.isNetworkFailure {
+                try await self.queueOfflineMutation(PendingMutation.noteArchive(id: note.id)) {
+                    self.applyNoteStatus(id: note.id, status: .archived)
+                }
+            }
         }
     }
 
@@ -573,39 +636,64 @@ final class AppModel: ObservableObject {
 
     func createProject(_ draft: ProjectDraft) async {
         await run {
-            await self.projectsViewModel.create(draft)
-            try self.throwIfViewModelError(self.projectsViewModel.lastError)
-            try await self.loadAllData()
+            guard let space = self.companySpace else { return }
+            let request = draft.createRequest(spaceId: space.id)
+            do {
+                _ = try await self.projectRepository.create(request)
+                try await self.loadAllData()
+            } catch let error as APIClientError where error.isNetworkFailure {
+                try await self.queueOfflineMutation(try PendingMutation.projectCreate(request)) {
+                    self.projects.append(self.makeOptimisticProject(request: request))
+                }
+            }
         }
     }
 
     func updateProject(id: String, draft: ProjectDraft) async {
         await run {
-            await self.projectsViewModel.update(id: id, draft: draft)
-            try self.throwIfViewModelError(self.projectsViewModel.lastError)
-            try await self.loadAllData()
+            let request = draft.updateRequest()
+            do {
+                _ = try await self.projectRepository.update(id: id, request: request)
+                try await self.loadAllData()
+            } catch let error as APIClientError where error.isNetworkFailure {
+                try await self.queueOfflineMutation(try PendingMutation.projectUpdate(id: id, request: request)) {
+                    self.applyProjectUpdate(id: id, request: request)
+                }
+            }
         }
     }
 
     func completeProject(_ project: Project) async {
         await run {
-            await self.projectsViewModel.complete(project)
-            try self.throwIfViewModelError(self.projectsViewModel.lastError)
-            try await self.loadAllData()
+            do {
+                _ = try await self.projectRepository.complete(id: project.id)
+                try await self.loadAllData()
+            } catch let error as APIClientError where error.isNetworkFailure {
+                try await self.queueOfflineMutation(PendingMutation.projectComplete(id: project.id)) {
+                    self.applyProjectStatus(id: project.id, status: .completed)
+                }
+            }
         }
     }
 
     func archiveProject(_ project: Project) async {
         await run {
-            await self.projectsViewModel.archive(project)
-            try self.throwIfViewModelError(self.projectsViewModel.lastError)
-            try await self.loadAllData()
+            do {
+                _ = try await self.projectRepository.archive(id: project.id)
+                try await self.loadAllData()
+            } catch let error as APIClientError where error.isNetworkFailure {
+                try await self.queueOfflineMutation(PendingMutation.projectArchive(id: project.id)) {
+                    self.applyProjectStatus(id: project.id, status: .archived)
+                }
+            }
         }
     }
 
     func loadProjectTasks(projectId: String, status: TaskStatus = .active) async -> [TaskItem] {
         let tasks = await projectsViewModel.tasks(projectId: projectId, status: status)
-        errorMessage = projectsViewModel.lastError?.localizedDescription
+        if let error = projectsViewModel.lastError {
+            errorMessage = UserFacingMessage.translate(error)
+        }
         return tasks
     }
 
@@ -613,17 +701,31 @@ final class AppModel: ObservableObject {
 
     func createCalendarItem(_ draft: CalendarDraftState) async {
         await run {
-            await self.calendarViewModel.create(draft)
-            try self.throwIfViewModelError(self.calendarViewModel.lastError)
-            try await self.loadAllData()
+            let targetSpace = draft.spaceType == .personal ? self.personalSpace : self.companySpace
+            guard let space = targetSpace else { return }
+            let request = draft.createRequest(spaceId: space.id)
+            do {
+                _ = try await self.calendarRepository.create(request)
+                try await self.loadAllData()
+            } catch let error as APIClientError where error.isNetworkFailure {
+                try await self.queueOfflineMutation(try PendingMutation.calendarCreate(request)) {
+                    self.calendarItems.append(self.makeOptimisticCalendarItem(request: request))
+                }
+            }
         }
     }
 
     func updateCalendarItem(id: String, draft: CalendarDraftState) async {
         await run {
-            await self.calendarViewModel.update(id: id, draft: draft)
-            try self.throwIfViewModelError(self.calendarViewModel.lastError)
-            try await self.loadAllData()
+            let request = draft.updateRequest()
+            do {
+                _ = try await self.calendarRepository.update(id: id, request: request)
+                try await self.loadAllData()
+            } catch let error as APIClientError where error.isNetworkFailure {
+                try await self.queueOfflineMutation(try PendingMutation.calendarUpdate(id: id, request: request)) {
+                    self.applyCalendarUpdate(id: id, request: request)
+                }
+            }
         }
     }
 
@@ -717,13 +819,13 @@ final class AppModel: ObservableObject {
         } catch APIClientError.unauthorized {
             expireCloudSession()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserFacingMessage.translate(error)
         }
     }
 
     private func expireCloudSession() {
         guard authMode == .cloudJWT else {
-            errorMessage = APIClientError.unauthorized.localizedDescription
+            errorMessage = UserFacingMessage.translate(APIClientError.unauthorized)
             return
         }
         try? api.tokenStore.clear()
@@ -740,7 +842,8 @@ final class AppModel: ObservableObject {
         agentViewModel.cancel()
         agentReview = agentViewModel.review
         refreshDerivedViewModels()
-        errorMessage = "云端登录已失效，请重新输入访问码。"
+        diagnostics.recordSession(event: "session_expired")
+        errorMessage = "云端登录已失效，请重新登录。"
     }
 
     private func syncCoreDataFromViewModels() {
@@ -795,6 +898,311 @@ final class AppModel: ObservableObject {
         #if canImport(WidgetKit)
         WidgetCenter.shared.reloadAllTimelines()
         #endif
+    }
+
+    private func queueOfflineMutation(_ mutation: PendingMutation, optimistic: () -> Void) async throws {
+        let count = try await mutationQueue.enqueue(mutation)
+        pendingMutationCount = count
+        isNetworkReachable = false
+        optimistic()
+        refreshDerivedViewModels()
+        errorMessage = "暂时离线。操作已保存，联网后会自动同步。"
+    }
+
+    private func syncPendingMutationCount() async {
+        pendingMutationCount = await mutationQueue.pendingCount()
+    }
+
+    private func replayPendingMutations() async {
+        guard !isReplayingMutations, isAuthenticated else { return }
+        let count = await mutationQueue.pendingCount()
+        pendingMutationCount = count
+        guard count > 0 else { return }
+
+        isReplayingMutations = true
+        let result = await mutationQueue.replay(using: api)
+        isReplayingMutations = false
+        pendingMutationCount = result.remaining
+
+        if result.succeeded > 0 {
+            await refreshAll()
+        }
+        if result.droppedPermanent > 0 {
+            supportErrorMessage = "部分离线操作未同步。请检查诊断日志后重试。"
+        }
+    }
+
+    private func startNetworkMonitor() {
+        #if canImport(Network)
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor in
+                guard let self else { return }
+                self.isNetworkReachable = path.status == .satisfied
+                if path.status == .satisfied {
+                    await self.replayPendingMutations()
+                }
+            }
+        }
+        pathMonitor.start(queue: pathMonitorQueue)
+        #endif
+    }
+
+    private func localUserId() -> String {
+        currentUser?.id ?? "local-user"
+    }
+
+    private func localId() -> String {
+        "local-\(UUID().uuidString)"
+    }
+
+    private func makeOptimisticTask(request: TaskCreateRequest) -> TaskItem {
+        let now = Date()
+        return TaskItem(
+            id: localId(),
+            userId: localUserId(),
+            spaceId: request.spaceId,
+            projectId: request.projectId,
+            title: request.title,
+            description: request.description,
+            status: .active,
+            priority: request.priority,
+            dueDate: request.dueDate,
+            remindAt: request.remindAt,
+            estimatedMinutes: request.estimatedMinutes,
+            source: "offline",
+            completedAt: nil,
+            archivedAt: nil,
+            createdAt: now,
+            updatedAt: now,
+            version: 0
+        )
+    }
+
+    private func applyTaskUpdate(id: String, request: TaskUpdateRequest) {
+        replaceTask(id: id) { task in
+            TaskItem(
+                id: task.id,
+                userId: task.userId,
+                spaceId: task.spaceId,
+                projectId: request.projectId ?? task.projectId,
+                title: request.title ?? task.title,
+                description: request.description ?? task.description,
+                status: request.status ?? task.status,
+                priority: request.priority ?? task.priority,
+                dueDate: request.dueDate ?? task.dueDate,
+                remindAt: request.remindAt ?? task.remindAt,
+                estimatedMinutes: request.estimatedMinutes ?? task.estimatedMinutes,
+                source: task.source,
+                completedAt: task.completedAt,
+                archivedAt: task.archivedAt,
+                createdAt: task.createdAt,
+                updatedAt: Date(),
+                version: task.version
+            )
+        }
+    }
+
+    private func applyTaskStatus(id: String, status: TaskStatus) {
+        let now = Date()
+        replaceTask(id: id) { task in
+            TaskItem(
+                id: task.id,
+                userId: task.userId,
+                spaceId: task.spaceId,
+                projectId: task.projectId,
+                title: task.title,
+                description: task.description,
+                status: status,
+                priority: task.priority,
+                dueDate: task.dueDate,
+                remindAt: task.remindAt,
+                estimatedMinutes: task.estimatedMinutes,
+                source: task.source,
+                completedAt: status == .done ? now : nil,
+                archivedAt: status == .archived ? now : nil,
+                createdAt: task.createdAt,
+                updatedAt: now,
+                version: task.version
+            )
+        }
+    }
+
+    private func replaceTask(id: String, transform: (TaskItem) -> TaskItem) {
+        if let index = personalTasks.firstIndex(where: { $0.id == id }) {
+            personalTasks[index] = transform(personalTasks[index])
+        }
+        if let index = companyTasks.firstIndex(where: { $0.id == id }) {
+            companyTasks[index] = transform(companyTasks[index])
+        }
+    }
+
+    private func makeOptimisticNote(request: NoteCreateRequest) -> Note {
+        let now = Date()
+        return Note(
+            id: localId(),
+            userId: localUserId(),
+            spaceId: request.spaceId,
+            title: request.title,
+            body: request.body,
+            type: request.type,
+            status: .active,
+            linkedTaskId: nil,
+            source: "offline",
+            createdAt: now,
+            updatedAt: now,
+            version: 0
+        )
+    }
+
+    private func applyNoteUpdate(id: String, request: NoteUpdateRequest) {
+        guard let index = notes.firstIndex(where: { $0.id == id }) else { return }
+        let note = notes[index]
+        notes[index] = Note(
+            id: note.id,
+            userId: note.userId,
+            spaceId: note.spaceId,
+            title: request.title ?? note.title,
+            body: request.body ?? note.body,
+            type: request.type ?? note.type,
+            status: request.status ?? note.status,
+            linkedTaskId: note.linkedTaskId,
+            source: note.source,
+            createdAt: note.createdAt,
+            updatedAt: Date(),
+            version: note.version
+        )
+    }
+
+    private func applyNoteStatus(id: String, status: NoteStatus) {
+        guard let index = notes.firstIndex(where: { $0.id == id }) else { return }
+        let note = notes[index]
+        notes[index] = Note(
+            id: note.id,
+            userId: note.userId,
+            spaceId: note.spaceId,
+            title: note.title,
+            body: note.body,
+            type: note.type,
+            status: status,
+            linkedTaskId: note.linkedTaskId,
+            source: note.source,
+            createdAt: note.createdAt,
+            updatedAt: Date(),
+            version: note.version
+        )
+    }
+
+    private func makeOptimisticProject(request: ProjectCreateRequest) -> Project {
+        let now = Date()
+        return Project(
+            id: localId(),
+            userId: localUserId(),
+            spaceId: request.spaceId,
+            name: request.name,
+            description: request.description,
+            status: .active,
+            startDate: request.startDate,
+            targetDate: request.targetDate,
+            completedAt: nil,
+            archivedAt: nil,
+            createdAt: now,
+            updatedAt: now,
+            version: 0
+        )
+    }
+
+    private func applyProjectUpdate(id: String, request: ProjectUpdateRequest) {
+        guard let index = projects.firstIndex(where: { $0.id == id }) else { return }
+        let project = projects[index]
+        projects[index] = Project(
+            id: project.id,
+            userId: project.userId,
+            spaceId: project.spaceId,
+            name: request.name ?? project.name,
+            description: request.description ?? project.description,
+            status: request.status ?? project.status,
+            startDate: request.startDate ?? project.startDate,
+            targetDate: request.targetDate ?? project.targetDate,
+            completedAt: project.completedAt,
+            archivedAt: project.archivedAt,
+            createdAt: project.createdAt,
+            updatedAt: Date(),
+            version: project.version
+        )
+    }
+
+    private func applyProjectStatus(id: String, status: ProjectStatus) {
+        guard let index = projects.firstIndex(where: { $0.id == id }) else { return }
+        let project = projects[index]
+        let now = Date()
+        projects[index] = Project(
+            id: project.id,
+            userId: project.userId,
+            spaceId: project.spaceId,
+            name: project.name,
+            description: project.description,
+            status: status,
+            startDate: project.startDate,
+            targetDate: project.targetDate,
+            completedAt: status == .completed ? now : nil,
+            archivedAt: status == .archived ? now : nil,
+            createdAt: project.createdAt,
+            updatedAt: now,
+            version: project.version
+        )
+    }
+
+    private func makeOptimisticCalendarItem(request: CalendarItemCreateRequest) -> CalendarItem {
+        let now = Date()
+        return CalendarItem(
+            id: localId(),
+            userId: localUserId(),
+            spaceId: request.spaceId,
+            projectId: request.projectId,
+            relatedTaskId: request.relatedTaskId,
+            title: request.title,
+            description: request.description,
+            type: request.type,
+            allDay: request.allDay,
+            startDate: request.startDate,
+            endDate: request.endDate,
+            startAt: request.startAt,
+            endAt: request.endAt,
+            timezone: request.timezone,
+            recurrence: request.recurrence,
+            remindAt: request.remindAt,
+            source: "offline",
+            createdAt: now,
+            updatedAt: now,
+            version: 0
+        )
+    }
+
+    private func applyCalendarUpdate(id: String, request: CalendarItemUpdateRequest) {
+        guard let index = calendarItems.firstIndex(where: { $0.id == id }) else { return }
+        let item = calendarItems[index]
+        calendarItems[index] = CalendarItem(
+            id: item.id,
+            userId: item.userId,
+            spaceId: item.spaceId,
+            projectId: request.projectId ?? item.projectId,
+            relatedTaskId: request.relatedTaskId ?? item.relatedTaskId,
+            title: request.title ?? item.title,
+            description: request.description ?? item.description,
+            type: request.type ?? item.type,
+            allDay: request.allDay ?? item.allDay,
+            startDate: request.startDate ?? item.startDate,
+            endDate: request.endDate ?? item.endDate,
+            startAt: request.startAt ?? item.startAt,
+            endAt: request.endAt ?? item.endAt,
+            timezone: request.timezone ?? item.timezone,
+            recurrence: request.recurrence ?? item.recurrence,
+            remindAt: request.remindAt ?? item.remindAt,
+            source: item.source,
+            createdAt: item.createdAt,
+            updatedAt: Date(),
+            version: item.version
+        )
     }
 
     private func throwIfViewModelError(_ error: APIClientError?) throws {
