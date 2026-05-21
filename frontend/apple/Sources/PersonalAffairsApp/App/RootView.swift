@@ -2,22 +2,17 @@ import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
-    @AppStorage("onboardingCompleted.v1.1") private var onboardingCompleted = false
 
     var body: some View {
         Group {
             if model.isAuthenticated {
-                if onboardingCompleted {
-                    #if os(iOS)
-                    IOSMainShellView()
-                    #else
-                    MacWorkbenchShellView()
-                    #endif
-                } else {
-                    OnboardingFlowView()
-                }
+                #if os(iOS)
+                IOSShell()
+                #else
+                MacShell()
+                #endif
             } else {
-                AuthView()
+                LoginScreen()
             }
         }
         .overlay(alignment: .bottom) {

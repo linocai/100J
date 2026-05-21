@@ -1,92 +1,87 @@
 import PersonalAffairsCore
 import SwiftUI
 
+/// Agent 二次确认 sheet。倒计时显示剩余时间。
 struct AgentConfirmationSheet: View {
     let prompt: AgentConfirmationPrompt
     let onConfirm: () -> Void
     let onCancel: () -> Void
-    let onExpired: () -> Void
-
     @State private var now = Date()
-    @State private var didExpire = false
-
+    @Environment(\.dismiss) private var dismiss
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Label("需要二次确认", systemImage: "exclamationmark.shield")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(Color.orange)
+        VStack(spacing: AppTheme.Spacing.lg) {
+            HStack(spacing: AppTheme.Spacing.md) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+                    .background(Color.orange, in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("需要二次确认")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.orange)
+                    Text(remaining)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+                Spacer(minLength: 0)
+            }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text(prompt.summary)
-                    .font(.headline.weight(.semibold))
+            Text(prompt.summary)
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if !prompt.reason.isEmpty {
                 Text(prompt.reason)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             if !prompt.resources.isEmpty {
-                WrappingHStack(spacing: 6, rowSpacing: 6) {
-                    ForEach(prompt.resources, id: \.self) { resource in
-                        Text(resource)
-                            .font(.caption.weight(.medium))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.orange.opacity(0.12), in: Capsule())
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(prompt.resources, id: \.self) { resource in
+                            StatusPill(text: resource, color: .indigo, size: .regular)
+                        }
                     }
                 }
             }
 
-            HStack(spacing: 10) {
-                Image(systemName: "timer")
-                    .foregroundStyle(.secondary)
-                Text("剩余 \(remainingText)")
-                    .font(.callout.monospacedDigit())
-                Spacer()
-                Text(prompt.command)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(12)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-            HStack {
+            HStack(spacing: AppTheme.Spacing.md) {
                 Button(role: .cancel) {
                     onCancel()
+                    dismiss()
                 } label: {
-                    Label("取消", systemImage: "xmark")
+                    Text("取消")
+                        .frame(maxWidth: .infinity)
                 }
-
-                Spacer()
+                .buttonStyle(.bordered)
+                .controlSize(.large)
 
                 Button {
                     onConfirm()
+                    dismiss()
                 } label: {
-                    Label("确认执行", systemImage: "checkmark.seal")
+                    Label("确认执行", systemImage: "checkmark.seal.fill")
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.orange)
-                .disabled(remainingSeconds == 0)
+                .controlSize(.large)
             }
         }
-        .padding(22)
-        .onReceive(timer) { value in
-            now = value
-            if remainingSeconds == 0, !didExpire {
-                didExpire = true
-                onExpired()
-            }
-        }
+        .padding(AppTheme.Spacing.xxl)
+        .onReceive(timer) { now = $0 }
     }
 
-    private var remainingSeconds: Int {
-        max(0, Int(prompt.expiresAt.timeIntervalSince(now)))
-    }
-
-    private var remainingText: String {
-        let minutes = remainingSeconds / 60
-        let seconds = remainingSeconds % 60
-        return String(format: "%02d:%02d", minutes, seconds)
+    private var remaining: String {
+        let remaining = max(0, Int(prompt.expiresAt.timeIntervalSince(now)))
+        let minutes = remaining / 60
+        let seconds = remaining % 60
+        return "在 \(minutes):\(String(format: "%02d", seconds)) 内确认"
     }
 }

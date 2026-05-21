@@ -1,111 +1,82 @@
+#if os(macOS)
+import AppKit
 import PersonalAffairsCore
 import SwiftUI
 
-#if os(macOS)
-import AppKit
-
 struct MenuBarPanel: View {
     @ObservedObject var model: AppModel
+    @State private var captureText = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
             HStack {
-                Text("Top 3")
+                BrandMark(size: 26)
+                Text("100J")
                     .font(.headline.weight(.semibold))
                 Spacer()
                 SyncStatusDot(state: model.syncStatus)
             }
 
-            if model.todayViewModel.topThree.isEmpty {
-                Text("今天还没有焦点任务。")
-                    .font(.caption)
+            Divider()
+
+            if !model.todayViewModel.topThree.isEmpty {
+                Text("今天 Top 3")
+                    .font(.caption.weight(.bold))
                     .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 4)
-            } else {
-                ForEach(model.todayViewModel.topThree) { task in
-                    MenuBarTaskRow(task: task)
+                ForEach(model.todayViewModel.topThree.prefix(3)) { task in
+                    HStack(spacing: 6) {
+                        Image(systemName: "circle")
+                            .foregroundStyle(.tertiary)
+                            .font(.caption)
+                        Text(task.title)
+                            .font(.callout)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
                 }
+                Divider()
+            }
+
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .foregroundStyle(.purple)
+                TextField("快速捕捉", text: $captureText)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(submitCapture)
+                Button(action: submitCapture) {
+                    Image(systemName: "arrow.up.circle.fill")
+                }
+                .buttonStyle(.borderless)
+                .disabled(captureText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
             Divider()
 
-            TextField("快速捕捉", text: $model.menuBarCaptureText)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit {
-                    Task { await model.submitMenuBarCapture() }
-                }
-
             HStack {
                 Button("打开 100J") {
                     NSApp.activate(ignoringOtherApps: true)
+                    if let window = NSApp.windows.first {
+                        window.makeKeyAndOrderFront(nil)
+                    }
                 }
                 Spacer()
-                Button {
-                    Task { await model.refreshAll() }
-                } label: {
-                    Label("刷新", systemImage: "arrow.clockwise")
+                Button("退出") {
+                    NSApp.terminate(nil)
                 }
-                .disabled(model.isLoading)
+                .foregroundStyle(.secondary)
             }
         }
-        .padding(14)
+        .padding(AppTheme.Spacing.md)
         .frame(width: 320)
     }
-}
 
-private struct MenuBarTaskRow: View {
-    let task: TaskItem
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "circle")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.top, 3)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(task.title)
-                    .font(.callout.weight(.medium))
-                    .lineLimit(2)
-                Text(task.priority.label)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-    }
-}
-
-private struct SyncStatusDot: View {
-    let state: AppSyncStatus
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .accessibilityLabel("同步状态：\(label)")
-    }
-
-    private var color: Color {
-        switch state {
-        case .offline: return .gray
-        case .syncing: return .orange
-        case .synced: return .green
-        case .error: return .red
-        }
-    }
-
-    private var label: String {
-        switch state {
-        case .offline: return "Offline"
-        case .syncing: return "Syncing"
-        case .synced: return "Synced"
-        case .error: return "Error"
+    private func submitCapture() {
+        let text = captureText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        Task {
+            model.universalComposerViewModel.input = text
+            _ = await model.submitUniversalComposer()
+            captureText = ""
         }
     }
 }
