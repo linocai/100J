@@ -34,6 +34,8 @@ public struct CalendarDraftState: Equatable {
     public var startDate: Date
     public var startAt: Date
     public var recurrence: Recurrence
+    public var hasReminder: Bool
+    public var remindAt: Date
     public var projectId: String?
 
     public init(
@@ -45,6 +47,8 @@ public struct CalendarDraftState: Equatable {
         startDate: Date = Date(),
         startAt: Date = Date(),
         recurrence: Recurrence = .none,
+        hasReminder: Bool = false,
+        remindAt: Date = Date(),
         projectId: String? = nil
     ) {
         self.spaceType = spaceType
@@ -55,6 +59,8 @@ public struct CalendarDraftState: Equatable {
         self.startDate = startDate
         self.startAt = startAt
         self.recurrence = recurrence
+        self.hasReminder = hasReminder
+        self.remindAt = remindAt
         self.projectId = projectId
     }
 
@@ -68,6 +74,8 @@ public struct CalendarDraftState: Equatable {
             startDate: CalendarViewState.parsedDateOnly(item.startDate) ?? Date(),
             startAt: item.startAt ?? Date(),
             recurrence: item.recurrence ?? .none,
+            hasReminder: item.remindAt != nil,
+            remindAt: item.remindAt ?? item.startAt ?? Date(),
             projectId: item.projectId
         )
     }
@@ -88,6 +96,7 @@ public struct CalendarDraftState: Equatable {
             startAt: allDay ? nil : startAt,
             timezone: timezone,
             recurrence: recurrence,
+            remindAt: hasReminder ? remindAt : nil,
             projectId: spaceType == .company ? projectId : nil
         )
     }
@@ -102,6 +111,7 @@ public struct CalendarDraftState: Equatable {
             startAt: allDay ? nil : startAt,
             timezone: timezone,
             recurrence: recurrence,
+            remindAt: hasReminder ? remindAt : nil,
             projectId: spaceType == .company ? projectId : nil
         )
     }

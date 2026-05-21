@@ -498,6 +498,7 @@ final class PersonalAffairsCoreTests: XCTestCase {
 
     func testCalendarDraftBuildsCreateAndUpdateRequests() throws {
         let date = try XCTUnwrap(CalendarViewState.parsedDateOnly("2026-05-18"))
+        let reminder = Date(timeIntervalSince1970: 1_779_033_900)
         let draft = CalendarDraftState(
             spaceType: .company,
             title: "Board review",
@@ -506,6 +507,8 @@ final class PersonalAffairsCoreTests: XCTestCase {
             allDay: true,
             startDate: date,
             recurrence: .monthly,
+            hasReminder: true,
+            remindAt: reminder,
             projectId: "project-1"
         )
 
@@ -514,12 +517,14 @@ final class PersonalAffairsCoreTests: XCTestCase {
         XCTAssertEqual(create.description, "Prepare agenda")
         XCTAssertEqual(create.startDate, "2026-05-18")
         XCTAssertNil(create.startAt)
+        XCTAssertEqual(create.remindAt, reminder)
         XCTAssertEqual(create.projectId, "project-1")
 
         let update = draft.updateRequest(timezone: "Asia/Shanghai")
         XCTAssertEqual(update.description, "Prepare agenda")
         XCTAssertEqual(update.startDate, "2026-05-18")
         XCTAssertNil(update.startAt)
+        XCTAssertEqual(update.remindAt, reminder)
         XCTAssertEqual(update.projectId, "project-1")
     }
 

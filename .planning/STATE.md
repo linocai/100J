@@ -6,7 +6,7 @@ Build Personal Affairs App v1 in phases: backend, macOS, iOS, local E2E testing,
 
 ## Current Position
 
-v1.1 Phase 0, P1, P2, and P3 are complete on branch `codex/production-hardening`.
+v1.1 Phase 0, P1, P2, P3, and P4 are complete on branch `codex/production-hardening`.
 
 As of 2026-05-21, `v1.1_final_plan.md` is the highest-authority v1.1 construction plan, with `新前端面板演示.html` as the visual and interaction reference. The missing old frontend blueprint files from Phase 0.1 are intentionally skipped because they are not present in the current repository.
 
@@ -81,6 +81,13 @@ Stopped frontend documents were removed to end the source-of-truth split.
   - Plan is a single segmented view for personal/company/projects/notes.
   - Universal Composer is global via `⌘K`; Agent confirmation is a global countdown sheet; Menu Bar Extra shows Top 3, quick capture, and sync status.
   - `SurfaceView(style:)`, custom `CommandTopBar`, and `QuickCaptureBar` usage were removed; `AppBackgroundView` now returns `EmptyView`.
+- v1.1 P4 iOS slice on `codex/production-hardening`:
+  - iOS now uses exactly four TabView entries: Today, Plan, Calendar, Agent, with iOS 26 tab bar minimize behavior when available.
+  - Today and Plan screens consume the P2 shared ViewModels through `AppModel`; old Personal/Company tabs were removed.
+  - Universal Composer is a global medium/large sheet; Agent confirmation is a global countdown sheet.
+  - Calendar create/edit supports `remind_at`, and iOS schedules local notifications from refreshed calendar items.
+  - `OneHundredJWidgets` SwiftPM target renders Top 3 and Agenda widgets from an AppGroup snapshot without network access.
+  - `CreateTaskIntent`, `AskAgentIntent`, and `PersonalAffairsShortcuts` were added for Siri/Shortcuts entrypoints.
 
 ## Verification
 
@@ -133,6 +140,18 @@ rg -n "SurfaceView\\(style:" frontend/apple/Sources/PersonalAffairsApp -g '*.swi
 ```
 
 Result: Swift build passed; Swift tests passed with 28 tests; generic iOS Xcode build passed with signing disabled; `SurfaceView(style:)` grep returned no matches.
+
+Latest Apple checks for v1.1 P4 on 2026-05-21:
+
+```bash
+cd frontend/apple
+swift build --scratch-path /tmp/personal-affairs-apple-p4-build
+swift test --scratch-path /tmp/personal-affairs-apple-p4-test
+xcodebuild -project PersonalAffairsApp.xcodeproj -scheme PersonalAffairsApp -destination 'generic/platform=iOS' -derivedDataPath /tmp/personal-affairs-xcode-p4-derived CODE_SIGNING_ALLOWED=NO build
+rg -n "Repository|repository|AuthRepository|TaskRepository|CalendarRepository|NoteRepository|ProjectRepository|AgentRepository" frontend/apple/Sources/PersonalAffairsApp/Features/iOS -g '*.swift'
+```
+
+Result: Swift build passed; Swift tests passed with 28 tests; generic iOS Xcode build passed with signing disabled and AppIntents metadata extraction; iOS Feature repository grep returned no matches.
 
 HZ database backup/restore rehearsal on 2026-05-19:
 
@@ -202,4 +221,4 @@ Result: project listed targets and schemes successfully; iOS Simulator build pas
 
 ## Next Action
 
-Next useful action is v1.1 P4 iOS rewrite from `v1.1_final_plan.md`, using the P2 shared ViewModels and the P3 macOS IA as the behavioral reference.
+Next useful action is v1.1 Phase 5 productionization from `v1.1_final_plan.md`: onboarding, offline mutation queue, token-refresh hardening, E2E/smoke, deployment, and TestFlight handoff.

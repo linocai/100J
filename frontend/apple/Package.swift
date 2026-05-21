@@ -22,6 +22,11 @@ let package = Package(
             path: "Sources/PersonalAffairsApp",
             exclude: ["Resources"]
         ),
+        .executableTarget(
+            name: "OneHundredJWidgets",
+            dependencies: ["PersonalAffairsCore"],
+            path: "Sources/OneHundredJWidgets"
+        ),
         .testTarget(
             name: "PersonalAffairsCoreTests",
             dependencies: ["PersonalAffairsCore"],

@@ -2,7 +2,7 @@
 import PersonalAffairsCore
 import SwiftUI
 
-struct IOSCalendarView: View {
+struct IOSCalendarScreen: View {
     @EnvironmentObject private var model: AppModel
     @State private var filter: CalendarScopeFilter = .all
     @State private var selectedProjectId: String?
@@ -10,8 +10,7 @@ struct IOSCalendarView: View {
     @State private var editingItem: CalendarItem?
 
     var body: some View {
-        NavigationStack {
-            List {
+        List {
                 IOSScreenHeader(title: "日程", subtitle: "个人和公司的固定时间事项统一放在这里。")
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
@@ -37,10 +36,10 @@ struct IOSCalendarView: View {
                 }
 
                 Section("日程") {
-                    if model.calendarItems.isEmpty {
+                    if filteredCalendarItems.isEmpty {
                         IOSUnavailableView(title: "暂无日程", systemImage: "calendar", message: "固定日期和约会会显示在这里。")
                     } else {
-                        ForEach(model.calendarItems) { item in
+                        ForEach(filteredCalendarItems) { item in
                             IOSCalendarRow(
                                 item: item,
                                 space: spaceLabel(item.spaceId, spaces: model.spaces),
@@ -60,39 +59,40 @@ struct IOSCalendarView: View {
                         }
                     }
                 }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("日程")
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $model.search, placement: .navigationBarDrawer(displayMode: .always))
+        .toolbar {
+            Button {
+                showingNewItem = true
+            } label: {
+                Image(systemName: "plus")
             }
-            .navigationTitle("日程")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                Button {
-                    showingNewItem = true
-                } label: {
-                    Image(systemName: "plus")
-                }
+        }
+        .sheet(item: $editingItem) { item in
+            IOSCalendarItemForm(
+                title: "编辑固定日程",
+                projects: model.projects,
+                initialDraft: CalendarDraftState(item: item, companySpaceId: model.companySpace?.id),
+                allowsOwnershipChange: false
+            ) { draft in
+                await model.updateCalendarItem(id: item.id, draft: draft)
             }
-            .sheet(item: $editingItem) { item in
-                IOSCalendarItemForm(
-                    title: "编辑固定日程",
-                    projects: model.projects,
-                    initialDraft: CalendarDraftState(item: item, companySpaceId: model.companySpace?.id),
-                    allowsOwnershipChange: false
-                ) { draft in
-                    await model.updateCalendarItem(id: item.id, draft: draft)
-                }
+        }
+        .sheet(isPresented: $showingNewItem) {
+            IOSCalendarItemForm(projects: model.projects) { draft in
+                await model.createCalendarItem(draft)
             }
-            .sheet(isPresented: $showingNewItem) {
-                IOSCalendarItemForm(projects: model.projects) { draft in
-                    await model.createCalendarItem(draft)
-                }
-            }
-            .refreshable {
-                await reload()
-            }
-            .overlay { IOSLoadingOverlay() }
-            .iosErrorAlert()
-            .task {
-                await reload()
-            }
+        }
+        .refreshable {
+            await reload()
+        }
+        .overlay { IOSLoadingOverlay() }
+        .iosErrorAlert()
+        .task {
+            await reload()
         }
     }
 
@@ -107,6 +107,11 @@ struct IOSCalendarView: View {
             return
         }
         await model.reloadCalendar(query: query)
+    }
+
+    private var filteredCalendarItems: [CalendarItem] {
+        guard let term = model.search.trimmedOrNil else { return model.calendarItems }
+        return model.calendarItems.filter { $0.matchesSearch(term, projectName: model.projectName(for: $0.projectId)) }
     }
 }
 
@@ -174,6 +179,19 @@ private struct IOSCalendarItemForm: View {
                         ForEach(Recurrence.allCases) { recurrence in
                             Text(recurrence.label).tag(recurrence)
                         }
+                    }
+                }
+
+                Section("提醒") {
+                    Toggle("开启提醒", isOn: $draft.hasReminder)
+                    if draft.hasReminder {
+                        DatePicker("提醒时间", selection: $draft.remindAt)
+                        #if DEBUG
+                        Button("5 秒后提醒") {
+                            draft.hasReminder = true
+                            draft.remindAt = Date().addingTimeInterval(5)
+                        }
+                        #endif
                     }
                 }
             }

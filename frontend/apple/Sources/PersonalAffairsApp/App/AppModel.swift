@@ -5,6 +5,10 @@ import PersonalAffairsCore
 import AuthenticationServices
 #endif
 
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
+
 enum AppSyncStatus: Equatable {
     case offline
     case syncing
@@ -31,6 +35,7 @@ final class AppModel: ObservableObject {
     @Published var selectedSection: AppSection? = .today
     @Published var agentReview = AgentReviewSession()
     @Published var menuBarCaptureText = ""
+    @Published var search = ""
 
     private let api: APIClient
     private let authRepository: AuthRepository
@@ -756,6 +761,40 @@ final class AppModel: ObservableObject {
     private func refreshDerivedViewModels() {
         todayViewModel.refresh()
         planViewModel.refresh()
+        refreshWidgetSnapshot()
+
+        #if os(iOS)
+        let calendarItems = calendarItems
+        Task {
+            await LocalNotificationCenter.shared.sync(items: calendarItems)
+        }
+        #endif
+    }
+
+    private func refreshWidgetSnapshot() {
+        let snapshot = WidgetSnapshot(
+            topThree: todayViewModel.topThree.map { task in
+                WidgetTaskSnapshot(
+                    id: task.id,
+                    title: task.title,
+                    subtitle: projectName(for: task.projectId) ?? task.priority.label,
+                    priority: task.priority.label
+                )
+            },
+            upcoming: todayViewModel.upcoming.map { schedule in
+                WidgetCalendarSnapshot(
+                    id: schedule.id,
+                    title: schedule.item.title,
+                    subtitle: projectName(for: schedule.item.projectId) ?? spaceLabel(for: schedule.item.spaceId),
+                    timeLabel: schedule.timeLabel
+                )
+            }
+        )
+        WidgetSnapshotStore.save(snapshot)
+
+        #if canImport(WidgetKit)
+        WidgetCenter.shared.reloadAllTimelines()
+        #endif
     }
 
     private func throwIfViewModelError(_ error: APIClientError?) throws {

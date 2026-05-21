@@ -2,7 +2,7 @@
 import PersonalAffairsCore
 import SwiftUI
 
-struct IOSSettingsView: View {
+struct IOSSettingsSheet: View {
     @EnvironmentObject private var model: AppModel
     @State private var baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "https://100j.linotsai.top/api/v1"
     @State private var selectedAuthMode = UserDefaults.standard.string(forKey: "appAuthMode").flatMap(AppAuthMode.init(rawValue:)) ?? .cloudJWT
