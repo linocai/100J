@@ -99,16 +99,10 @@ struct MacWorkbenchShellView: View {
                 isInspectorPresented.toggle()
             } label: {
                 Label("Inspector", systemImage: "sidebar.right")
+                    .symbolVariant(isInspectorPresented ? .fill : .none)
             }
             .keyboardShortcut("0", modifiers: [.command, .option])
             .help("切换 Inspector (⌥⌘0)")
-
-            Button {
-                Task { await model.refreshAll() }
-            } label: {
-                Label("刷新", systemImage: "arrow.clockwise")
-            }
-            .disabled(model.isLoading)
         }
     }
 
@@ -167,10 +161,18 @@ struct MacWorkbenchShellView: View {
 
     @ViewBuilder
     private var keyboardShortcuts: some View {
-        Button("Universal Composer") {
-            model.universalComposerViewModel.open()
+        ZStack {
+            Button("Universal Composer") {
+                model.universalComposerViewModel.open()
+            }
+            .keyboardShortcut("k", modifiers: .command)
+
+            Button("Refresh") {
+                Task { await model.refreshAll() }
+            }
+            .keyboardShortcut("r", modifiers: .command)
+            .disabled(model.isLoading)
         }
-        .keyboardShortcut("k", modifiers: .command)
         .opacity(0)
         .frame(width: 0, height: 0)
         .accessibilityHidden(true)

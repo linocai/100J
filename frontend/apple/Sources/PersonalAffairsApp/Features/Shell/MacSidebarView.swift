@@ -1,3 +1,4 @@
+import PersonalAffairsCore
 import SwiftUI
 
 struct MacSidebarView: View {
@@ -108,16 +109,20 @@ struct MacSidebarView: View {
     private func count(for section: AppSection) -> Int? {
         switch section {
         case .today:
-            return model.todayViewModel.topThree.count
+            // 今天要做的：Top 3 焦点 + 今日固定日程；0 时不显示角标
+            let n = model.todayViewModel.topThree.count + model.todayViewModel.upcoming.count
+            return n > 0 ? n : nil
         case .plan:
-            return model.planViewModel.personalItems.count
-                + model.planViewModel.companyItems.count
-                + model.planViewModel.projectItems.count
-                + model.planViewModel.noteItems.count
+            // 仅未完成的弹性待办总数（个人 + 公司 active）
+            let n = model.activePersonalTasks.count + model.activeCompanyTasks.count
+            return n > 0 ? n : nil
         case .calendar:
-            return model.calendarItems.count
+            // 今日固定日程数
+            let n = CalendarViewState.items(on: Date(), from: model.calendarItems).count
+            return n > 0 ? n : nil
         case .agent:
-            return model.agentReview.pendingConfirmation == nil ? model.agentLogs.count : 1
+            // 待二次确认的操作数（无则不显示）
+            return model.agentReview.pendingConfirmation == nil ? nil : 1
         default:
             return nil
         }

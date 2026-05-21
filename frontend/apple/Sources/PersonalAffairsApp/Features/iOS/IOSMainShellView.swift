@@ -71,10 +71,6 @@ struct IOSMainShellView: View {
             .tabItem { Label("Agent", systemImage: "sparkles") }
         }
         .toolbarBackground(.regularMaterial, for: .tabBar)
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.55)
-                .onEnded { _ in model.universalComposerViewModel.open() }
-        )
     }
 
     private var selectedTab: Binding<AppSection> {

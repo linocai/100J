@@ -19,6 +19,16 @@ struct IOSPlanScreen: View {
             case .notes: return "笔记"
             }
         }
+
+        /// 给 Universal Composer 的预填提示，让 Composer 内联默认 intent。
+        var composerHint: String {
+            switch self {
+            case .personal: return "个人 "
+            case .company: return "公司 "
+            case .projects: return "新项目 "
+            case .notes: return "灵感 "
+            }
+        }
     }
 
     @EnvironmentObject private var model: AppModel
@@ -50,10 +60,11 @@ struct IOSPlanScreen: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    openCreateSheet()
+                    model.universalComposerViewModel.open(prefill: segment.composerHint)
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("新建")
             }
         }
         .sheet(isPresented: $showingNewTask) {

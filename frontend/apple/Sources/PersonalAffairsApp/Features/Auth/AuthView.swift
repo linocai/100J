@@ -32,9 +32,16 @@ struct AuthView: View {
             .disabled(model.isLoading)
             .controlSize(.large)
 
-            Text("继续即表示你接受服务条款与隐私政策。")
+            Text("首次登录会自动创建你的 Personal 与 Company 空间。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            Text(.init("继续即表示你接受 [服务条款](https://100j.linotsai.top/terms) 与 [隐私政策](https://100j.linotsai.top/privacy)。"))
                 .font(.footnote)
                 .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+                .tint(.indigo)
 
             Spacer(minLength: 18)
 
@@ -52,7 +59,7 @@ struct AuthView: View {
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.regularMaterial)
+        .background(MeshGradientBackdrop())
         .onSubmit {
             if showingAdvanced {
                 submitAccessCode()
@@ -110,21 +117,7 @@ private struct AdvancedAuthBox: View {
             }
 
             HStack {
-                #if DEBUG
-                Button("开发：进入本机 Owner") {
-                    model.updateBaseURL("http://127.0.0.1:8000/api/v1")
-                    model.updateAuthMode(.localOwner)
-                }
-                #if os(macOS)
-                .buttonStyle(.link)
-                #else
-                .buttonStyle(.plain)
-                .foregroundStyle(Color.accentColor)
-                #endif
-                #endif
-
                 Spacer()
-
                 Button("连接访问码", action: submit)
                     .buttonStyle(.bordered)
                     .disabled(accessCode.trimmingCharacters(in: .whitespacesAndNewlines).count < 8 || model.isLoading)

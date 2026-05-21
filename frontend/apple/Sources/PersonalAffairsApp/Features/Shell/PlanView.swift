@@ -27,6 +27,16 @@ struct PlanView: View {
             case .notes: return "note.text"
             }
         }
+
+        /// 给 Universal Composer 的预填提示，让 Composer 内联默认 intent。
+        var composerHint: String {
+            switch self {
+            case .personal: return "个人 "
+            case .company: return "公司 "
+            case .projects: return "新项目 "
+            case .notes: return "灵感 "
+            }
+        }
     }
 
     @EnvironmentObject private var model: AppModel
@@ -81,10 +91,11 @@ struct PlanView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    model.universalComposerViewModel.open()
+                    model.universalComposerViewModel.open(prefill: tab.composerHint)
                 } label: {
                     Label("新建", systemImage: "plus")
                 }
+                .help("用 ⌘K Composer 创建新事项")
             }
         }
     }
