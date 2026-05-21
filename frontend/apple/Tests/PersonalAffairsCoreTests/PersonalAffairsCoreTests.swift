@@ -660,7 +660,7 @@ final class PersonalAffairsCoreTests: XCTestCase {
         let items = CalendarViewState.items(on: date, from: [otherDay, timed, allDay], calendar: calendar)
 
         XCTAssertEqual(items.map(\.id), ["calendar-1", "calendar-2"])
-        XCTAssertEqual(CalendarViewState.sortedItems([otherDay, timed, allDay]).map(\.id), ["calendar-1", "calendar-2", "calendar-3"])
+        XCTAssertEqual(CalendarViewState.sortedItems([otherDay, timed, allDay], calendar: calendar).map(\.id), ["calendar-1", "calendar-2", "calendar-3"])
     }
 
     func testCalendarDraftBuildsCreateAndUpdateRequests() throws {

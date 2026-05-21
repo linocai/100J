@@ -14,8 +14,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -30,7 +30,7 @@ jobs:
       run:
         working-directory: frontend/apple
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: swift build --scratch-path /tmp/personal-affairs-apple-build
       - run: swift test --scratch-path /tmp/personal-affairs-apple-build
       - run: xcodebuild -project PersonalAffairsApp.xcodeproj -scheme PersonalAffairsApp -destination 'generic/platform=iOS' -derivedDataPath /tmp/personal-affairs-xcodeproj-derived CODE_SIGNING_ALLOWED=NO build

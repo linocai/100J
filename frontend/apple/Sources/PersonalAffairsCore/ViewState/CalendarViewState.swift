@@ -140,21 +140,32 @@ public enum CalendarViewState {
         }
     }
 
-    public static func sortedItems(_ items: [CalendarItem]) -> [CalendarItem] {
+    public static func sortedItems(_ items: [CalendarItem], calendar: Calendar = .current) -> [CalendarItem] {
         items.sorted { lhs, rhs in
-            let lhsDate = sortDate(for: lhs) ?? .distantFuture
-            let rhsDate = sortDate(for: rhs) ?? .distantFuture
+            let lhsDay = dayKey(for: lhs, calendar: calendar) ?? "9999-12-31"
+            let rhsDay = dayKey(for: rhs, calendar: calendar) ?? "9999-12-31"
+            if lhsDay != rhsDay {
+                return lhsDay < rhsDay
+            }
+            if lhs.allDay != rhs.allDay {
+                return lhs.allDay
+            }
+            let lhsDate = sortDate(for: lhs, calendar: calendar) ?? .distantFuture
+            let rhsDate = sortDate(for: rhs, calendar: calendar) ?? .distantFuture
             if lhsDate != rhsDate {
                 return lhsDate < rhsDate
             }
-            return lhs.title < rhs.title
+            if lhs.title != rhs.title {
+                return lhs.title < rhs.title
+            }
+            return lhs.id < rhs.id
         }
     }
 
     public static func items(on date: Date, from items: [CalendarItem], calendar: Calendar = .current) -> [CalendarItem] {
-        sortedItems(items).filter { item in
-            guard let itemDate = sortDate(for: item) else { return false }
-            return calendar.isDate(itemDate, inSameDayAs: date)
+        let targetDay = dayKey(date, calendar: calendar)
+        return sortedItems(items, calendar: calendar).filter { item in
+            dayKey(for: item, calendar: calendar) == targetDay
         }
     }
 
@@ -180,27 +191,36 @@ public enum CalendarViewState {
         return calendar.date(from: components) ?? calendar.startOfDay(for: date)
     }
 
-    public static func sortDate(for item: CalendarItem) -> Date? {
+    public static func sortDate(for item: CalendarItem, calendar: Calendar = .current) -> Date? {
         if item.allDay {
-            return parsedDateOnly(item.startDate)
+            return parsedDateOnly(item.startDate, calendar: calendar)
         }
         return item.startAt
     }
 
-    public static func parsedDateOnly(_ value: String?) -> Date? {
+    public static func parsedDateOnly(_ value: String?, calendar: Calendar = .current) -> Date? {
         guard let value else { return nil }
-        return dateOnlyFormatter.date(from: value)
+        return dateOnlyFormatter(calendar: calendar).date(from: value)
     }
 
-    public static func dayKey(_ date: Date) -> String {
-        dateOnlyFormatter.string(from: date)
+    public static func dayKey(_ date: Date, calendar: Calendar = .current) -> String {
+        dateOnlyFormatter(calendar: calendar).string(from: date)
+    }
+
+    private static func dayKey(for item: CalendarItem, calendar: Calendar) -> String? {
+        if item.allDay {
+            return item.startDate
+        }
+        guard let startAt = item.startAt else { return nil }
+        return dayKey(startAt, calendar: calendar)
     }
 }
 
-private let dateOnlyFormatter: DateFormatter = {
+private func dateOnlyFormatter(calendar: Calendar) -> DateFormatter {
     let formatter = DateFormatter()
-    formatter.calendar = Calendar(identifier: .gregorian)
+    formatter.calendar = calendar
+    formatter.timeZone = calendar.timeZone
     formatter.locale = Locale(identifier: "en_US_POSIX")
     formatter.dateFormat = "yyyy-MM-dd"
     return formatter
-}()
+}
