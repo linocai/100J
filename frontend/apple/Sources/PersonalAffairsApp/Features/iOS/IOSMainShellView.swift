@@ -32,12 +32,16 @@ struct IOSMainShellView: View {
 
     @ViewBuilder
     private var shell: some View {
+        #if compiler(>=6.3)
         if #available(iOS 26.0, *) {
             tabs
                 .tabBarMinimizeBehavior(.onScrollDown)
         } else {
             tabs
         }
+        #else
+        tabs
+        #endif
     }
 
     private var tabs: some View {
