@@ -2,6 +2,7 @@ from app.core.database import Base
 from app.models.agent_action_log import AgentActionLog
 from app.models.agent_pending_confirmation import AgentPendingConfirmation
 from app.models.calendar_item import CalendarItem
+from app.models.device_session import DeviceSession
 from app.models.device_token import DeviceToken
 from app.models.email_otp import EmailOTPCode
 from app.models.llm_provider_key import LLMProviderKey
@@ -16,6 +17,7 @@ __all__ = [
     "AgentPendingConfirmation",
     "Base",
     "CalendarItem",
+    "DeviceSession",
     "DeviceToken",
     "EmailOTPCode",
     "LLMProviderKey",
