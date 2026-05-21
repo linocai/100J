@@ -61,7 +61,8 @@ struct PersonalTasksView: View {
             eyebrow: "个人",
             title: "个人待办",
             subtitle: "个人事项保持弹性；截止日期不会自动进入日程。",
-            systemImage: "checklist"
+            systemImage: "checklist",
+            accent: AppTheme.Colors.personalAccent
         ) {
             Button {
                 showingNewTask = true

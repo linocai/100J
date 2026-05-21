@@ -46,7 +46,8 @@ struct AgentView: View {
             eyebrow: "系统",
             title: "Agent",
             subtitle: "事务助理负责解析、预演和审核；危险操作必须确认。",
-            systemImage: "sparkles"
+            systemImage: "sparkles",
+            accent: AppTheme.Colors.agentAccent
         )
     }
 

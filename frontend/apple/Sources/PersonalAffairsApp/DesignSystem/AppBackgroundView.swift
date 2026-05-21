@@ -8,16 +8,16 @@ struct AppBackgroundView: View {
             base
             RadialGradient(
                 colors: [
-                    AppTheme.Colors.companyAccent.opacity(colorScheme == .dark ? 0.18 : 0.10),
+                    Color.primary.opacity(colorScheme == .dark ? 0.06 : 0.035),
                     .clear
                 ],
-                center: .topLeading,
-                startRadius: 24,
-                endRadius: 560
+                center: UnitPoint(x: 0.78, y: 0.12),
+                startRadius: 40,
+                endRadius: 520
             )
             RadialGradient(
                 colors: [
-                    AppTheme.Colors.agentAccent.opacity(colorScheme == .dark ? 0.16 : 0.08),
+                    Color.primary.opacity(colorScheme == .dark ? 0.05 : 0.025),
                     .clear
                 ],
                 center: .bottomTrailing,

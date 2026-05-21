@@ -63,7 +63,8 @@ struct CompanyProjectsView: View {
             eyebrow: "公司",
             title: "项目",
             subtitle: "项目展示整体形状；日常任务处理仍然回到公司工作台。",
-            systemImage: "folder"
+            systemImage: "folder",
+            accent: AppTheme.Colors.companyAccent
         ) {
             HStack {
                 Picker("状态", selection: $status) {

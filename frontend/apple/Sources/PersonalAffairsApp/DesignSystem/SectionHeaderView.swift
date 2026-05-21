@@ -29,6 +29,7 @@ struct SectionHeaderView: View {
     let title: String
     let subtitle: String?
     var systemImage: String?
+    var accent: Color?
     var trailing: AnyView?
 
     init(
@@ -36,13 +37,15 @@ struct SectionHeaderView: View {
         eyebrow: String? = nil,
         title: String,
         subtitle: String? = nil,
-        systemImage: String? = nil
+        systemImage: String? = nil,
+        accent: Color? = nil
     ) {
         self.style = style
         self.eyebrow = eyebrow
         self.title = title
         self.subtitle = subtitle
         self.systemImage = systemImage
+        self.accent = accent
         self.trailing = AnyView(EmptyView())
     }
 
@@ -52,6 +55,7 @@ struct SectionHeaderView: View {
         title: String,
         subtitle: String? = nil,
         systemImage: String? = nil,
+        accent: Color? = nil,
         @ViewBuilder trailing: () -> Trailing
     ) {
         self.style = style
@@ -59,6 +63,7 @@ struct SectionHeaderView: View {
         self.title = title
         self.subtitle = subtitle
         self.systemImage = systemImage
+        self.accent = accent
         self.trailing = AnyView(trailing())
     }
 
@@ -71,7 +76,7 @@ struct SectionHeaderView: View {
 
     private var horizontalHeader: some View {
         HStack(alignment: .bottom, spacing: AppTheme.Spacing.lg) {
-            headerText
+            headerContent
             Spacer(minLength: AppTheme.Spacing.lg)
             trailing
         }
@@ -79,8 +84,22 @@ struct SectionHeaderView: View {
 
     private var verticalHeader: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-            headerText
+            headerContent
             trailing
+        }
+    }
+
+    @ViewBuilder
+    private var headerContent: some View {
+        if showsAccentSpine, let accent {
+            HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(accent)
+                    .frame(width: 3, height: style == .hero ? 44 : 36)
+                headerText
+            }
+        } else {
+            headerText
         }
     }
 
@@ -100,7 +119,7 @@ struct SectionHeaderView: View {
             } icon: {
                 if let systemImage {
                     Image(systemName: systemImage)
-                        .foregroundStyle(AppTheme.Colors.companyAccent)
+                        .foregroundStyle(accent ?? AppTheme.Colors.companyAccent)
                 }
             }
             .labelStyle(.titleAndIcon)
@@ -111,5 +130,9 @@ struct SectionHeaderView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    private var showsAccentSpine: Bool {
+        accent != nil && style != .panel
     }
 }

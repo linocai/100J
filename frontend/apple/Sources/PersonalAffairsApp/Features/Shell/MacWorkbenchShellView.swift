@@ -15,7 +15,7 @@ struct MacWorkbenchShellView: View {
             let showsInspector = width >= AppTheme.Layout.inspectorVisibilityThreshold
             let sidebarColumnWidth = sidebarWidth(for: width)
             let inspectorColumnWidth = showsInspector ? inspectorWidth(for: width) : 0
-            let separatorWidth: CGFloat = showsInspector ? 2 : 1
+            let separatorWidth: CGFloat = showsInspector ? 1 : 0
             let centerWidth = max(0, width - sidebarColumnWidth - inspectorColumnWidth - separatorWidth)
             let layout = WorkbenchLayoutContext(
                 windowWidth: width,
@@ -39,8 +39,6 @@ struct MacWorkbenchShellView: View {
                 HStack(spacing: 0) {
                     MacSidebarView(selection: $model.selectedSection)
                         .frame(width: sidebarColumnWidth)
-
-                    verticalHairline
 
                     currentWorkspace
                         .frame(minWidth: 0, maxWidth: contentMaxWidth(for: layout), maxHeight: .infinity)
@@ -113,13 +111,13 @@ struct MacWorkbenchShellView: View {
 
     private var horizontalHairline: some View {
         Rectangle()
-            .fill(AppTheme.Colors.hairline)
+            .fill(Color.primary.opacity(0.06))
             .frame(height: 1)
     }
 
     private var verticalHairline: some View {
         Rectangle()
-            .fill(AppTheme.Colors.hairline)
+            .fill(Color.primary.opacity(0.06))
             .frame(width: 1)
     }
 

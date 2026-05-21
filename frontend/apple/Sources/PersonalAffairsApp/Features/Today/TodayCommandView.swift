@@ -17,7 +17,8 @@ struct TodayCommandView: View {
                     eyebrow: todayEyebrow,
                     title: "今天不要排满，只挑最重要的三件事。",
                     subtitle: "弹性待办在 Focus Stack；必须发生的时间进入 Fixed Schedule；Agent 只做整理和建议。",
-                    systemImage: "sparkle.magnifyingglass"
+                    systemImage: "sparkle.magnifyingglass",
+                    accent: AppTheme.Colors.agentAccent
                 ) {
                     HStack {
                         Button {

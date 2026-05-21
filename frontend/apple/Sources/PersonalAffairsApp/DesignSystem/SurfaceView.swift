@@ -48,12 +48,14 @@ enum SurfaceStyle {
 
     var shadowOpacity: Double {
         switch self {
-        case .elevated, .inspector:
-            return 0.08
-        case .base:
+        case .elevated:
+            return 0.06
+        case .inspector:
             return 0.05
-        default:
-            return 0.025
+        case .base:
+            return 0.03
+        case .sidebar, .subtle, .selected(_), .tinted(_), .warning, .card:
+            return 0
         }
     }
 
@@ -110,7 +112,7 @@ struct SurfaceView<Content: View>: View {
             .overlay {
                 shape.stroke(style.borderColor, lineWidth: 1)
             }
-            .shadow(color: Color.black.opacity(style.shadowOpacity), radius: 18, x: 0, y: 10)
+            .shadow(color: Color.black.opacity(style.shadowOpacity), radius: 12, x: 0, y: 4)
     }
 
     private var resolvedPadding: CGFloat {

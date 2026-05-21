@@ -21,7 +21,8 @@ struct CompanyWorkbenchView: View {
                     eyebrow: "公司",
                     title: "公司工作台",
                     subtitle: "项目任务和无项目小任务都在同一个公司界面处理。",
-                    systemImage: "rectangle.3.group"
+                    systemImage: "rectangle.3.group",
+                    accent: AppTheme.Colors.companyAccent
                 ) {
                     HStack {
                         Button {

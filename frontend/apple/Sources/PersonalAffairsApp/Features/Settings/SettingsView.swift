@@ -16,7 +16,8 @@ struct SettingsView: View {
                     eyebrow: "系统",
                     title: "设置",
                     subtitle: "本机服务状态、数据刷新、LLM Key 和高级连接设置。",
-                    systemImage: "gearshape"
+                    systemImage: "gearshape",
+                    accent: AppTheme.Colors.tertiaryText
                 )
                 SurfaceView {
                     Form {

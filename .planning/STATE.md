@@ -6,6 +6,10 @@ Build Personal Affairs App v1 in phases: backend, macOS, iOS, local E2E testing,
 
 ## Current Position
 
+v1.1 Phase 0 complete, starting Phase 1 backend.
+
+As of 2026-05-21, `v1.1_final_plan.md` is the highest-authority v1.1 construction plan, with `新前端面板演示.html` as the visual and interaction reference. The missing old frontend blueprint files from Phase 0.1 are intentionally skipped because they are not present in the current repository.
+
 Phase 4 automated local verification was completed for the 2026-05-17 snapshot. P0/P1 production hardening, P2 / Phase 5 deployment, and the first P3 production-soak slice are now complete on branch `codex/production-hardening`.
 
 As of 2026-05-19 16:23 CST, single-owner cloud access-code login is implemented, verified locally, deployed to HZ, and verified in production at `https://100j.linotsai.top`.

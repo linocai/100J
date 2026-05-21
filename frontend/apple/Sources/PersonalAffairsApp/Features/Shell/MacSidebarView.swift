@@ -34,7 +34,12 @@ struct MacSidebarView: View {
                 .padding(.bottom, AppTheme.Spacing.lg)
         }
         .padding(.top, AppTheme.Spacing.lg)
-        .background(AppTheme.Colors.sidebarBackground.opacity(0.54))
+        .background(.regularMaterial)
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(Color.primary.opacity(0.05))
+                .frame(width: 1)
+        }
     }
 
     private var brand: some View {
@@ -124,8 +129,6 @@ private struct SidebarButton: View {
                     .font(.callout.weight(.semibold))
                     .frame(width: isHero ? 30 : 26, height: isHero ? 30 : 26)
                     .foregroundStyle(isSelected ? accent : AppTheme.Colors.secondaryText)
-                    .background(accent.opacity(isSelected ? 0.13 : 0.07))
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.sm, style: .continuous))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(section.title)
                         .font((isHero ? Font.callout.weight(.semibold) : Font.callout.weight(.medium)))
@@ -152,10 +155,6 @@ private struct SidebarButton: View {
             .padding(.vertical, isHero ? 9 : 7)
             .background(itemBackground)
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
-                    .stroke(isSelected ? AppTheme.Colors.sidebarSelectionBorder : Color.clear, lineWidth: 1)
-            }
         }
         .buttonStyle(.plain)
         .keyboardShortcut(keyEquivalent, modifiers: .command)
@@ -190,10 +189,10 @@ private struct SidebarButton: View {
 
     private var itemBackground: Color {
         if isSelected {
-            return AppTheme.Colors.sidebarSelection
+            return accent.opacity(0.13)
         }
         if isHovering {
-            return AppTheme.Colors.surfaceTinted
+            return Color.primary.opacity(0.035)
         }
         return .clear
     }

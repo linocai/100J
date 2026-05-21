@@ -36,7 +36,7 @@ enum PillStyle: Equatable {
     var backgroundOpacity: Double {
         switch self {
         case .neutralSubtle, .warningSubtle:
-            return 0.08
+            return 0.06
         default:
             return 0.13
         }

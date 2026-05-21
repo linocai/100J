@@ -41,7 +41,8 @@ struct GlobalCalendarView: View {
             eyebrow: "系统",
             title: "固定日程",
             subtitle: "这里只承载固定日期、固定时间、纪念日和订阅到期。",
-            systemImage: "calendar"
+            systemImage: "calendar",
+            accent: AppTheme.Colors.calendarAccent
         ) {
             Button {
                 showingNewItem = true

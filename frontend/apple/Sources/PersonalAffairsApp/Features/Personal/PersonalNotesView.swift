@@ -56,7 +56,8 @@ struct PersonalNotesView: View {
             eyebrow: "个人",
             title: "灵感 / 备忘",
             subtitle: "备忘是想法，不是任务；只有确认要做时才转成待办。",
-            systemImage: "note.text"
+            systemImage: "note.text",
+            accent: AppTheme.Colors.personalAccent
         ) {
             Button {
                 showingNewNote = true
