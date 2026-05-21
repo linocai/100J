@@ -47,8 +47,19 @@ public struct WidgetSnapshot: Codable, Equatable {
 }
 
 public enum WidgetSnapshotStore {
+    /// 仅供 widget extension 在有 provisioning profile 时切回 group container 用。
+    /// v1.1.4 起 macOS host App **不使用** group container，避免 ad-hoc 触发 TCC 弹窗。
     public static let appGroupID = "group.top.linotsai.app.PersonalAffairs"
+
+    /// 切换 group container（默认 nil = per-app UserDefaults）。
+    /// Widget extension 启动时可调用 `useAppGroup(...)` 来开启共享。
+    public static var preferredAppGroupID: String?
+
     private static let key = "oneHundredJ.widgetSnapshot.v1"
+
+    public static func useAppGroup(_ groupID: String?) {
+        preferredAppGroupID = groupID
+    }
 
     public static func save(_ snapshot: WidgetSnapshot) {
         guard let data = try? JSONEncoder.personalAffairs.encode(snapshot) else { return }
@@ -65,6 +76,9 @@ public enum WidgetSnapshotStore {
     }
 
     private static var defaults: UserDefaults {
-        UserDefaults(suiteName: appGroupID) ?? .standard
+        if let groupID = preferredAppGroupID, let shared = UserDefaults(suiteName: groupID) {
+            return shared
+        }
+        return .standard
     }
 }

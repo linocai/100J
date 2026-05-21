@@ -1,11 +1,18 @@
+import PersonalAffairsCore
 import SwiftUI
 
 @main
 struct PersonalAffairsApp: App {
-    @StateObject private var model = AppModel()
-    // 注：v1.1.3 曾尝试通过 keychain-access-groups 让 Keychain 用 access group 作为
-    // 稳定身份键，但 ad-hoc 签名无 provisioning profile，taskgated 直接拒绝启动。
-    // 现在退一步只靠稳定的 designated requirement（codesign --identifier + -r）。
+    @StateObject private var model: AppModel
+
+    init() {
+        // iOS 仍走 App Group → widget extension 能拿到 Today snapshot。
+        // macOS 在 ad-hoc 签名下访问 group container 会触发 TCC 弹窗，所以走 per-app。
+        #if os(iOS)
+        WidgetSnapshotStore.useAppGroup("group.top.linotsai.app.PersonalAffairs")
+        #endif
+        _model = StateObject(wrappedValue: AppModel())
+    }
 
     var body: some Scene {
         WindowGroup {

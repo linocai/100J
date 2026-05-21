@@ -6,11 +6,9 @@
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
-	<key>com.apple.security.application-groups</key>
-	<array>
-		<string>group.top.linotsai.app.PersonalAffairs</string>
-	</array>
-	<!-- 注：keychain-access-groups 需要 provisioning profile，ad-hoc 用不了。 -->
-	<!-- v1.1.3 改靠稳定 designated requirement 让 Keychain ACL 跨重打包匹配。 -->
+	<!-- 注 1：keychain-access-groups 需要 provisioning profile，ad-hoc 用不了。 -->
+	<!-- 注 2：application-groups 在 ad-hoc + macOS Sequoia 上会触发 TCC 弹窗
+	     "100J 想访问其他设备的数据"。Widget 暂时退回 per-app UserDefaults。
+	     未来如果走 Developer ID + provisioning profile 可以恢复 group。 -->
 </dict>
 </plist>
