@@ -1,5 +1,7 @@
 # 100J v1 偏离审计与修改方案
 
+> 全部 P0/P1 已在 v1.1 收口；P6 已按个人账户发布口径完成 HZ 部署与本地安装包验收。
+
 > 审计人视角：资深全栈审计工程师
 > 审计基线：`plan.md`（v1 施工计划）+ `personal_affairs_backend_blueprint_v1.md` + `personal_affairs_frontend_blueprint_v1.md`
 > 审计对象：`backend/`、`frontend/apple/`、`.planning/`、`.learnings/`

@@ -6,13 +6,15 @@ Build Personal Affairs App v1 in phases: backend, macOS, iOS, local E2E testing,
 
 ## Current Position
 
-v1.1 Phase 0, P1, P2, P3, and P4 are complete on branch `codex/production-hardening`.
+v1.1 Phase 0 through P6 are complete on branch `codex/production-hardening`.
 
 As of 2026-05-21, `v1.1_final_plan.md` is the highest-authority v1.1 construction plan, with `新前端面板演示.html` as the visual and interaction reference. The missing old frontend blueprint files from Phase 0.1 are intentionally skipped because they are not present in the current repository.
 
 Phase 4 automated local verification was completed for the 2026-05-17 snapshot. P0/P1 production hardening, P2 / Phase 5 deployment, and the first P3 production-soak slice are now complete on branch `codex/production-hardening`.
 
 As of 2026-05-19 16:23 CST, single-owner cloud access-code login is implemented, verified locally, deployed to HZ, and verified in production at `https://100j.linotsai.top`.
+
+As of 2026-05-21 15:40 CST, P6 was completed under the personal Apple account release scope: no Apple upload, no public signing submission, no production email provider. HZ production now runs with `EMAIL_OTP_ENABLED=false` and `APPLE_ALLOWED_AUDIENCES=top.linotsai.app.PersonalAffairs`; production login acceptance uses the advanced/self-host access-code path.
 
 As of 2026-05-19, `AUDIT_v1.md` is the highest-authority production guidance file. The active implementation documents are now:
 
@@ -56,13 +58,13 @@ Stopped frontend documents were removed to end the source-of-truth split.
   - Swift repository tests cover task query mapping, project task routes, calendar merged fetching/sorting, and Agent execute/confirm request encoding.
   - Inspector/layout constants and key surface opacity values moved into `AppTheme` tokens; regular inspector width is now 360.
 - Release-candidate operations slice on `codex/production-hardening`:
-  - macOS packaging now supports Developer ID signing, hardened runtime, notarization, stapling, Gatekeeper assessment, and final re-zip when Apple credentials are supplied.
+  - macOS packaging now supports local ad-hoc release zips, with optional public-distribution signing hooks when credentials are supplied.
   - `scripts/prod-check.sh` now checks HTTPS health, TLS certificate dates, HZ services, latest backup presence, recent API/Nginx errors, and production smoke.
   - `scripts/verify-release.sh` is the one-command RC verification entrypoint for backend, Apple build/test, iOS simulator build, macOS package, and optional production check.
-  - `frontend/apple/RELEASE.md` documents macOS notarization, iOS TestFlight handoff, and crash/usage monitoring policy.
+  - `frontend/apple/RELEASE.md` documents the personal-account local install path, HZ deploy checks, and crash/usage monitoring policy.
 - iPhone direct-install slice on `codex/production-hardening`:
   - `frontend/apple/PersonalAffairsApp.xcodeproj` was added as an iPhone-ready Xcode project for real-device signing and Run.
-  - The Xcode project has `PersonalAffairsApp` and `PersonalAffairsCore` targets; the app target uses automatic signing and bundle id `com.linotsai.100j.dev`.
+  - The Xcode project has `PersonalAffairsApp` and `PersonalAffairsCore` targets; the app target uses automatic signing and production bundle id `top.linotsai.app.PersonalAffairs`.
   - CI now validates the project with a generic iOS build and `CODE_SIGNING_ALLOWED=NO`.
 - Single-owner cloud login local slice:
   - Backend now has `/api/v1/auth/owner-login`, guarded by `OWNER_CLOUD_ACCESS_CODE`, which returns JWT tokens for the single local owner account and default spaces.
@@ -95,6 +97,12 @@ Stopped frontend documents were removed to end the source-of-truth split.
   - `AppModel` now enqueues offline task/note/calendar/project writes with optimistic local updates, replays via `NWPathMonitor`, drops permanent replay failures, and hardens non-auth 401 refresh retry/token clearing.
   - Settings gained feedback/help links and diagnostics export/share.
   - Production identifiers are now `top.linotsai.app.PersonalAffairs` and `group.top.linotsai.app.PersonalAffairs`; iOS/macOS entitlements and package scripts were updated. Legacy keychain service remains only for local session migration.
+- v1.1 P6 personal-account release slice on `codex/production-hardening`:
+  - Backend gained `EMAIL_OTP_ENABLED`; Email OTP request/verify return 404 when disabled and do not create OTP rows.
+  - `scripts/deploy-hz.sh` now enforces `EMAIL_OTP_ENABLED=false` and `APPLE_ALLOWED_AUDIENCES=top.linotsai.app.PersonalAffairs` in the HZ env file.
+  - Apple `AuthView` hides the Email OTP fallback and keeps Apple-first plus advanced/self-host access-code login.
+  - `frontend/apple/RELEASE.md`, backend/deployment docs, `v1.1_final_plan.md`, and `RELEASE_NOTES_v1.1.md` now describe the personal-account release path: local macOS zip, iPhone Xcode Run with personal team signing, and HZ production smoke.
+  - HZ deployment passed on 2026-05-21; production health, production check, Email OTP disabled response, owner access-code login, and seed-demo idempotency were verified.
 
 ## Verification
 
@@ -111,8 +119,8 @@ Latest Apple result: all passed on 2026-05-19 on `codex/production-hardening`.
 Notes:
 
 - `xcodebuild` printed `IDERunDestination: Supported platforms for the buildables in the current scheme is empty.`, but exited 0 and completed the iOS Simulator build.
-- macOS package produced: `frontend/apple/dist/100J.app` and latest zip `frontend/apple/dist/100J-macos-1.0-202605191413.zip`.
-- Public macOS distribution still requires the user's Apple Developer ID certificate/notary credentials; the repo now has the scripted release path, but no private signing material is stored.
+- Latest macOS package produced: `frontend/apple/dist/100J.app` and `frontend/apple/dist/100J-macos-1.1.0-202605211538.zip`.
+- The v1.1.0 release path is personal-account local install: no Apple upload and no public-distribution signing submission in P6.
 
 Latest backend checks on 2026-05-19:
 
@@ -177,6 +185,25 @@ rg -n "Repository|repository|AuthRepository|TaskRepository|CalendarRepository|No
 ```
 
 Result: backend ruff passed; backend pytest passed with 40 tests; Swift build passed; Swift tests passed with 37 tests; generic iOS Xcode build passed with signing disabled and production bundle id; macOS ad-hoc package produced `frontend/apple/dist/100J.app` and `frontend/apple/dist/100J-macos-1.1-p5-202605211437.zip`; iOS Feature repository grep returned no matches.
+
+Latest checks for v1.1 P6 on 2026-05-21:
+
+```bash
+cd backend
+.venv/bin/ruff check .
+.venv/bin/python -m pytest
+
+cd frontend/apple
+swift build --scratch-path /tmp/personal-affairs-apple-p6-build
+swift test --scratch-path /tmp/personal-affairs-apple-p6-test
+xcodebuild -project PersonalAffairsApp.xcodeproj -scheme PersonalAffairsApp -destination 'generic/platform=iOS' -derivedDataPath /tmp/personal-affairs-xcode-p6-derived CODE_SIGNING_ALLOWED=NO build
+cd ../..
+SCRATCH_PATH=/tmp/personal-affairs-apple-p6-package-build VERSION=1.1.0 frontend/apple/scripts/package-macos-app.sh
+scripts/deploy-hz.sh
+scripts/prod-check.sh
+```
+
+Result: backend ruff passed; backend pytest passed with 41 tests; Swift build passed; Swift tests passed with 37 tests; generic iOS Xcode build passed with signing disabled and production bundle id; macOS ad-hoc package produced `frontend/apple/dist/100J-macos-1.1.0-202605211538.zip`; HZ deploy passed; production check passed for `https://100j.linotsai.top`; production Email OTP request returned 404; owner access-code login returned 200 without printing the secret; `POST /api/v1/me/seed-demo` created 5 tasks and 2 calendar items on first run and 0/0 on repeat.
 
 HZ database backup/restore rehearsal on 2026-05-19:
 
@@ -246,4 +273,4 @@ Result: project listed targets and schemes successfully; iOS Simulator build pas
 
 ## Next Action
 
-Next useful action is Phase 6 from `v1.1_final_plan.md`: HZ deployment, production smoke, TestFlight handoff/upload, and real notarization submission when Apple credentials are available.
+P6 is complete. Next useful action is manual personal-device acceptance: open the macOS ad-hoc zip locally and run the iPhone app from Xcode with personal team signing, then track any v1.1.1 fixes from production observations.

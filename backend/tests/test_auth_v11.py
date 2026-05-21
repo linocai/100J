@@ -2,7 +2,8 @@ from sqlalchemy.exc import IntegrityError
 
 import app.api.v1.auth as auth_module
 import app.services.apple_auth_service as apple_auth_service
-from app.models import DeviceToken, Task
+from app.core.config import get_settings
+from app.models import DeviceToken, EmailOTPCode, Task
 from tests.conftest import TestingSessionLocal, register_and_auth
 
 
@@ -131,6 +132,32 @@ def test_email_otp_request_is_rate_limited(client, monkeypatch):
 
     response = client.post("/api/v1/auth/email-otp/request", json={"email": "otp@example.com"})
     assert response.status_code == 429
+
+
+def test_email_otp_disabled_returns_404_without_creating_code(client, monkeypatch):
+    monkeypatch.setenv("EMAIL_OTP_ENABLED", "false")
+    get_settings.cache_clear()
+    monkeypatch.setattr(
+        auth_module,
+        "get_email_sender",
+        lambda: lambda email, code: (_ for _ in ()).throw(AssertionError("sender should not be called")),
+    )
+    try:
+        requested = client.post("/api/v1/auth/email-otp/request", json={"email": "otp@example.com"})
+        verified = client.post(
+            "/api/v1/auth/email-otp/verify",
+            json={"email": "otp@example.com", "code": "123456"},
+        )
+        with TestingSessionLocal() as db:
+            otp_count = db.query(EmailOTPCode).count()
+    finally:
+        get_settings.cache_clear()
+
+    assert requested.status_code == 404
+    assert requested.json()["error"]["code"] == "not_found"
+    assert verified.status_code == 404
+    assert verified.json()["error"]["code"] == "not_found"
+    assert otp_count == 0
 
 
 def test_register_device_upserts_user_token(client):

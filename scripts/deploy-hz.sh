@@ -53,6 +53,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_DAYS=30
 LLM_KEY_ENCRYPTION_SECRET=${llm_secret}
 OWNER_CLOUD_ACCESS_CODE=${owner_access_code}
+EMAIL_OTP_ENABLED=false
+APPLE_ALLOWED_AUDIENCES=top.linotsai.app.PersonalAffairs
 PENDING_CONFIRMATION_EXPIRE_MINUTES=15
 CORS_ORIGINS=https://${DOMAIN}
 ENV_FILE
@@ -63,6 +65,28 @@ if ! grep -q '^OWNER_CLOUD_ACCESS_CODE=' "${REMOTE_ENV_FILE}"; then
   owner_access_code="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)"
   printf '\nOWNER_CLOUD_ACCESS_CODE=%s\n' "${owner_access_code}" >> "${REMOTE_ENV_FILE}"
 fi
+
+ensure_env_value() {
+  key="$1"
+  value="$2"
+  if grep -q "^${key}=" "${REMOTE_ENV_FILE}"; then
+    python3 - "${REMOTE_ENV_FILE}" "${key}" "${value}" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+key = sys.argv[2]
+value = sys.argv[3]
+lines = path.read_text().splitlines()
+path.write_text("\n".join(f"{key}={value}" if line.startswith(f"{key}=") else line for line in lines) + "\n")
+PY
+  else
+    printf '%s=%s\n' "${key}" "${value}" >> "${REMOTE_ENV_FILE}"
+  fi
+}
+
+ensure_env_value "EMAIL_OTP_ENABLED" "false"
+ensure_env_value "APPLE_ALLOWED_AUDIENCES" "top.linotsai.app.PersonalAffairs"
 
 db_password="$(grep '^POSTGRES_PASSWORD=' "${REMOTE_ENV_FILE}" | cut -d= -f2-)"
 if grep -q '@db:5432' "${REMOTE_ENV_FILE}"; then

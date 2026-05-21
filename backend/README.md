@@ -17,9 +17,10 @@ Edit `.env` if your local PostgreSQL URL differs from the default.
 
 The default auth mode is `AUTH_MODE=local_owner`. In this mode the API lazily creates one
 local owner user plus Personal / Company spaces, and local tools can call APIs without JWT login.
-For v1.1 Apple clients, use `AUTH_MODE=jwt` with Sign in with Apple or Email OTP. The
-`OWNER_CLOUD_ACCESS_CODE` path is retained only as a self-host/debug rollback channel at
-`/api/v1/auth/owner-login`.
+For v1.1 Apple clients, use `AUTH_MODE=jwt` with Sign in with Apple. Email OTP remains
+available for local/test environments when `EMAIL_OTP_ENABLED=true`, but HZ production keeps it
+disabled. The `OWNER_CLOUD_ACCESS_CODE` path is retained as the personal-account/self-host login
+channel at `/api/v1/auth/owner-login`.
 
 ## Database
 
@@ -86,6 +87,7 @@ Production secrets must be random and must not use the development defaults:
 - `POSTGRES_PASSWORD`
 - `LLM_KEY_ENCRYPTION_SECRET`
 - `OWNER_CLOUD_ACCESS_CODE`
+- `EMAIL_OTP_ENABLED=false`
 - `APPLE_ALLOWED_AUDIENCES`
 
 `LLM_KEY_ENCRYPTION_SECRET` is hashed into the Fernet key material at runtime; use a high-entropy

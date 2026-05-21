@@ -3,13 +3,9 @@ import SwiftUI
 
 struct AuthView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var emailField = ""
-    @State private var otpField = ""
-    @State private var otpRequested = false
     @State private var accessCode = ""
     @State private var baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "https://100j.linotsai.top/api/v1"
     @State private var showingAdvanced = false
-    @FocusState private var emailFocused: Bool
 
     var body: some View {
         VStack(spacing: 24) {
@@ -26,22 +22,14 @@ struct AuthView: View {
                     .frame(maxWidth: 380)
             }
 
-            VStack(spacing: 14) {
-                SignInWithAppleButton(.signIn) { request in
-                    request.requestedScopes = [.email, .fullName]
-                } onCompletion: { result in
-                    Task { await model.handleAppleSignIn(result) }
-                }
-                .signInWithAppleButtonStyle(.black)
-                .frame(width: 320, height: 46)
-                .disabled(model.isLoading)
-
-                Text("或")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-
-                emailOTPBlock
+            SignInWithAppleButton(.signIn) { request in
+                request.requestedScopes = [.email, .fullName]
+            } onCompletion: { result in
+                Task { await model.handleAppleSignIn(result) }
             }
+            .signInWithAppleButtonStyle(.black)
+            .frame(width: 320, height: 46)
+            .disabled(model.isLoading)
             .controlSize(.large)
 
             Text("继续即表示你接受服务条款与隐私政策。")
@@ -66,90 +54,9 @@ struct AuthView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.regularMaterial)
         .onSubmit {
-            if otpRequested {
-                verifyOTP()
-            } else if emailField.contains("@") {
-                requestOTP()
+            if showingAdvanced {
+                submitAccessCode()
             }
-        }
-    }
-
-    @ViewBuilder
-    private var emailOTPBlock: some View {
-        if otpRequested {
-            VStack(spacing: 10) {
-                TextField("6 位验证码", text: $otpField)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 320)
-                    #if os(iOS)
-                    .keyboardType(.numberPad)
-                    #endif
-
-                Button {
-                    verifyOTP()
-                } label: {
-                    HStack {
-                        if model.isLoading {
-                            ProgressView()
-                                .controlSize(.small)
-                        }
-                        Text("登录")
-                    }
-                    .frame(width: 320)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(otpField.trimmingCharacters(in: .whitespacesAndNewlines).count != 6 || model.isLoading)
-
-                Button("换个邮箱") {
-                    otpRequested = false
-                    otpField = ""
-                    emailFocused = true
-                }
-                .buttonStyle(.plain)
-                .font(.caption)
-            }
-        } else {
-            VStack(spacing: 10) {
-                TextField("邮箱", text: $emailField)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 320)
-                    .focused($emailFocused)
-                    #if os(iOS)
-                    .keyboardType(.emailAddress)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    #endif
-
-                Button {
-                    requestOTP()
-                } label: {
-                    HStack {
-                        if model.isLoading {
-                            ProgressView()
-                                .controlSize(.small)
-                        }
-                        Text("发送一次性验证码")
-                    }
-                    .frame(width: 320)
-                }
-                .buttonStyle(.bordered)
-                .disabled(!emailField.contains("@") || model.isLoading)
-            }
-        }
-    }
-
-    private func requestOTP() {
-        Task {
-            await model.requestEmailOTP(email: emailField)
-            if model.errorMessage == nil {
-                otpRequested = true
-            }
-        }
-    }
-
-    private func verifyOTP() {
-        Task {
-            await model.verifyEmailOTP(email: emailField, code: otpField)
         }
     }
 

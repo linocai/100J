@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     local_owner_display_name: str = "100J Owner"
     local_owner_timezone: str = "Asia/Shanghai"
     owner_cloud_access_code: str = ""
+    email_otp_enabled: bool = True
     apple_allowed_audiences: Annotated[List[str], NoDecode] = Field(
         default_factory=lambda: ["top.linotsai.app.PersonalAffairs"]
     )

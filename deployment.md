@@ -42,12 +42,14 @@ ACCESS_TOKEN_EXPIRE_MINUTES
 REFRESH_TOKEN_EXPIRE_DAYS
 LLM_KEY_ENCRYPTION_SECRET
 OWNER_CLOUD_ACCESS_CODE
+EMAIL_OTP_ENABLED=false
+APPLE_ALLOWED_AUDIENCES=top.linotsai.app.PersonalAffairs
 PENDING_CONFIRMATION_EXPIRE_MINUTES
 CORS_ORIGINS=https://100j.linotsai.top
 ```
 
 Use random production secrets for `JWT_SECRET_KEY`, `POSTGRES_PASSWORD`, `LLM_KEY_ENCRYPTION_SECRET`, and `OWNER_CLOUD_ACCESS_CODE`.
-The Apple apps use `OWNER_CLOUD_ACCESS_CODE` as the single-owner cloud access code, then store the returned JWT pair in Apple Keychain.
+The Apple apps use `OWNER_CLOUD_ACCESS_CODE` as the single-owner cloud access code, then store the returned JWT pair in Apple Keychain. P6 personal-account production keeps Email OTP disabled; `scripts/deploy-hz.sh` enforces `EMAIL_OTP_ENABLED=false`.
 
 ## Local Release Checks
 

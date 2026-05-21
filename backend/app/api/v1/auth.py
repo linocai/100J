@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.errors import AppError
 from app.core.rate_limit import limiter
@@ -67,12 +68,16 @@ def apple_sign_in(request: Request, payload: AppleSignInRequest, db: Session = D
 @router.post("/email-otp/request", status_code=204)
 @limiter.limit("5/minute")
 def request_email_otp(request: Request, payload: EmailRequest, db: Session = Depends(get_db)):
+    if not get_settings().email_otp_enabled:
+        raise AppError(status_code=404, code="not_found", message="Email OTP is not enabled.")
     request_code(db, payload.email, send=get_email_sender())
 
 
 @router.post("/email-otp/verify", response_model=TokenResponse)
 @limiter.limit("20/minute")
 def verify_email_otp(request: Request, payload: EmailOTPVerifyRequest, db: Session = Depends(get_db)):
+    if not get_settings().email_otp_enabled:
+        raise AppError(status_code=404, code="not_found", message="Email OTP is not enabled.")
     user = verify_code(db, payload.email, payload.code)
     return issue_tokens(user)
 

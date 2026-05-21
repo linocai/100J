@@ -89,16 +89,8 @@ The script builds the macOS release executable with a scratch path under `/tmp`,
 `frontend/apple/dist/100J.app`, ad-hoc signs it for local distribution, verifies the signature,
 and writes a timestamped zip next to the app bundle.
 
-For public macOS distribution, use Developer ID signing plus notarization:
-
-```bash
-CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
-NOTARIZE=1 \
-NOTARY_PROFILE=100j-notary \
-frontend/apple/scripts/package-macos-app.sh
-```
-
-See `frontend/apple/RELEASE.md` for notarization, TestFlight, and crash-reporting handoff notes.
+For the v1.1 personal-account release, this ad-hoc zip is the macOS install artifact.
+See `frontend/apple/RELEASE.md` for iPhone local install, HZ deployment, and monitoring notes.
 
 ## Run Backend First
 
