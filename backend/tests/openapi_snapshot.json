@@ -255,6 +255,49 @@
         "title": "AgentToolsResponse",
         "type": "object"
       },
+      "AppleSignInRequest": {
+        "properties": {
+          "bundle_id": {
+            "minLength": 1,
+            "title": "Bundle Id",
+            "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "id_token": {
+            "minLength": 1,
+            "title": "Id Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_token",
+          "bundle_id"
+        ],
+        "title": "AppleSignInRequest",
+        "type": "object"
+      },
       "CalendarItemCreate": {
         "properties": {
           "all_day": {
@@ -272,7 +315,7 @@
           "description": {
             "anyOf": [
               {
-                "maxLength": 10000,
+                "maxLength": 8000,
                 "type": "string"
               },
               {
@@ -392,7 +435,7 @@
             "title": "Timezone"
           },
           "title": {
-            "maxLength": 255,
+            "maxLength": 200,
             "minLength": 1,
             "title": "Title",
             "type": "string"
@@ -630,7 +673,7 @@
           "description": {
             "anyOf": [
               {
-                "maxLength": 10000,
+                "maxLength": 8000,
                 "type": "string"
               },
               {
@@ -748,7 +791,7 @@
           "title": {
             "anyOf": [
               {
-                "maxLength": 255,
+                "maxLength": 200,
                 "minLength": 1,
                 "type": "string"
               },
@@ -794,7 +837,7 @@
             "type": "string"
           },
           "title": {
-            "maxLength": 255,
+            "maxLength": 200,
             "minLength": 1,
             "title": "Title",
             "type": "string"
@@ -839,6 +882,41 @@
           "deleted_at"
         ],
         "title": "DeleteResponse",
+        "type": "object"
+      },
+      "EmailOTPVerifyRequest": {
+        "properties": {
+          "code": {
+            "maxLength": 6,
+            "minLength": 6,
+            "title": "Code",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "code"
+        ],
+        "title": "EmailOTPVerifyRequest",
+        "type": "object"
+      },
+      "EmailRequest": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "EmailRequest",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -923,7 +1001,7 @@
       "NoteCreate": {
         "properties": {
           "body": {
-            "maxLength": 20000,
+            "maxLength": 16000,
             "minLength": 1,
             "title": "Body",
             "type": "string"
@@ -935,7 +1013,7 @@
           "title": {
             "anyOf": [
               {
-                "maxLength": 255,
+                "maxLength": 200,
                 "type": "string"
               },
               {
@@ -1078,7 +1156,7 @@
           "body": {
             "anyOf": [
               {
-                "maxLength": 20000,
+                "maxLength": 16000,
                 "type": "string"
               },
               {
@@ -1101,7 +1179,7 @@
           "title": {
             "anyOf": [
               {
-                "maxLength": 255,
+                "maxLength": 200,
                 "type": "string"
               },
               {
@@ -1145,7 +1223,7 @@
           "description": {
             "anyOf": [
               {
-                "maxLength": 10000,
+                "maxLength": 8000,
                 "type": "string"
               },
               {
@@ -1155,7 +1233,7 @@
             "title": "Description"
           },
           "name": {
-            "maxLength": 255,
+            "maxLength": 120,
             "minLength": 1,
             "title": "Name",
             "type": "string"
@@ -1337,7 +1415,7 @@
           "description": {
             "anyOf": [
               {
-                "maxLength": 10000,
+                "maxLength": 8000,
                 "type": "string"
               },
               {
@@ -1394,7 +1472,7 @@
             "title": "Remind At"
           },
           "title": {
-            "maxLength": 255,
+            "maxLength": 200,
             "minLength": 1,
             "title": "Title",
             "type": "string"
@@ -1411,7 +1489,7 @@
           "description": {
             "anyOf": [
               {
-                "maxLength": 10000,
+                "maxLength": 8000,
                 "type": "string"
               },
               {
@@ -1423,7 +1501,7 @@
           "name": {
             "anyOf": [
               {
-                "maxLength": 255,
+                "maxLength": 120,
                 "minLength": 1,
                 "type": "string"
               },
@@ -1483,6 +1561,40 @@
           "refresh_token"
         ],
         "title": "RefreshRequest",
+        "type": "object"
+      },
+      "RegisterDeviceRequest": {
+        "properties": {
+          "app_version": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Version"
+          },
+          "platform": {
+            "maxLength": 16,
+            "minLength": 2,
+            "title": "Platform",
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "platform",
+          "token"
+        ],
+        "title": "RegisterDeviceRequest",
         "type": "object"
       },
       "RegisterRequest": {
@@ -1576,7 +1688,7 @@
           "description": {
             "anyOf": [
               {
-                "maxLength": 10000,
+                "maxLength": 8000,
                 "type": "string"
               },
               {
@@ -1648,7 +1760,7 @@
             "type": "string"
           },
           "title": {
-            "maxLength": 255,
+            "maxLength": 200,
             "minLength": 1,
             "title": "Title",
             "type": "string"
@@ -1834,7 +1946,7 @@
           "description": {
             "anyOf": [
               {
-                "maxLength": 10000,
+                "maxLength": 8000,
                 "type": "string"
               },
               {
@@ -1915,7 +2027,7 @@
           "title": {
             "anyOf": [
               {
-                "maxLength": 255,
+                "maxLength": 200,
                 "minLength": 1,
                 "type": "string"
               },
@@ -1954,6 +2066,17 @@
       },
       "UserRead": {
         "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
           "display_name": {
             "anyOf": [
               {
@@ -1979,6 +2102,11 @@
           },
           "id": {
             "title": "Id",
+            "type": "string"
+          },
+          "locale": {
+            "default": "zh-Hans",
+            "title": "Locale",
             "type": "string"
           },
           "timezone": {
@@ -2313,6 +2441,122 @@
         "summary": "Get Tools",
         "tags": [
           "agent"
+        ]
+      }
+    },
+    "/api/v1/auth/apple": {
+      "post": {
+        "operationId": "apple_sign_in_api_v1_auth_apple_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppleSignInRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apple Sign In",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/email-otp/request": {
+      "post": {
+        "operationId": "request_email_otp_api_v1_auth_email_otp_request_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Email Otp",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/email-otp/verify": {
+      "post": {
+        "operationId": "verify_email_otp_api_v1_auth_email_otp_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailOTPVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify Email Otp",
+        "tags": [
+          "auth"
         ]
       }
     },
@@ -2869,6 +3113,45 @@
         "summary": "Update Calendar Item",
         "tags": [
           "calendar-items"
+        ]
+      }
+    },
+    "/api/v1/devices": {
+      "post": {
+        "operationId": "register_current_device_api_v1_devices_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDeviceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Register Current Device",
+        "tags": [
+          "devices"
         ]
       }
     },

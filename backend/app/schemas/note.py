@@ -4,12 +4,12 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from app.schemas.common import ORMModel
-from app.schemas.limits import NOTE_BODY_MAX_LENGTH, SHORT_TEXT_MAX_LENGTH
+from app.schemas.limits import NOTE_BODY_MAX_LENGTH, NOTE_TITLE_MAX_LENGTH, TASK_TITLE_MAX_LENGTH
 from app.schemas.task import TaskRead
 
 
 class NoteBase(BaseModel):
-    title: Optional[str] = Field(default=None, max_length=SHORT_TEXT_MAX_LENGTH)
+    title: Optional[str] = Field(default=None, max_length=NOTE_TITLE_MAX_LENGTH)
     body: Optional[str] = Field(default=None, max_length=NOTE_BODY_MAX_LENGTH)
     type: Optional[str] = "idea"
 
@@ -44,7 +44,7 @@ class NoteListResponse(BaseModel):
 
 
 class ConvertNoteToTaskRequest(BaseModel):
-    title: str = Field(min_length=1, max_length=SHORT_TEXT_MAX_LENGTH)
+    title: str = Field(min_length=1, max_length=TASK_TITLE_MAX_LENGTH)
     priority: str = "medium"
     due_date: Optional[date] = None
 

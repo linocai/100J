@@ -4,11 +4,11 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from app.schemas.common import ORMModel
-from app.schemas.limits import LONG_TEXT_MAX_LENGTH, SHORT_TEXT_MAX_LENGTH
+from app.schemas.limits import CALENDAR_TITLE_MAX_LENGTH, LONG_TEXT_MAX_LENGTH
 
 
 class CalendarItemBase(BaseModel):
-    title: Optional[str] = Field(default=None, min_length=1, max_length=SHORT_TEXT_MAX_LENGTH)
+    title: Optional[str] = Field(default=None, min_length=1, max_length=CALENDAR_TITLE_MAX_LENGTH)
     description: Optional[str] = Field(default=None, max_length=LONG_TEXT_MAX_LENGTH)
     type: Optional[str] = "appointment"
     all_day: Optional[bool] = False
@@ -25,7 +25,7 @@ class CalendarItemBase(BaseModel):
 
 class CalendarItemCreate(CalendarItemBase):
     space_id: str
-    title: str = Field(min_length=1, max_length=SHORT_TEXT_MAX_LENGTH)
+    title: str = Field(min_length=1, max_length=CALENDAR_TITLE_MAX_LENGTH)
 
 
 class CalendarItemUpdate(CalendarItemBase):

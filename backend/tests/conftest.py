@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base, build_engine, get_db
+from app.core.rate_limit import limiter
 from app.main import create_app
 
 
@@ -14,6 +15,9 @@ TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=Fals
 def reset_database():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    storage = getattr(limiter, "_storage", None)
+    if storage is not None and hasattr(storage, "reset"):
+        storage.reset()
     yield
 
 

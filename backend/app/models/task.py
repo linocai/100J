@@ -13,6 +13,8 @@ class Task(IdMixin, TimestampMixin, Base):
         CheckConstraint("status in ('active', 'done', 'archived')", name="ck_tasks_status"),
         CheckConstraint("priority in ('low', 'medium', 'high', 'urgent')", name="ck_tasks_priority"),
         CheckConstraint("source in ('manual', 'agent')", name="ck_tasks_source"),
+        CheckConstraint("length(title) <= 200", name="ck_tasks_title_len"),
+        CheckConstraint("description is null or length(description) <= 8000", name="ck_tasks_desc_len"),
         Index("idx_tasks_user_space", "user_id", "space_id"),
         Index("idx_tasks_project_id", "project_id"),
         Index("idx_tasks_status", "status"),
@@ -23,7 +25,7 @@ class Task(IdMixin, TimestampMixin, Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
     space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id"), nullable=False)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=True)
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
     priority: Mapped[str] = mapped_column(String(32), default="medium", nullable=False)
@@ -36,4 +38,3 @@ class Task(IdMixin, TimestampMixin, Base):
 
     space = relationship("Space", back_populates="tasks")
     project = relationship("Project", back_populates="tasks")
-

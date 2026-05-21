@@ -17,8 +17,9 @@ Edit `.env` if your local PostgreSQL URL differs from the default.
 
 The default auth mode is `AUTH_MODE=local_owner`. In this mode the API lazily creates one
 local owner user plus Personal / Company spaces, and local tools can call APIs without JWT login.
-For the cloud Apple apps, use `AUTH_MODE=jwt` with `OWNER_CLOUD_ACCESS_CODE`; the app exchanges
-that access code at `/api/v1/auth/owner-login` and stores the returned tokens in Apple Keychain.
+For v1.1 Apple clients, use `AUTH_MODE=jwt` with Sign in with Apple or Email OTP. The
+`OWNER_CLOUD_ACCESS_CODE` path is retained only as a self-host/debug rollback channel at
+`/api/v1/auth/owner-login`.
 
 ## Database
 
@@ -85,6 +86,7 @@ Production secrets must be random and must not use the development defaults:
 - `POSTGRES_PASSWORD`
 - `LLM_KEY_ENCRYPTION_SECRET`
 - `OWNER_CLOUD_ACCESS_CODE`
+- `APPLE_ALLOWED_AUDIENCES`
 
 `LLM_KEY_ENCRYPTION_SECRET` is hashed into the Fernet key material at runtime; use a high-entropy
 random value in production, not the example placeholder.
@@ -103,6 +105,7 @@ The smoke test registers a disposable test user and verifies auth, spaces, tasks
 ## v1 API Areas
 
 - Auth: `/api/v1/auth/*`
+- Devices: `/api/v1/devices`
 - Spaces: `/api/v1/spaces`
 - Tasks: `/api/v1/tasks`
 - Projects: `/api/v1/projects`

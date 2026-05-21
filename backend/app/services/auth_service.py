@@ -41,7 +41,7 @@ def register_user(db: Session, email: str, password: str, display_name: str, tim
 
 def authenticate_user(db: Session, email: str, password: str) -> User:
     user = db.scalar(select(User).where(User.email == email.lower(), User.deleted_at.is_(None)))
-    if not user or not verify_password(password, user.password_hash):
+    if not user or not user.password_hash or not verify_password(password, user.password_hash):
         raise AppError(status_code=401, code="unauthorized", message="Invalid email or password.")
     return user
 

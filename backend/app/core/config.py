@@ -21,12 +21,15 @@ class Settings(BaseSettings):
     local_owner_display_name: str = "100J Owner"
     local_owner_timezone: str = "Asia/Shanghai"
     owner_cloud_access_code: str = ""
+    apple_allowed_audiences: Annotated[List[str], NoDecode] = Field(
+        default_factory=lambda: ["top.linotsai.app.PersonalAffairs"]
+    )
     pending_confirmation_expire_minutes: int = 15
     cors_origins: Annotated[List[str], NoDecode] = Field(default_factory=list)
 
-    @field_validator("cors_origins", mode="before")
+    @field_validator("cors_origins", "apple_allowed_audiences", mode="before")
     @classmethod
-    def parse_cors_origins(cls, value):
+    def parse_string_list(cls, value):
         if isinstance(value, str):
             stripped = value.strip()
             if not stripped:

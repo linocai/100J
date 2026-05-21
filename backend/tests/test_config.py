@@ -17,3 +17,9 @@ def test_cors_origins_accepts_empty_string():
     settings = Settings(cors_origins="")
 
     assert settings.cors_origins == []
+
+
+def test_apple_allowed_audiences_accepts_comma_separated_string():
+    settings = Settings(apple_allowed_audiences="com.example.one,com.example.two")
+
+    assert settings.apple_allowed_audiences == ["com.example.one", "com.example.two"]
