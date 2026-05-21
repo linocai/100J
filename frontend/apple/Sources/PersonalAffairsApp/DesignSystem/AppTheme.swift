@@ -83,13 +83,14 @@ enum AppTheme {
         static let textPrimary = primaryText
         static let textSecondary = secondaryText
         static let textTertiary = tertiaryText
-        static let personalAccent = Color(red: 0.17, green: 0.62, blue: 0.43)
-        static let companyAccent = Color(red: 0.26, green: 0.46, blue: 0.96)
-        static let calendarAccent = Color(red: 0.88, green: 0.55, blue: 0.18)
-        static let agentAccent = Color(red: 0.51, green: 0.34, blue: 0.85)
-        static let warningAccent = Color(red: 0.84, green: 0.50, blue: 0.16)
-        static let dangerAccent = Color(red: 0.81, green: 0.31, blue: 0.31)
-        static let successAccent = Color(red: 0.20, green: 0.62, blue: 0.39)
+        // Apple System Colors — 让 Increase Contrast / Dark Mode / Accessibility 全部由系统接管。
+        static let personalAccent = Color.mint
+        static let companyAccent = Color.indigo
+        static let calendarAccent = Color.orange
+        static let agentAccent = Color.purple
+        static let warningAccent = Color.orange
+        static let dangerAccent = Color.red
+        static let successAccent = Color.green
     }
 }
 

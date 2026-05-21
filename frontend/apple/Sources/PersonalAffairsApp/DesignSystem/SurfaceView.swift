@@ -1,5 +1,9 @@
 import SwiftUI
 
+/// v1.1 起 SurfaceView 退化为 `GroupBox` 的薄包装：
+///   - 几何与阴影完全交给系统（macOS/iOS GroupBox + .regularMaterial）
+///   - 仅保留 `style.tint` 语义（warning / tinted / selected 仍可染色）
+/// 旧 API（`style` / `cornerRadius` / `padding`）保持不变，避免破坏调用方。
 enum SurfaceStyle {
     case base
     case elevated
@@ -11,72 +15,15 @@ enum SurfaceStyle {
     case card
     case subtle
 
-    var defaultPadding: CGFloat {
+    /// 状态色：有色 → GroupBox 外叠一层 10% 着色作为提示；无 → 完全系统外观。
+    var tint: Color? {
         switch self {
-        case .card, .subtle, .selected, .tinted, .warning:
-            return AppTheme.Spacing.md
-        case .sidebar:
-            return AppTheme.Spacing.md
-        default:
-            return AppTheme.Spacing.lg
-        }
-    }
-
-    var defaultRadius: CGFloat {
-        switch self {
-        case .card, .subtle, .selected, .tinted, .warning:
-            return AppTheme.Radius.md
-        case .sidebar:
-            return AppTheme.Radius.lg
-        default:
-            return AppTheme.Radius.lg
-        }
-    }
-
-    var borderColor: Color {
-        switch self {
-        case .selected(let style), .tinted(let style):
-            return style.color.opacity(0.28)
         case .warning:
-            return AppTheme.Colors.warningAccent.opacity(0.26)
-        case .inspector:
-            return AppTheme.Colors.agentAccent.opacity(0.16)
-        default:
-            return AppTheme.Colors.hairline
-        }
-    }
-
-    var shadowOpacity: Double {
-        switch self {
-        case .elevated:
-            return 0.06
-        case .inspector:
-            return 0.05
-        case .base:
-            return 0.03
-        case .sidebar, .subtle, .selected(_), .tinted(_), .warning, .card:
-            return 0
-        }
-    }
-
-    func fill(_ scheme: ColorScheme) -> Color {
-        switch self {
-        case .elevated:
-            return AppTheme.Colors.surfaceElevated
-        case .selected(let style), .tinted(let style):
-            return style.color.opacity(scheme == .dark ? 0.18 : 0.11)
-        case .warning:
-            return AppTheme.Colors.warningAccent.opacity(scheme == .dark ? 0.16 : 0.10)
-        case .sidebar:
-            return AppTheme.Colors.sidebarBackground.opacity(scheme == .dark ? 0.74 : 0.62)
-        case .inspector:
-            return AppTheme.Colors.surfaceElevated.opacity(scheme == .dark ? 0.72 : 0.68)
-        case .card:
-            return AppTheme.Colors.surfaceBase
-        case .subtle:
-            return AppTheme.Colors.surfaceTinted
-        case .base:
-            return AppTheme.Colors.surfaceBase
+            return AppTheme.Colors.warningAccent
+        case .selected(let pill), .tinted(let pill):
+            return pill.color
+        case .base, .elevated, .sidebar, .inspector, .card, .subtle:
+            return nil
         }
     }
 }
@@ -86,8 +33,6 @@ struct SurfaceView<Content: View>: View {
     let cornerRadius: CGFloat?
     let padding: CGFloat?
     let content: Content
-
-    @Environment(\.colorScheme) private var colorScheme
 
     init(
         style: SurfaceStyle = .base,
@@ -102,29 +47,12 @@ struct SurfaceView<Content: View>: View {
     }
 
     var body: some View {
-        content
-            .padding(resolvedPadding)
-            .background(.regularMaterial, in: shape)
-            .background {
-                shape.fill(style.fill(colorScheme))
-            }
-            .clipShape(shape)
-            .overlay {
-                shape.stroke(style.borderColor, lineWidth: 1)
-            }
-            .shadow(color: Color.black.opacity(style.shadowOpacity), radius: 12, x: 0, y: 4)
-    }
-
-    private var resolvedPadding: CGFloat {
-        padding ?? style.defaultPadding
-    }
-
-    private var resolvedRadius: CGFloat {
-        cornerRadius ?? style.defaultRadius
-    }
-
-    private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: resolvedRadius, style: .continuous)
+        GroupBox {
+            content
+                .padding(padding ?? 0)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .modifier(SurfaceTintModifier(tint: style.tint, cornerRadius: cornerRadius ?? AppTheme.Radius.md))
     }
 }
 
@@ -136,7 +64,22 @@ struct SoftSurfaceView<Content: View>: View {
     }
 
     var body: some View {
-        SurfaceView {
+        SurfaceView { content }
+    }
+}
+
+private struct SurfaceTintModifier: ViewModifier {
+    let tint: Color?
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        if let tint {
+            content
+                .background(
+                    tint.opacity(0.10),
+                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                )
+        } else {
             content
         }
     }

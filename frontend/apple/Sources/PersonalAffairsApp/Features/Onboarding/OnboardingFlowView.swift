@@ -96,6 +96,6 @@ private struct OnboardingPageView: View {
         }
         .padding(36)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(AppBackgroundView())
+        .background(MeshGradientBackdrop())
     }
 }
