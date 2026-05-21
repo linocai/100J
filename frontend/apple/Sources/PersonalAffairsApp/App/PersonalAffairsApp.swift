@@ -1,8 +1,16 @@
+import PersonalAffairsCore
 import SwiftUI
 
 @main
 struct PersonalAffairsApp: App {
-    @StateObject private var model = AppModel()
+    @StateObject private var model: AppModel
+
+    init() {
+        // 让 Keychain item 以 access group 作为稳定身份键 — 与
+        // PersonalAffairsApp.macOS.entitlements 的 keychain-access-groups 一致。
+        KeychainAccessGroup.configure("top.linotsai.app.PersonalAffairs")
+        _model = StateObject(wrappedValue: AppModel())
+    }
 
     var body: some Scene {
         WindowGroup {

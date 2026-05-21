@@ -11,7 +11,9 @@ struct RootView: View {
                 #else
                 MacShell()
                 #endif
-            } else if model.isLoading && model.hasDeviceSession {
+            } else if model.hasDeviceSession {
+                // 有 device session：要么正在 silent resume，要么即将开始
+                // 永远不让 SetupScreen 闪现
                 ResumingPlaceholder()
             } else {
                 SetupScreen()

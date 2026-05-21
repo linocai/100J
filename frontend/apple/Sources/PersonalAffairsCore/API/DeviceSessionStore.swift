@@ -133,13 +133,16 @@ public final class DeviceSessionStore {
     // MARK: Keychain primitives（与 KeychainTokenStore 共用同一 service）
 
     private func readKeychain(account: String) -> String? {
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,
             kSecAttrAccount as String: account,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
+        if let group = KeychainAccessGroup.identifier {
+            query[kSecAttrAccessGroup as String] = group
+        }
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         guard status == errSecSuccess, let data = item as? Data else { return nil }
@@ -148,20 +151,25 @@ public final class DeviceSessionStore {
 
     private func writeKeychain(value: String, account: String) throws {
         let data = Data(value.utf8)
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,
             kSecAttrAccount as String: account
         ]
+        if let group = KeychainAccessGroup.identifier {
+            query[kSecAttrAccessGroup as String] = group
+        }
+        // 用 AfterFirstUnlockThisDeviceOnly：开机解锁后即可静默读取，
+        // 不需要每次 App 启动都触发"允许访问"对话框。
         let update: [String: Any] = [
             kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
         let status = SecItemUpdate(query as CFDictionary, update as CFDictionary)
         if status == errSecItemNotFound {
             var add = query
             add[kSecValueData as String] = data
-            add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
             let addStatus = SecItemAdd(add as CFDictionary, nil)
             guard addStatus == errSecSuccess else { throw KeychainError.status(addStatus) }
         } else if status != errSecSuccess {
@@ -170,11 +178,14 @@ public final class DeviceSessionStore {
     }
 
     private func deleteKeychain(account: String) {
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,
             kSecAttrAccount as String: account
         ]
+        if let group = KeychainAccessGroup.identifier {
+            query[kSecAttrAccessGroup as String] = group
+        }
         SecItemDelete(query as CFDictionary)
     }
 }

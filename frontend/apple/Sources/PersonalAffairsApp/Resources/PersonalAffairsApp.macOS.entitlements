@@ -10,5 +10,11 @@
 	<array>
 		<string>group.top.linotsai.app.PersonalAffairs</string>
 	</array>
+	<!-- v1.1.2+: 让 Keychain item 用 access group 作为稳定身份键，
+	     不再依赖每次 ad-hoc 重签都变化的 designated requirement。 -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>top.linotsai.app.PersonalAffairs</string>
+	</array>
 </dict>
 </plist>

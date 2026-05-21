@@ -57,7 +57,21 @@ create_zip() {
 }
 
 codesign_app() {
-  local args=(--force --deep --sign "$CODESIGN_IDENTITY")
+  # 关键稳定性配置（解决 ad-hoc 重打包触发 Keychain "允许访问"对话框）：
+  # 1. --identifier "$BUNDLE_ID"  让 keychain ACL 用稳定 bundle id 匹配 App。
+  # 2. --requirements 'designated => identifier ...'
+  #      让 designated requirement 用 identifier 字符串而不是 cdhash，
+  #      旧版本写入的 keychain item 在新版本启动时仍然能直接读到。
+  # 3. entitlements 中的 keychain-access-groups 让 SecItem 用 access group
+  #      作为身份键 — 这是 macOS Sequoia+ 推荐的最终方案。
+  # codesign --requirements 接收 "=<source>" 表示 inline 源码（非文件路径）。
+  local designated_req='=designated => identifier "'"$BUNDLE_ID"'"'
+  local args=(
+    --force --deep
+    --identifier "$BUNDLE_ID"
+    --requirements "$designated_req"
+    --sign "$CODESIGN_IDENTITY"
+  )
   if [[ "$CODESIGN_IDENTITY" != "-" ]]; then
     args+=(--options runtime --timestamp)
   fi

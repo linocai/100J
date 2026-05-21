@@ -225,10 +225,17 @@ final class AppModel: ObservableObject {
     }
 
     func bootstrapIfPossible() async {
-        // v1.1.2: 优先用 device session 静默 resume；
-        // 没 session 时（首次装/手动退出）保持未登录状态等待用户输访问码。
-        if authMode == .cloudJWT, DeviceSessionStore.shared.hasActiveSession {
-            await run {
+        // v1.1.2 cloud 路径：只接受 device session；
+        // 任何来自旧版本（v1.1.0 / v1.1.1）残留的纯 JWT token 一律静默清空，
+        // 避免触发"云端登录已失效"红条闪一下。
+        if authMode == .cloudJWT {
+            guard DeviceSessionStore.shared.hasActiveSession else {
+                if api.tokenStore.accessToken != nil || api.tokenStore.refreshToken != nil {
+                    try? api.tokenStore.clear()
+                }
+                return
+            }
+            await silentBootstrap {
                 try await self.authRepository.silentResume()
                 self.currentUser = try await self.authRepository.me()
                 self.spaces = try await self.spaceRepository.list()
@@ -237,12 +244,39 @@ final class AppModel: ObservableObject {
             }
             return
         }
-        if authMode == .cloudJWT, api.tokenStore.accessToken == nil { return }
+
+        // localOwner 模式：直接拉取
         await run {
             self.currentUser = try await self.authRepository.me()
             self.spaces = try await self.spaceRepository.list()
             try await self.loadCoreData()
             await self.loadSupportData()
+        }
+    }
+
+    /// 启动期专用：跟 `run` 一样的生命周期但**失败时不显示红条**，只清掉 device session。
+    /// 设计意图：device session 失败 = 服务器端 revoke 或 365 天过期，让用户回 Setup 屏即可。
+    private func silentBootstrap(_ operation: @escaping () async throws -> Void) async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            try await operation()
+        } catch APIClientError.unauthorized {
+            try? api.tokenStore.clear()
+            DeviceSessionStore.shared.clearAll()
+            currentUser = nil
+            spaces = []
+            personalTasks = []
+            companyTasks = []
+            projects = []
+            notes = []
+            calendarItems = []
+            agentTools = []
+            agentLogs = []
+            llmKey = nil
+            refreshDerivedViewModels()
+        } catch {
+            // 网络等暂时问题 — 保留 device session，下次启动再试
         }
     }
 
