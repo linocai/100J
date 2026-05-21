@@ -26,9 +26,15 @@ public struct LoginRequest: Codable {
 
 public struct OwnerLoginRequest: Codable {
     public let accessCode: String
+    public let deviceId: String?
+    public let deviceName: String?
+    public let platform: String?
 
-    public init(accessCode: String) {
+    public init(accessCode: String, deviceId: String? = nil, deviceName: String? = nil, platform: String? = nil) {
         self.accessCode = accessCode
+        self.deviceId = deviceId
+        self.deviceName = deviceName
+        self.platform = platform
     }
 }
 
@@ -37,12 +43,46 @@ public struct AppleSignInRequest: Codable {
     public let bundleId: String
     public let email: String?
     public let fullName: String?
+    public let deviceId: String?
+    public let deviceName: String?
+    public let platform: String?
 
-    public init(idToken: String, bundleId: String, email: String? = nil, fullName: String? = nil) {
+    public init(
+        idToken: String,
+        bundleId: String,
+        email: String? = nil,
+        fullName: String? = nil,
+        deviceId: String? = nil,
+        deviceName: String? = nil,
+        platform: String? = nil
+    ) {
         self.idToken = idToken
         self.bundleId = bundleId
         self.email = email
         self.fullName = fullName
+        self.deviceId = deviceId
+        self.deviceName = deviceName
+        self.platform = platform
+    }
+}
+
+public struct DeviceRefreshRequest: Codable {
+    public let deviceId: String
+    public let refreshToken: String
+
+    public init(deviceId: String, refreshToken: String) {
+        self.deviceId = deviceId
+        self.refreshToken = refreshToken
+    }
+}
+
+public struct DeviceLogoutRequest: Codable {
+    public let deviceId: String
+    public let refreshToken: String?
+
+    public init(deviceId: String, refreshToken: String? = nil) {
+        self.deviceId = deviceId
+        self.refreshToken = refreshToken
     }
 }
 

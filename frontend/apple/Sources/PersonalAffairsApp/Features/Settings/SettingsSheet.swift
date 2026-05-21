@@ -50,7 +50,7 @@ struct SettingsSheet: View {
         }
     }
 
-    // MARK: 账号
+    // MARK: 账号 / 设备
 
     private var accountSection: some View {
         Section {
@@ -68,19 +68,39 @@ struct SettingsSheet: View {
             }
             .padding(.vertical, 4)
 
+            if let session = model.deviceSessionInfo {
+                LabeledContent("本设备", value: session.deviceName)
+                LabeledContent("已登录", value: "\(daysSince(session.lastRefreshedAt)) 天")
+                if let expires = session.expiresAt {
+                    LabeledContent("到期", value: relativeDate(expires))
+                        .font(.footnote)
+                }
+            }
+
             Button(role: .destructive) {
                 Task {
                     await model.logout()
                     isPresented = false
                 }
             } label: {
-                Label("退出登录", systemImage: "rectangle.portrait.and.arrow.right")
+                Label("退出本设备", systemImage: "rectangle.portrait.and.arrow.right")
             }
         } header: {
-            Text("账号")
+            Text("账号 · 设备")
         } footer: {
-            Text("退出后回到登录页，会清空本地缓存的 token。")
+            Text("退出会撤销服务器端的设备会话；下次打开需要重新输入访问码。")
         }
+    }
+
+    private func daysSince(_ date: Date) -> Int {
+        max(1, Calendar.current.dateComponents([.day], from: date, to: Date()).day ?? 1)
+    }
+
+    private func relativeDate(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "yyyy 年 M 月 d 日"
+        return f.string(from: date)
     }
 
     private var userName: String {

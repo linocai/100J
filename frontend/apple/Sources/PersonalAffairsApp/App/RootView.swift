@@ -11,8 +11,10 @@ struct RootView: View {
                 #else
                 MacShell()
                 #endif
+            } else if model.isLoading && model.hasDeviceSession {
+                ResumingPlaceholder()
             } else {
-                LoginScreen()
+                SetupScreen()
             }
         }
         .overlay(alignment: .bottom) {
@@ -26,5 +28,23 @@ struct RootView: View {
         #if os(macOS)
         .background(MacWindowChromeConfigurator())
         #endif
+    }
+}
+
+/// 启动时正在用 device session 静默换 token 的过渡态。
+/// 通常 < 1s，但即便偶尔 2s 用户也能看到「在恢复」而不是空白闪屏。
+struct ResumingPlaceholder: View {
+    var body: some View {
+        ZStack {
+            MeshGradientBackdrop()
+            VStack(spacing: 16) {
+                BrandMark(size: 56)
+                ProgressView()
+                    .controlSize(.regular)
+                Text("正在恢复登录…")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 }

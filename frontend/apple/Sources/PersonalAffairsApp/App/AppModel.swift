@@ -143,6 +143,14 @@ final class AppModel: ObservableObject {
         authMode == .localOwner || currentUser != nil
     }
 
+    var hasDeviceSession: Bool {
+        DeviceSessionStore.shared.hasActiveSession
+    }
+
+    var deviceSessionInfo: DeviceSessionInfo? {
+        DeviceSessionStore.shared.info
+    }
+
     var personalSpace: Space? {
         spaces.first { $0.type == .personal }
     }
@@ -217,6 +225,18 @@ final class AppModel: ObservableObject {
     }
 
     func bootstrapIfPossible() async {
+        // v1.1.2: 优先用 device session 静默 resume；
+        // 没 session 时（首次装/手动退出）保持未登录状态等待用户输访问码。
+        if authMode == .cloudJWT, DeviceSessionStore.shared.hasActiveSession {
+            await run {
+                try await self.authRepository.silentResume()
+                self.currentUser = try await self.authRepository.me()
+                self.spaces = try await self.spaceRepository.list()
+                try await self.loadCoreData()
+                await self.loadSupportData()
+            }
+            return
+        }
         if authMode == .cloudJWT, api.tokenStore.accessToken == nil { return }
         await run {
             self.currentUser = try await self.authRepository.me()
