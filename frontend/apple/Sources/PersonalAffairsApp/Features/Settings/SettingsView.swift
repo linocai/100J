@@ -70,10 +70,8 @@ struct SettingsView: View {
                                     .textFieldStyle(.roundedBorder)
                                 Button("保存") {
                                     Task {
-                                        await model.run {
-                                            model.llmKey = try await model.agentRepository.saveLLMKey(provider: provider, apiKey: apiKey)
-                                            apiKey = ""
-                                        }
+                                        await model.saveLLMKey(provider: provider, apiKey: apiKey)
+                                        apiKey = ""
                                     }
                                 }
                                 .disabled(provider.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || apiKey.isEmpty)

@@ -351,48 +351,32 @@ struct ContextInspectorView: View {
 
     private func mutateTask(_ mutation: TaskMutation, _ task: TaskItem) {
         Task {
-            await model.run {
-                switch mutation {
-                case .complete:
-                    _ = try await model.taskRepository.complete(id: task.id)
-                case .reopen:
-                    _ = try await model.taskRepository.reopen(id: task.id)
-                case .archive:
-                    _ = try await model.taskRepository.archive(id: task.id)
-                }
-                try await model.loadAllData()
+            switch mutation {
+            case .complete:
+                await model.completeTask(task)
+            case .reopen:
+                await model.reopenTask(task)
+            case .archive:
+                await model.archiveTask(task)
             }
         }
     }
 
     private func deleteCalendarItem(_ item: CalendarItem) {
         Task {
-            await model.run {
-                _ = try await model.calendarRepository.delete(id: item.id)
-                try await model.loadAllData()
-            }
+            await model.deleteCalendarItem(item)
         }
     }
 
     private func convert(_ note: Note) {
         Task {
-            await model.run {
-                let title = note.title?.trimmedOrNil ?? String(note.body.prefix(48))
-                _ = try await model.noteRepository.convertToTask(
-                    noteId: note.id,
-                    request: ConvertNoteToTaskRequest(title: title, priority: .medium)
-                )
-                try await model.loadAllData()
-            }
+            await model.convertNoteToTask(note)
         }
     }
 
     private func archive(_ note: Note) {
         Task {
-            await model.run {
-                _ = try await model.noteRepository.archive(id: note.id)
-                try await model.loadAllData()
-            }
+            await model.archiveNote(note)
         }
     }
 }

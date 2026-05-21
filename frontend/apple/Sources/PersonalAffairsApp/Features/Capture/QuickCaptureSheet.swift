@@ -156,60 +156,48 @@ struct QuickCaptureSheet: View {
             let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
             let description = draft.description.trimmedOrNil
 
-            await model.run {
-                switch draft.target {
-                case .personalTask:
-                    guard let space = model.personalSpace else { return }
-                    _ = try await model.taskRepository.create(
-                        TaskCreateRequest(
-                            spaceId: space.id,
-                            title: title,
-                            description: description,
-                            priority: draft.priority,
-                            dueDate: draft.dueDateString
-                        )
+            switch draft.target {
+            case .personalTask:
+                await model.createPersonalTask(
+                    TaskDraft(
+                        title: title,
+                        description: description ?? "",
+                        priority: draft.priority,
+                        dueDateString: draft.dueDateString
                     )
-                case .companyTask:
-                    guard let space = model.companySpace else { return }
-                    _ = try await model.taskRepository.create(
-                        TaskCreateRequest(
-                            spaceId: space.id,
-                            projectId: draft.projectId,
-                            title: title,
-                            description: description,
-                            priority: draft.priority,
-                            dueDate: draft.dueDateString
-                        )
+                )
+            case .companyTask:
+                await model.createCompanyTask(
+                    TaskDraft(
+                        title: title,
+                        description: description ?? "",
+                        priority: draft.priority,
+                        dueDateString: draft.dueDateString,
+                        projectId: draft.projectId
                     )
-                case .fixedCalendar:
-                    let targetSpace = draft.calendarSpace == .personal ? model.personalSpace : model.companySpace
-                    guard let space = targetSpace else { return }
-                    _ = try await model.calendarRepository.create(
-                        CalendarItemCreateRequest(
-                            spaceId: space.id,
-                            title: title,
-                            description: description,
-                            type: draft.calendarType,
-                            allDay: draft.allDay,
-                            startDate: draft.allDay ? draft.startDateString : nil,
-                            startAt: draft.allDay ? nil : draft.startAt,
-                            timezone: TimeZone.current.identifier,
-                            recurrence: draft.recurrence,
-                            projectId: draft.calendarSpace == .company ? draft.projectId : nil
-                        )
+                )
+            case .fixedCalendar:
+                await model.createCalendarItem(
+                    CalendarDraftState(
+                        spaceType: draft.calendarSpace,
+                        title: title,
+                        description: description ?? "",
+                        type: draft.calendarType,
+                        allDay: draft.allDay,
+                        startDate: draft.startDate,
+                        startAt: draft.startAt,
+                        recurrence: draft.recurrence,
+                        projectId: draft.projectId
                     )
-                case .personalNote:
-                    guard let space = model.personalSpace else { return }
-                    _ = try await model.noteRepository.create(
-                        NoteCreateRequest(
-                            spaceId: space.id,
-                            title: title,
-                            body: draft.description.trimmedOrNil ?? draft.rawText.trimmedOrNil ?? title,
-                            type: draft.noteType
-                        )
+                )
+            case .personalNote:
+                await model.createNote(
+                    NoteDraft(
+                        title: title,
+                        body: draft.description.trimmedOrNil ?? draft.rawText.trimmedOrNil ?? title,
+                        type: draft.noteType
                     )
-                }
-                try await model.loadAllData()
+                )
             }
 
             onSaved()

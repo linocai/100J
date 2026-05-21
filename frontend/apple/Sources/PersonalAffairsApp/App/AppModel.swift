@@ -20,14 +20,54 @@ final class AppModel: ObservableObject {
     @Published var selectedSection: AppSection? = .today
     @Published var agentReview = AgentReviewSession()
 
-    let api: APIClient
-    let authRepository: AuthRepository
-    let spaceRepository: SpaceRepository
-    let taskRepository: TaskRepository
-    let projectRepository: ProjectRepository
-    let calendarRepository: CalendarRepository
-    let noteRepository: NoteRepository
-    let agentRepository: AgentRepository
+    private let api: APIClient
+    private let authRepository: AuthRepository
+    private let spaceRepository: SpaceRepository
+    private let taskRepository: TaskRepository
+    private let projectRepository: ProjectRepository
+    private let calendarRepository: CalendarRepository
+    private let noteRepository: NoteRepository
+    private let agentRepository: AgentRepository
+
+    lazy var personalTasksViewModel = PersonalTasksViewModel(repo: taskRepository) { [weak self] in
+        self?.personalSpace
+    }
+    lazy var companyTasksViewModel = CompanyTasksViewModel(repo: taskRepository) { [weak self] in
+        self?.companySpace
+    }
+    lazy var projectsViewModel = ProjectsViewModel(repo: projectRepository) { [weak self] in
+        self?.companySpace
+    }
+    lazy var notesViewModel = NotesViewModel(repo: noteRepository) { [weak self] in
+        self?.personalSpace
+    }
+    lazy var calendarViewModel = CalendarViewModel(
+        repo: calendarRepository,
+        personalSpace: { [weak self] in self?.personalSpace },
+        companySpace: { [weak self] in self?.companySpace },
+        window: { [weak self] in self?.calendarWindow() ?? defaultCalendarWindow() }
+    )
+    lazy var agentViewModel = AgentViewModel(
+        repo: agentRepository,
+        personalSpace: { [weak self] in self?.personalSpace },
+        companySpace: { [weak self] in self?.companySpace }
+    )
+    lazy var todayViewModel = TodayViewModel(
+        personalTasks: { [weak self] in self?.personalTasks ?? [] },
+        companyTasks: { [weak self] in self?.companyTasks ?? [] },
+        calendarItems: { [weak self] in self?.calendarItems ?? [] },
+        notes: { [weak self] in self?.notes ?? [] }
+    )
+    lazy var planViewModel = PlanViewModel(
+        personalTasks: { [weak self] in self?.personalTasks ?? [] },
+        companyTasks: { [weak self] in self?.companyTasks ?? [] },
+        projects: { [weak self] in self?.projects ?? [] },
+        notes: { [weak self] in self?.notes ?? [] }
+    )
+    lazy var universalComposerViewModel = UniversalComposerViewModel(
+        personalSpace: { [weak self] in self?.personalSpace },
+        companySpace: { [weak self] in self?.companySpace }
+    )
 
     init() {
         let defaultBaseURL = "https://100j.linotsai.top/api/v1"
@@ -123,6 +163,7 @@ final class AppModel: ObservableObject {
             agentTools = []
             agentLogs = []
             llmKey = nil
+            refreshDerivedViewModels()
         }
     }
 
@@ -188,6 +229,7 @@ final class AppModel: ObservableObject {
             self.calendarItems = []
             self.agentLogs = []
             self.llmKey = nil
+            self.refreshDerivedViewModels()
         }
     }
 
@@ -209,161 +251,165 @@ final class AppModel: ObservableObject {
 
     func loadCoreData() async throws {
         guard let personalSpace, let companySpace else { return }
-        let window = calendarWindow()
-        async let personalTasks = taskRepository.list(spaceId: personalSpace.id, status: .active)
-        async let companyTasks = taskRepository.list(spaceId: companySpace.id, status: .active)
-        async let projects = projectRepository.list(spaceId: companySpace.id, status: .active)
-        async let notes = noteRepository.list(status: .active)
-        async let calendarItems = calendarRepository.merged(
-            personalSpaceId: personalSpace.id,
-            companySpaceId: companySpace.id,
-            fromDate: window.fromDate,
-            toDate: window.toDate
-        )
+        personalTasksViewModel.filter = .active
+        personalTasksViewModel.search = ""
+        companyTasksViewModel.filter = .active
+        companyTasksViewModel.search = ""
+        companyTasksViewModel.scope = .all
+        projectsViewModel.filter = .active
+        projectsViewModel.search = ""
+        notesViewModel.status = .active
+        notesViewModel.type = nil
+        notesViewModel.search = ""
+        calendarViewModel.filter = .all
+        calendarViewModel.selectedProjectId = nil
 
-        self.personalTasks = try await personalTasks
-        self.companyTasks = try await companyTasks
-        self.projects = try await projects
-        self.notes = try await notes
-        self.calendarItems = try await calendarItems
+        await personalTasksViewModel.reload()
+        try throwIfViewModelError(personalTasksViewModel.lastError)
+        await companyTasksViewModel.reload()
+        try throwIfViewModelError(companyTasksViewModel.lastError)
+        await projectsViewModel.reload()
+        try throwIfViewModelError(projectsViewModel.lastError)
+        await notesViewModel.reload()
+        try throwIfViewModelError(notesViewModel.lastError)
+        await calendarViewModel.reload(
+            query: .all(personalSpaceId: personalSpace.id, companySpaceId: companySpace.id)
+        )
+        try throwIfViewModelError(calendarViewModel.lastError)
+
+        syncCoreDataFromViewModels()
     }
 
     func loadSupportData() async {
         supportErrorMessage = nil
-        do {
-            agentTools = try await agentRepository.tools()
-        } catch {
+        await agentViewModel.reloadSupport()
+        if let error = agentViewModel.lastError {
             supportErrorMessage = error.localizedDescription
         }
-        do {
-            agentLogs = try await agentRepository.logs()
-        } catch {
-            supportErrorMessage = supportErrorMessage ?? error.localizedDescription
-        }
-        do {
-            llmKey = try await agentRepository.llmKey()
-        } catch {
-            supportErrorMessage = supportErrorMessage ?? error.localizedDescription
-        }
+        syncAgentSupportFromViewModel()
     }
 
     func reloadPersonalTasks(status: TaskStatus = .active, search: String? = nil) async {
         await run {
-            guard let personalSpace = self.personalSpace else { return }
-            let query = PersonalTasksViewState.query(
-                personalSpaceId: personalSpace.id,
-                status: status,
-                search: search
-            )
-            self.personalTasks = try await self.taskRepository.list(query: query)
+            guard self.personalSpace != nil else { return }
+            self.personalTasksViewModel.filter = status
+            self.personalTasksViewModel.search = search ?? ""
+            await self.personalTasksViewModel.reload()
+            try self.throwIfViewModelError(self.personalTasksViewModel.lastError)
+            self.personalTasks = self.personalTasksViewModel.items
+            self.refreshDerivedViewModels()
         }
     }
 
     func reloadCompanyTasks(status: TaskStatus = .active, projectScope: String? = nil, projectId: String? = nil, search: String? = nil) async {
         await run {
-            guard let companySpace = self.companySpace else { return }
-            let scope = CompanyTaskScope(pickerValue: projectScope ?? (projectId == nil ? "all" : "project"), selectedProjectId: projectId)
-            let query = scope.query(
-                companySpaceId: companySpace.id,
-                status: status,
-                search: search
+            guard self.companySpace != nil else { return }
+            self.companyTasksViewModel.filter = status
+            self.companyTasksViewModel.search = search ?? ""
+            self.companyTasksViewModel.scope = CompanyTaskScope(
+                pickerValue: projectScope ?? (projectId == nil ? "all" : "project"),
+                selectedProjectId: projectId
             )
-            self.companyTasks = try await self.taskRepository.list(query: query)
+            await self.companyTasksViewModel.reload()
+            try self.throwIfViewModelError(self.companyTasksViewModel.lastError)
+            self.companyTasks = self.companyTasksViewModel.items
+            self.refreshDerivedViewModels()
         }
     }
 
     func reloadNotes(status: NoteStatus = .active, type: NoteType? = nil, search: String? = nil) async {
         await run {
-            self.notes = try await self.noteRepository.list(status: status, type: type, search: search)
+            self.notesViewModel.status = status
+            self.notesViewModel.type = type
+            self.notesViewModel.search = search ?? ""
+            await self.notesViewModel.reload()
+            try self.throwIfViewModelError(self.notesViewModel.lastError)
+            self.notes = self.notesViewModel.items
+            self.refreshDerivedViewModels()
         }
     }
 
     func reloadProjects(status: ProjectStatus = .active) async {
         await run {
-            guard let companySpace = self.companySpace else { return }
-            self.projects = try await self.projectRepository.list(spaceId: companySpace.id, status: status)
+            guard self.companySpace != nil else { return }
+            self.projectsViewModel.filter = status
+            await self.projectsViewModel.reload()
+            try self.throwIfViewModelError(self.projectsViewModel.lastError)
+            self.projects = self.projectsViewModel.items
+            self.refreshDerivedViewModels()
         }
     }
 
     func reloadCalendar(query: CalendarListQuery) async {
         await run {
-            let window = self.calendarWindow()
-            switch query {
-            case .all(let personalSpaceId, let companySpaceId):
-                self.calendarItems = try await self.calendarRepository.merged(
-                    personalSpaceId: personalSpaceId,
-                    companySpaceId: companySpaceId,
-                    fromDate: window.fromDate,
-                    toDate: window.toDate
-                )
-            case .personal(let spaceId):
-                self.calendarItems = try await self.calendarRepository.list(
-                    spaceId: spaceId,
-                    fromDate: window.fromDate,
-                    toDate: window.toDate
-                )
-            case .company(let spaceId):
-                self.calendarItems = try await self.calendarRepository.list(
-                    spaceId: spaceId,
-                    fromDate: window.fromDate,
-                    toDate: window.toDate
-                )
-            case .project(let companySpaceId, let projectId):
-                self.calendarItems = try await self.calendarRepository.list(
-                    spaceId: companySpaceId,
-                    projectId: projectId,
-                    fromDate: window.fromDate,
-                    toDate: window.toDate
-                )
-            }
+            await self.calendarViewModel.reload(query: query)
+            try self.throwIfViewModelError(self.calendarViewModel.lastError)
+            self.calendarItems = self.calendarViewModel.items
+            self.refreshDerivedViewModels()
         }
     }
 
     // MARK: - Task CRUD
 
     func createPersonalTask(_ draft: TaskDraft) async {
-        guard let space = personalSpace else { return }
         await run {
-            _ = try await self.taskRepository.create(draft.createRequest(spaceId: space.id, includesProject: false))
+            await self.personalTasksViewModel.create(draft)
+            try self.throwIfViewModelError(self.personalTasksViewModel.lastError)
             try await self.loadAllData()
         }
     }
 
     func createCompanyTask(_ draft: TaskDraft) async {
-        guard let space = companySpace else { return }
         await run {
-            _ = try await self.taskRepository.create(draft.createRequest(spaceId: space.id, includesProject: true))
+            await self.companyTasksViewModel.create(draft)
+            try self.throwIfViewModelError(self.companyTasksViewModel.lastError)
             try await self.loadAllData()
         }
     }
 
     func createProjectTask(_ draft: TaskDraft, projectId: String) async {
-        guard let space = companySpace else { return }
-        var pinnedDraft = draft
-        pinnedDraft.projectId = projectId
         await run {
-            _ = try await self.taskRepository.create(pinnedDraft.createRequest(spaceId: space.id, includesProject: true))
+            await self.companyTasksViewModel.createProjectTask(draft, projectId: projectId)
+            try self.throwIfViewModelError(self.companyTasksViewModel.lastError)
             try await self.loadAllData()
         }
     }
 
     func updateTask(id: String, draft: TaskDraft, includesProject: Bool) async {
         await run {
-            _ = try await self.taskRepository.update(id: id, request: draft.updateRequest(includesProject: includesProject))
+            if includesProject {
+                await self.companyTasksViewModel.update(id: id, draft: draft)
+                try self.throwIfViewModelError(self.companyTasksViewModel.lastError)
+            } else {
+                await self.personalTasksViewModel.update(id: id, draft: draft)
+                try self.throwIfViewModelError(self.personalTasksViewModel.lastError)
+            }
             try await self.loadAllData()
         }
     }
 
     func completeTask(_ task: TaskItem) async {
         await run {
-            _ = try await self.taskRepository.complete(id: task.id)
+            if task.spaceId == self.personalSpace?.id {
+                await self.personalTasksViewModel.complete(task)
+                try self.throwIfViewModelError(self.personalTasksViewModel.lastError)
+            } else {
+                await self.companyTasksViewModel.complete(task)
+                try self.throwIfViewModelError(self.companyTasksViewModel.lastError)
+            }
             try await self.loadAllData()
         }
     }
 
     func reopenTask(_ task: TaskItem) async {
         await run {
-            _ = try await self.taskRepository.reopen(id: task.id)
+            if task.spaceId == self.personalSpace?.id {
+                await self.personalTasksViewModel.reopen(task)
+                try self.throwIfViewModelError(self.personalTasksViewModel.lastError)
+            } else {
+                await self.companyTasksViewModel.reopen(task)
+                try self.throwIfViewModelError(self.companyTasksViewModel.lastError)
+            }
             try await self.loadAllData()
         }
     }
@@ -371,9 +417,21 @@ final class AppModel: ObservableObject {
     func toggleTaskDone(_ task: TaskItem) async {
         await run {
             if task.status == .done {
-                _ = try await self.taskRepository.reopen(id: task.id)
+                if task.spaceId == self.personalSpace?.id {
+                    await self.personalTasksViewModel.reopen(task)
+                    try self.throwIfViewModelError(self.personalTasksViewModel.lastError)
+                } else {
+                    await self.companyTasksViewModel.reopen(task)
+                    try self.throwIfViewModelError(self.companyTasksViewModel.lastError)
+                }
             } else {
-                _ = try await self.taskRepository.complete(id: task.id)
+                if task.spaceId == self.personalSpace?.id {
+                    await self.personalTasksViewModel.complete(task)
+                    try self.throwIfViewModelError(self.personalTasksViewModel.lastError)
+                } else {
+                    await self.companyTasksViewModel.complete(task)
+                    try self.throwIfViewModelError(self.companyTasksViewModel.lastError)
+                }
             }
             try await self.loadAllData()
         }
@@ -381,7 +439,13 @@ final class AppModel: ObservableObject {
 
     func archiveTask(_ task: TaskItem) async {
         await run {
-            _ = try await self.taskRepository.archive(id: task.id)
+            if task.spaceId == self.personalSpace?.id {
+                await self.personalTasksViewModel.archive(task)
+                try self.throwIfViewModelError(self.personalTasksViewModel.lastError)
+            } else {
+                await self.companyTasksViewModel.archive(task)
+                try self.throwIfViewModelError(self.companyTasksViewModel.lastError)
+            }
             try await self.loadAllData()
         }
     }
@@ -389,31 +453,33 @@ final class AppModel: ObservableObject {
     // MARK: - Note CRUD
 
     func createNote(_ draft: NoteDraft) async {
-        guard let space = personalSpace else { return }
         await run {
-            _ = try await self.noteRepository.create(draft.createRequest(spaceId: space.id))
+            await self.notesViewModel.create(draft)
+            try self.throwIfViewModelError(self.notesViewModel.lastError)
             try await self.loadAllData()
         }
     }
 
     func updateNote(id: String, draft: NoteDraft) async {
         await run {
-            _ = try await self.noteRepository.update(id: id, request: draft.updateRequest())
+            await self.notesViewModel.update(id: id, draft: draft)
+            try self.throwIfViewModelError(self.notesViewModel.lastError)
             try await self.loadAllData()
         }
     }
 
     func archiveNote(_ note: Note) async {
         await run {
-            _ = try await self.noteRepository.archive(id: note.id)
+            await self.notesViewModel.archive(note)
+            try self.throwIfViewModelError(self.notesViewModel.lastError)
             try await self.loadAllData()
         }
     }
 
     func convertNoteToTask(_ note: Note) async {
         await run {
-            let title = note.title?.trimmedOrNil ?? String(note.body.prefix(48))
-            _ = try await self.noteRepository.convertToTask(noteId: note.id, request: ConvertNoteToTaskRequest(title: title))
+            await self.notesViewModel.convertToTask(note)
+            try self.throwIfViewModelError(self.notesViewModel.lastError)
             try await self.loadAllData()
         }
     }
@@ -421,64 +487,65 @@ final class AppModel: ObservableObject {
     // MARK: - Project CRUD
 
     func createProject(_ draft: ProjectDraft) async {
-        guard let space = companySpace else { return }
         await run {
-            _ = try await self.projectRepository.create(draft.createRequest(spaceId: space.id))
+            await self.projectsViewModel.create(draft)
+            try self.throwIfViewModelError(self.projectsViewModel.lastError)
             try await self.loadAllData()
         }
     }
 
     func updateProject(id: String, draft: ProjectDraft) async {
         await run {
-            _ = try await self.projectRepository.update(id: id, request: draft.updateRequest())
+            await self.projectsViewModel.update(id: id, draft: draft)
+            try self.throwIfViewModelError(self.projectsViewModel.lastError)
             try await self.loadAllData()
         }
     }
 
     func completeProject(_ project: Project) async {
         await run {
-            _ = try await self.projectRepository.complete(id: project.id)
+            await self.projectsViewModel.complete(project)
+            try self.throwIfViewModelError(self.projectsViewModel.lastError)
             try await self.loadAllData()
         }
     }
 
     func archiveProject(_ project: Project) async {
         await run {
-            _ = try await self.projectRepository.archive(id: project.id)
+            await self.projectsViewModel.archive(project)
+            try self.throwIfViewModelError(self.projectsViewModel.lastError)
             try await self.loadAllData()
         }
     }
 
     func loadProjectTasks(projectId: String, status: TaskStatus = .active) async -> [TaskItem] {
-        do {
-            return try await projectRepository.tasks(projectId: projectId, status: status)
-        } catch {
-            errorMessage = error.localizedDescription
-            return []
-        }
+        let tasks = await projectsViewModel.tasks(projectId: projectId, status: status)
+        errorMessage = projectsViewModel.lastError?.localizedDescription
+        return tasks
     }
 
     // MARK: - Calendar CRUD
 
     func createCalendarItem(_ draft: CalendarDraftState) async {
-        let targetSpace = draft.spaceType == .personal ? personalSpace : companySpace
-        guard let space = targetSpace else { return }
         await run {
-            _ = try await self.calendarRepository.create(draft.createRequest(spaceId: space.id))
+            await self.calendarViewModel.create(draft)
+            try self.throwIfViewModelError(self.calendarViewModel.lastError)
             try await self.loadAllData()
         }
     }
 
     func updateCalendarItem(id: String, draft: CalendarDraftState) async {
         await run {
-            _ = try await self.calendarRepository.update(id: id, request: draft.updateRequest())
+            await self.calendarViewModel.update(id: id, draft: draft)
+            try self.throwIfViewModelError(self.calendarViewModel.lastError)
             try await self.loadAllData()
         }
     }
 
     func deleteCalendarItem(_ item: CalendarItem) async {
         await run {
-            _ = try await self.calendarRepository.delete(id: item.id)
+            await self.calendarViewModel.delete(item)
+            try self.throwIfViewModelError(self.calendarViewModel.lastError)
             try await self.loadAllData()
         }
     }
@@ -486,47 +553,50 @@ final class AppModel: ObservableObject {
     // MARK: - Agent
 
     func composeAgentCommand() {
-        guard let text = agentReview.consumeInput() else { return }
-        _ = agentReview.compose(text: text, personalSpace: personalSpace, companySpace: companySpace)
+        agentViewModel.review = agentReview
+        agentViewModel.composePendingInput()
+        agentReview = agentViewModel.review
     }
 
     func executeAgentCommand(dryRun: Bool) async {
-        guard let command = agentReview.pendingCommand else { return }
         await run {
-            let response = try await self.agentRepository.execute(
-                command: command.command,
-                arguments: command.arguments,
-                dryRun: dryRun
-            )
-            self.agentReview.apply(response: response, dryRun: dryRun)
+            self.agentViewModel.review = self.agentReview
+            await self.agentViewModel.execute(dryRun: dryRun)
+            try self.throwIfViewModelError(self.agentViewModel.lastError)
+            self.agentReview = self.agentViewModel.review
             try await self.loadAllData()
         }
     }
 
     func confirmAgentCommand() async {
-        guard let prompt = agentReview.pendingConfirmation else { return }
         await run {
-            let response = try await self.agentRepository.confirm(token: prompt.token)
-            self.agentReview.apply(response: response, dryRun: false)
+            self.agentViewModel.review = self.agentReview
+            await self.agentViewModel.confirm()
+            try self.throwIfViewModelError(self.agentViewModel.lastError)
+            self.agentReview = self.agentViewModel.review
             try await self.loadAllData()
         }
     }
 
     func cancelAgentCommand() {
-        agentReview.cancel()
+        agentViewModel.review = agentReview
+        agentViewModel.cancel()
+        agentReview = agentViewModel.review
     }
 
     func reloadAgentSupport() async {
         await run {
-            self.agentTools = try await self.agentRepository.tools()
-            self.agentLogs = try await self.agentRepository.logs()
-            self.llmKey = try await self.agentRepository.llmKey()
+            await self.agentViewModel.reloadSupport()
+            try self.throwIfViewModelError(self.agentViewModel.lastError)
+            self.syncAgentSupportFromViewModel()
         }
     }
 
     func saveLLMKey(provider: String, apiKey: String) async {
         await run {
-            self.llmKey = try await self.agentRepository.saveLLMKey(provider: provider, apiKey: apiKey)
+            await self.agentViewModel.saveLLMKey(provider: provider, apiKey: apiKey)
+            try self.throwIfViewModelError(self.agentViewModel.lastError)
+            self.syncAgentSupportFromViewModel()
         }
     }
 
@@ -559,8 +629,36 @@ final class AppModel: ObservableObject {
         agentTools = []
         agentLogs = []
         llmKey = nil
-        agentReview.cancel()
+        agentViewModel.cancel()
+        agentReview = agentViewModel.review
+        refreshDerivedViewModels()
         errorMessage = "云端登录已失效，请重新输入访问码。"
+    }
+
+    private func syncCoreDataFromViewModels() {
+        personalTasks = personalTasksViewModel.items
+        companyTasks = companyTasksViewModel.items
+        projects = projectsViewModel.items
+        notes = notesViewModel.items
+        calendarItems = calendarViewModel.items
+        refreshDerivedViewModels()
+    }
+
+    private func syncAgentSupportFromViewModel() {
+        agentTools = agentViewModel.tools
+        agentLogs = agentViewModel.logs
+        llmKey = agentViewModel.llmKey
+    }
+
+    private func refreshDerivedViewModels() {
+        todayViewModel.refresh()
+        planViewModel.refresh()
+    }
+
+    private func throwIfViewModelError(_ error: APIClientError?) throws {
+        if let error {
+            throw error
+        }
     }
 
     private func calendarWindow() -> (fromDate: String, toDate: String) {

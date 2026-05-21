@@ -124,10 +124,7 @@ struct FixedSchedulePanel: View {
 
     private func delete(_ item: CalendarItem) {
         Task {
-            await model.run {
-                _ = try await model.calendarRepository.delete(id: item.id)
-                try await model.loadAllData()
-            }
+            await model.deleteCalendarItem(item)
         }
     }
 }

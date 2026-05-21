@@ -57,16 +57,13 @@ struct LooseEndsPanel: View {
 
     private func mutateTask(_ mutation: Mutation, _ task: TaskItem) {
         Task {
-            await model.run {
-                switch mutation {
-                case .complete:
-                    _ = try await model.taskRepository.complete(id: task.id)
-                case .reopen:
-                    _ = try await model.taskRepository.reopen(id: task.id)
-                case .archive:
-                    _ = try await model.taskRepository.archive(id: task.id)
-                }
-                try await model.loadAllData()
+            switch mutation {
+            case .complete:
+                await model.completeTask(task)
+            case .reopen:
+                await model.reopenTask(task)
+            case .archive:
+                await model.archiveTask(task)
             }
         }
     }
