@@ -46,11 +46,18 @@ struct IOSShell: View {
 
     @ViewBuilder
     private var shell: some View {
+        // tabBarMinimizeBehavior 是 iOS 26 SDK 才有的符号；旧 Xcode（如 CI 的
+        // macos-latest runner）的编译器找不到它，#if compiler(>=6.3) 用来在
+        // 老编译器里彻底跳过这一行，避免 "no member 'tabBarMinimizeBehavior'"。
+        #if compiler(>=6.3)
         if #available(iOS 26.0, *) {
             tabs.tabBarMinimizeBehavior(.onScrollDown)
         } else {
             tabs
         }
+        #else
+        tabs
+        #endif
     }
 
     private var tabs: some View {
