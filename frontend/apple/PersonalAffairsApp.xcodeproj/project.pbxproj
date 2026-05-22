@@ -318,7 +318,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Sources/PersonalAffairsApp/Resources/PersonalAffairsApp.iOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.122;
+				CURRENT_PROJECT_VERSION = 1.124;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = HX73DFL88G;
 				ENABLE_PREVIEWS = YES;
@@ -332,7 +332,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.22;
+				MARKETING_VERSION = 1.222;
 				PRODUCT_BUNDLE_IDENTIFIER = top.linotsai.app.PersonalAffairs;
 				PRODUCT_MODULE_NAME = PersonalAffairsApp;
 				PRODUCT_NAME = 100J;
@@ -350,7 +350,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Sources/PersonalAffairsApp/Resources/PersonalAffairsApp.iOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.122;
+				CURRENT_PROJECT_VERSION = 1.124;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = HX73DFL88G;
 				ENABLE_PREVIEWS = YES;
@@ -364,7 +364,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.22;
+				MARKETING_VERSION = 1.222;
 				PRODUCT_BUNDLE_IDENTIFIER = top.linotsai.app.PersonalAffairs;
 				PRODUCT_MODULE_NAME = PersonalAffairsApp;
 				PRODUCT_NAME = 100J;

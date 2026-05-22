@@ -11,6 +11,11 @@ struct IOSShell: View {
 
     var body: some View {
         shell
+            .overlay(alignment: .bottom) {
+                errorBanner
+                    .padding(.horizontal, AppTheme.Spacing.lg)
+                    .padding(.bottom, 92)
+            }
             .sheet(isPresented: $showingComposer) {
                 ComposerSheet(isPresented: $showingComposer)
                     .environmentObject(model)
@@ -89,6 +94,16 @@ struct IOSShell: View {
         .toolbarBackground(.regularMaterial, for: .tabBar)
     }
 
+    @ViewBuilder
+    private var errorBanner: some View {
+        if let message = model.errorMessage {
+            ErrorBanner(message: message) {
+                Task { @MainActor in model.errorMessage = nil }
+            }
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
     private func openComposer() {
         model.universalComposerViewModel.open()
         showingComposer = true
@@ -117,7 +132,7 @@ private struct ScreenContainer<Content: View>: View {
         NavigationStack {
             content()
                 .navigationTitle(title)
-                .navigationBarTitleDisplayMode(.large)
+                .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItemGroup(placement: .topBarTrailing) {
                         Button {

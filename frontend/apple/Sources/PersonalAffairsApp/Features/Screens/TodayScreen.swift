@@ -13,9 +13,10 @@ struct TodayScreen: View {
                 metricStrip
                 grid
             }
-            .padding(.horizontal, padding)
-            .padding(.vertical, AppTheme.Spacing.xxl)
-            .frame(maxWidth: 1200, alignment: .leading)
+            .padding(.horizontal, AdaptivePageLayout.horizontalPadding)
+            .padding(.top, AdaptivePageLayout.topPadding)
+            .padding(.bottom, AdaptivePageLayout.bottomPadding)
+            .frame(maxWidth: AdaptivePageLayout.maxContentWidth, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .center)
         }
         .background(AppTheme.Background.canvas.opacity(0.0))
@@ -23,50 +24,33 @@ struct TodayScreen: View {
         .task { await model.refreshAll() }
     }
 
-    private var padding: CGFloat {
-        #if os(macOS)
-        return AppTheme.Spacing.xxxl
-        #else
-        return AppTheme.Spacing.lg
-        #endif
-    }
-
     // MARK: Header
 
     private var header: some View {
-        HStack(alignment: .lastTextBaseline, spacing: AppTheme.Spacing.lg) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(eyebrow)
-                    .font(.caption.weight(.bold))
-                    .tracking(0.08)
-                    .textCase(.uppercase)
-                    .foregroundStyle(.orange)
-                Text(greeting)
-                    .font(.system(size: 32, weight: .bold))
-                    .tracking(-0.5)
-                Text("今天先挑三件事；其余进入 Loose Ends，不会自动排进日程。")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: 540, alignment: .leading)
-            }
-            Spacer(minLength: 0)
+        AdaptiveHeroHeader(
+            eyebrow: eyebrow,
+            title: greeting,
+            subtitle: "今天先挑三件事；其余进入 Loose Ends，不会自动排进日程。",
+            accent: .orange
+        ) {
             HStack(spacing: AppTheme.Spacing.sm) {
-                Button {
+                AdaptiveHeroActionButton(
+                    fullTitle: "问 Agent",
+                    compactTitle: "Agent",
+                    systemImage: "sparkles",
+                    style: .bordered
+                ) {
                     jumpTo(.agent)
-                } label: {
-                    Label("问 Agent", systemImage: "sparkles")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
 
-                Button {
+                AdaptiveHeroActionButton(
+                    fullTitle: "快速捕捉",
+                    compactTitle: "捕捉",
+                    systemImage: "bolt.fill",
+                    style: .prominent(.orange)
+                ) {
                     model.universalComposerViewModel.open()
-                } label: {
-                    Label("快速捕捉", systemImage: "bolt.fill")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
-                .controlSize(.large)
                 .keyboardShortcut("n", modifiers: .command)
             }
         }
@@ -94,6 +78,23 @@ struct TodayScreen: View {
     // MARK: Metric strip
 
     private var metricStrip: some View {
+        #if os(iOS)
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(), spacing: 1),
+                GridItem(.flexible(), spacing: 1)
+            ],
+            spacing: 1
+        ) {
+            metric(value: model.activePersonalTasks.count + model.activeCompanyTasks.count,
+                   label: "弹性待办", color: .indigo)
+            metric(value: model.todayViewModel.upcoming.count, label: "今日日程", color: .orange)
+            metric(value: model.todayViewModel.looseEnds.count, label: "Loose Ends", color: .purple)
+            metric(value: weekDoneCount(), label: "本周完成", color: .green)
+        }
+        .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
+        #else
         HStack(spacing: 1) {
             metric(value: model.activePersonalTasks.count + model.activeCompanyTasks.count,
                    label: "弹性待办", color: .indigo)
@@ -103,6 +104,7 @@ struct TodayScreen: View {
         }
         .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
+        #endif
     }
 
     private func metric(value: Int, label: String, color: Color) -> some View {

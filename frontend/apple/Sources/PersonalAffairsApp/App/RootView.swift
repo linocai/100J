@@ -20,16 +20,27 @@ struct RootView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if let message = model.errorMessage {
-                ErrorBanner(message: message) {
-                    Task { @MainActor in model.errorMessage = nil }
-                }
-                .padding()
+            #if os(iOS)
+            if !model.isAuthenticated {
+                errorBanner
             }
+            #else
+            errorBanner
+            #endif
         }
         #if os(macOS)
         .background(MacWindowChromeConfigurator())
         #endif
+    }
+
+    @ViewBuilder
+    private var errorBanner: some View {
+        if let message = model.errorMessage {
+            ErrorBanner(message: message) {
+                Task { @MainActor in model.errorMessage = nil }
+            }
+            .padding()
+        }
     }
 }
 

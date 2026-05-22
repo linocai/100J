@@ -22,6 +22,8 @@ enum AppSyncStatus: Equatable {
 
 @MainActor
 final class AppModel: ObservableObject {
+    nonisolated static let defaultCloudBaseURL = "https://100j.linotsai.top/api/v1"
+
     @Published var authMode: AppAuthMode
     @Published var currentUser: User?
     @Published var spaces: [Space] = []
@@ -100,7 +102,7 @@ final class AppModel: ObservableObject {
     )
 
     init() {
-        let defaultBaseURL = "https://100j.linotsai.top/api/v1"
+        let defaultBaseURL = Self.defaultCloudBaseURL
         let storedBaseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? defaultBaseURL
         let storedAuthMode: AppAuthMode
         if UserDefaults.standard.bool(forKey: "cloudOwnerDefaultMigrated") {
@@ -149,6 +151,20 @@ final class AppModel: ObservableObject {
 
     var deviceSessionInfo: DeviceSessionInfo? {
         DeviceSessionStore.shared.info
+    }
+
+    var apiBaseURLString: String {
+        api.baseURL.absoluteString
+    }
+
+    var apiServerHost: String {
+        api.baseURL.host ?? apiBaseURLString
+    }
+
+    var isLocalDevelopmentConnection: Bool {
+        if authMode == .localOwner { return true }
+        guard let host = api.baseURL.host?.lowercased() else { return false }
+        return host == "127.0.0.1" || host == "localhost" || host == "::1"
     }
 
     var personalSpace: Space? {
@@ -222,6 +238,18 @@ final class AppModel: ObservableObject {
             llmKey = nil
             refreshDerivedViewModels()
         }
+    }
+
+    @discardableResult
+    func prepareCloudOwnerSetup(baseURL: String = AppModel.defaultCloudBaseURL) -> Bool {
+        let endpoint = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !endpoint.isEmpty, updateBaseURL(endpoint) else { return false }
+
+        try? api.tokenStore.clear()
+        DeviceSessionStore.shared.clearAll()
+        updateAuthMode(.cloudJWT)
+        selectedSection = .today
+        return true
     }
 
     func bootstrapIfPossible() async {

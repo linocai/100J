@@ -49,46 +49,30 @@ struct PlanScreen: View {
 
                 content
             }
-            .padding(.horizontal, padding)
-            .padding(.vertical, AppTheme.Spacing.xxl)
-            .frame(maxWidth: 1200, alignment: .leading)
+            .padding(.horizontal, AdaptivePageLayout.horizontalPadding)
+            .padding(.top, AdaptivePageLayout.topPadding)
+            .padding(.bottom, AdaptivePageLayout.bottomPadding)
+            .frame(maxWidth: AdaptivePageLayout.maxContentWidth, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .center)
         }
         .onAppear { model.planViewModel.refresh() }
     }
 
-    private var padding: CGFloat {
-        #if os(macOS)
-        return AppTheme.Spacing.xxxl
-        #else
-        return AppTheme.Spacing.lg
-        #endif
-    }
-
     private var header: some View {
-        HStack(alignment: .lastTextBaseline, spacing: AppTheme.Spacing.lg) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("规划")
-                    .font(.caption.weight(.bold))
-                    .tracking(0.08)
-                    .textCase(.uppercase)
-                    .foregroundStyle(.indigo)
-                Text("Plan")
-                    .font(.system(size: 32, weight: .bold))
-                    .tracking(-0.5)
-                Text("个人事项保持弹性；公司事项可挂项目；项目与笔记按需展开。")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
-            Button {
+        AdaptiveHeroHeader(
+            eyebrow: "规划",
+            title: "Plan",
+            subtitle: "个人事项保持弹性；公司事项可挂项目；项目与笔记按需展开。",
+            accent: .indigo
+        ) {
+            AdaptiveHeroActionButton(
+                fullTitle: "新建",
+                compactTitle: "新建",
+                systemImage: "plus",
+                style: .prominent(.indigo)
+            ) {
                 model.universalComposerViewModel.open(prefill: segment.composerHint)
-            } label: {
-                Label("新建", systemImage: "plus")
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.indigo)
-            .controlSize(.large)
             .help("用 ⌘K Composer 创建新事项")
         }
     }
