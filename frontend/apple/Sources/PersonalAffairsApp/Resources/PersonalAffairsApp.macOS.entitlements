@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- 注 1：keychain-access-groups 需要 provisioning profile，ad-hoc 用不了。 -->
+	<!-- 注 2：application-groups 在 ad-hoc + macOS Sequoia 上会触发 TCC 弹窗
+	     "100J 想访问其他设备的数据"。Widget 暂时退回 per-app UserDefaults。
+	     未来如果走 Developer ID + provisioning profile 可以恢复 group。 -->
+</dict>
+</plist>

@@ -1,8 +1,10 @@
+from secrets import compare_digest
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.errors import AppError
 from app.core.config import get_settings
+from app.core.errors import AppError
 from app.core.security import create_access_token, create_refresh_token, hash_password, verify_password
 from app.models import Space, User
 
@@ -39,9 +41,23 @@ def register_user(db: Session, email: str, password: str, display_name: str, tim
 
 def authenticate_user(db: Session, email: str, password: str) -> User:
     user = db.scalar(select(User).where(User.email == email.lower(), User.deleted_at.is_(None)))
-    if not user or not verify_password(password, user.password_hash):
+    if not user or not user.password_hash or not verify_password(password, user.password_hash):
         raise AppError(status_code=401, code="unauthorized", message="Invalid email or password.")
     return user
+
+
+def authenticate_owner_access_code(db: Session, access_code: str) -> User:
+    settings = get_settings()
+    expected_code = settings.owner_cloud_access_code.strip()
+    if not expected_code:
+        raise AppError(
+            status_code=503,
+            code="owner_access_code_not_configured",
+            message="Owner cloud access code is not configured.",
+        )
+    if not compare_digest(access_code, expected_code):
+        raise AppError(status_code=401, code="unauthorized", message="Invalid cloud access code.")
+    return get_or_create_local_owner(db)
 
 
 def get_or_create_local_owner(db: Session) -> User:

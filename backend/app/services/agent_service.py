@@ -42,6 +42,7 @@ TOOLS = [
     {"name": "list_projects", "description": "List company projects.", "parameters_schema": {}},
     {"name": "create_project", "description": "Create a company project.", "parameters_schema": {}},
     {"name": "update_project", "description": "Update a company project.", "parameters_schema": {}},
+    {"name": "archive_project", "description": "Archive a company project.", "parameters_schema": {}},
     {
         "name": "list_calendar_items",
         "description": "List fixed-time or fixed-date calendar items.",
@@ -160,6 +161,7 @@ def list_action_logs(db: Session, user_id: str, limit: int = 50, cursor: Optiona
 
 
 def execute_command(db: Session, user_id: str, request: AgentCommandRequest) -> Dict[str, Any]:
+    _validate_agent_arguments(request.command, dict(request.arguments))
     if request.dry_run:
         return {
             "status": "dry_run",
@@ -233,6 +235,73 @@ def _confirmation_reason(command: str, arguments: Dict[str, Any]) -> Optional[st
     if command == "archive_project":
         return "This action will archive an entire project."
     return None
+
+
+def _validate_agent_arguments(command: str, arguments: Dict[str, Any]) -> None:
+    try:
+        _validate_agent_arguments_or_raise(command, arguments)
+    except (KeyError, ValidationError) as exc:
+        raise AppError(status_code=422, code="validation_error", message=str(exc))
+
+
+def _require_argument(arguments: Dict[str, Any], key: str) -> Any:
+    if key not in arguments or arguments[key] in (None, ""):
+        raise KeyError("Missing required agent argument: {}".format(key))
+    return arguments[key]
+
+
+def _validate_agent_arguments_or_raise(command: str, arguments: Dict[str, Any]) -> None:
+    if command == "list_tasks":
+        return
+    if command == "create_task":
+        TaskCreate(**arguments)
+        return
+    if command == "update_task":
+        _require_argument(arguments, "task_id")
+        TaskUpdate(**{key: value for key, value in arguments.items() if key != "task_id"})
+        return
+    if command in {"complete_task", "archive_task"}:
+        _require_argument(arguments, "task_id")
+        return
+    if command == "list_projects":
+        return
+    if command == "create_project":
+        ProjectCreate(**arguments)
+        return
+    if command == "update_project":
+        _require_argument(arguments, "project_id")
+        ProjectUpdate(**{key: value for key, value in arguments.items() if key != "project_id"})
+        return
+    if command == "archive_project":
+        _require_argument(arguments, "project_id")
+        return
+    if command == "list_calendar_items":
+        return
+    if command == "create_calendar_item":
+        CalendarItemCreate(**arguments)
+        return
+    if command == "update_calendar_item":
+        _require_argument(arguments, "calendar_item_id")
+        CalendarItemUpdate(
+            **{key: value for key, value in arguments.items() if key != "calendar_item_id"}
+        )
+        return
+    if command == "list_notes":
+        return
+    if command == "create_note":
+        NoteCreate(**arguments)
+        return
+    if command == "update_note":
+        _require_argument(arguments, "note_id")
+        NoteUpdate(**{key: value for key, value in arguments.items() if key != "note_id"})
+        return
+    if command == "convert_note_to_task":
+        _require_argument(arguments, "note_id")
+        ConvertNoteToTaskRequest(
+            **{key: value for key, value in arguments.items() if key != "note_id"}
+        )
+        return
+    raise AppError(status_code=422, code="validation_error", message="Unsupported agent command.")
 
 
 def _execute_and_log(db: Session, user_id: str, command: str, arguments: Dict[str, Any]) -> Dict[str, Any]:

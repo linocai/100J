@@ -47,6 +47,25 @@ xcodebuild -scheme PersonalAffairsApp \
 
 The exact simulator name can be replaced with any available iOS Simulator from `xcrun simctl list devices available`.
 
+## Run On Your iPhone
+
+Open the iPhone-ready Xcode project, not only the Swift package:
+
+```text
+frontend/apple/PersonalAffairsApp.xcodeproj
+```
+
+In Xcode:
+
+1. Select the `PersonalAffairsApp` scheme.
+2. Select the `PersonalAffairsApp` target, then `Signing & Capabilities`.
+3. Enable `Automatically manage signing`.
+4. Choose your Apple ID / Personal Team.
+5. Keep or adjust the Bundle Identifier. The default is `top.linotsai.app.PersonalAffairs`.
+6. Select your iPhone as the destination and run.
+
+The project target is iPhone-only and links the existing shared `PersonalAffairsCore` static library target.
+
 ## Test
 
 ```bash
@@ -59,6 +78,19 @@ Use the same scratch-path workaround if needed:
 ```bash
 swift test --scratch-path /tmp/personal-affairs-apple-build
 ```
+
+## Package macOS
+
+```bash
+frontend/apple/scripts/package-macos-app.sh
+```
+
+The script builds the macOS release executable with a scratch path under `/tmp`, creates
+`frontend/apple/dist/100J.app`, ad-hoc signs it for local distribution, verifies the signature,
+and writes a timestamped zip next to the app bundle.
+
+For the v1.1 personal-account release, this ad-hoc zip is the macOS install artifact.
+See `frontend/apple/RELEASE.md` for iPhone local install, HZ deployment, and monitoring notes.
 
 ## Run Backend First
 
@@ -99,4 +131,10 @@ Verified commands:
 swift build --scratch-path /tmp/personal-affairs-apple-build
 swift test --scratch-path /tmp/personal-affairs-apple-build
 xcodebuild -quiet -scheme PersonalAffairsApp -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' -derivedDataPath /tmp/personal-affairs-xcode-derived build
+```
+
+From the repository root, the full release-candidate verification entrypoint is:
+
+```bash
+scripts/verify-release.sh
 ```

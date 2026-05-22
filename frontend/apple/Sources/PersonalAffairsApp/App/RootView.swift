@@ -7,18 +7,22 @@ struct RootView: View {
         Group {
             if model.isAuthenticated {
                 #if os(iOS)
-                IOSMainShellView()
+                IOSShell()
                 #else
-                MacWorkbenchShellView()
+                MacShell()
                 #endif
+            } else if model.hasDeviceSession {
+                // 有 device session：要么正在 silent resume，要么即将开始
+                // 永远不让 SetupScreen 闪现
+                ResumingPlaceholder()
             } else {
-                AuthView()
+                SetupScreen()
             }
         }
         .overlay(alignment: .bottom) {
             if let message = model.errorMessage {
                 ErrorBanner(message: message) {
-                    model.errorMessage = nil
+                    Task { @MainActor in model.errorMessage = nil }
                 }
                 .padding()
             }
@@ -29,70 +33,20 @@ struct RootView: View {
     }
 }
 
-#if os(macOS)
-struct MainShellView: View {
-    @EnvironmentObject private var model: AppModel
-
+/// 启动时正在用 device session 静默换 token 的过渡态。
+/// 通常 < 1s，但即便偶尔 2s 用户也能看到「在恢复」而不是空白闪屏。
+struct ResumingPlaceholder: View {
     var body: some View {
-        NavigationSplitView {
-            List(selection: $model.selectedSection) {
-                Section("焦点") {
-                    SidebarRow(section: .today)
-                    SidebarRow(section: .calendar)
-                }
-                Section("个人") {
-                    SidebarRow(section: .personalTasks)
-                    SidebarRow(section: .personalNotes)
-                }
-                Section("公司") {
-                    SidebarRow(section: .companyTasks)
-                    SidebarRow(section: .companyProjects)
-                }
-                Section("系统") {
-                    SidebarRow(section: .agent)
-                    SidebarRow(section: .settings)
-                }
-            }
-            .navigationTitle("事务")
-            .toolbar {
-                Button {
-                    Task { await model.refreshAll() }
-                } label: {
-                    Label("刷新", systemImage: "arrow.clockwise")
-                }
-            }
-        } detail: {
-            Group {
-                switch model.selectedSection ?? .today {
-                case .today:
-                    TodayCommandView(selectTask: { _ in }, selectCalendarItem: { _ in }, jumpToSection: { model.selectedSection = $0 })
-                case .personalTasks:
-                    PersonalTasksView()
-                case .personalNotes:
-                    PersonalNotesView()
-                case .companyTasks:
-                    CompanyTasksView()
-                case .companyProjects:
-                    CompanyProjectsView()
-                case .calendar:
-                    GlobalCalendarView()
-                case .agent:
-                    AgentView()
-                case .settings:
-                    SettingsView()
-                }
+        ZStack {
+            MeshGradientBackdrop()
+            VStack(spacing: 16) {
+                BrandMark(size: 56)
+                ProgressView()
+                    .controlSize(.regular)
+                Text("正在恢复登录…")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
         }
     }
 }
-
-private struct SidebarRow: View {
-    let section: AppSection
-
-    var body: some View {
-        NavigationLink(value: section) {
-            Label(section.title, systemImage: section.systemImage)
-        }
-    }
-}
-#endif

@@ -1,6 +1,6 @@
 import Foundation
 
-public struct RegisterRequest: Encodable {
+public struct RegisterRequest: Codable {
     public let email: String
     public let password: String
     public let displayName: String?
@@ -14,7 +14,7 @@ public struct RegisterRequest: Encodable {
     }
 }
 
-public struct LoginRequest: Encodable {
+public struct LoginRequest: Codable {
     public let email: String
     public let password: String
 
@@ -24,7 +24,87 @@ public struct LoginRequest: Encodable {
     }
 }
 
-public struct RefreshRequest: Encodable {
+public struct OwnerLoginRequest: Codable {
+    public let accessCode: String
+    public let deviceId: String?
+    public let deviceName: String?
+    public let platform: String?
+
+    public init(accessCode: String, deviceId: String? = nil, deviceName: String? = nil, platform: String? = nil) {
+        self.accessCode = accessCode
+        self.deviceId = deviceId
+        self.deviceName = deviceName
+        self.platform = platform
+    }
+}
+
+public struct AppleSignInRequest: Codable {
+    public let idToken: String
+    public let bundleId: String
+    public let email: String?
+    public let fullName: String?
+    public let deviceId: String?
+    public let deviceName: String?
+    public let platform: String?
+
+    public init(
+        idToken: String,
+        bundleId: String,
+        email: String? = nil,
+        fullName: String? = nil,
+        deviceId: String? = nil,
+        deviceName: String? = nil,
+        platform: String? = nil
+    ) {
+        self.idToken = idToken
+        self.bundleId = bundleId
+        self.email = email
+        self.fullName = fullName
+        self.deviceId = deviceId
+        self.deviceName = deviceName
+        self.platform = platform
+    }
+}
+
+public struct DeviceRefreshRequest: Codable {
+    public let deviceId: String
+    public let refreshToken: String
+
+    public init(deviceId: String, refreshToken: String) {
+        self.deviceId = deviceId
+        self.refreshToken = refreshToken
+    }
+}
+
+public struct DeviceLogoutRequest: Codable {
+    public let deviceId: String
+    public let refreshToken: String?
+
+    public init(deviceId: String, refreshToken: String? = nil) {
+        self.deviceId = deviceId
+        self.refreshToken = refreshToken
+    }
+}
+
+public struct EmailRequest: Codable {
+    public let email: String
+
+    public init(email: String) {
+        self.email = email
+    }
+}
+
+public struct EmailOTPVerifyRequest: Codable {
+    public let email: String
+    public let code: String
+
+    public init(email: String, code: String) {
+        self.email = email
+        self.code = code
+    }
+}
+
+public struct RefreshRequest: Codable {
     public let refreshToken: String
 
     public init(refreshToken: String) {
@@ -32,7 +112,7 @@ public struct RefreshRequest: Encodable {
     }
 }
 
-public struct TaskCreateRequest: Encodable {
+public struct TaskCreateRequest: Codable {
     public var spaceId: String
     public var projectId: String?
     public var title: String
@@ -63,7 +143,7 @@ public struct TaskCreateRequest: Encodable {
     }
 }
 
-public struct TaskUpdateRequest: Encodable {
+public struct TaskUpdateRequest: Codable {
     public var projectId: String?
     public var title: String?
     public var description: String?
@@ -94,7 +174,7 @@ public struct TaskUpdateRequest: Encodable {
     }
 }
 
-public struct ProjectCreateRequest: Encodable {
+public struct ProjectCreateRequest: Codable {
     public var spaceId: String
     public var name: String
     public var description: String?
@@ -110,7 +190,7 @@ public struct ProjectCreateRequest: Encodable {
     }
 }
 
-public struct ProjectUpdateRequest: Encodable {
+public struct ProjectUpdateRequest: Codable {
     public var name: String?
     public var description: String?
     public var startDate: String?
@@ -126,7 +206,7 @@ public struct ProjectUpdateRequest: Encodable {
     }
 }
 
-public struct CalendarItemCreateRequest: Encodable {
+public struct CalendarItemCreateRequest: Codable {
     public var spaceId: String
     public var title: String
     public var description: String?
@@ -175,7 +255,7 @@ public struct CalendarItemCreateRequest: Encodable {
     }
 }
 
-public struct CalendarItemUpdateRequest: Encodable {
+public struct CalendarItemUpdateRequest: Codable {
     public var title: String?
     public var description: String?
     public var type: CalendarItemType?
@@ -207,7 +287,7 @@ public struct CalendarItemUpdateRequest: Encodable {
     }
 }
 
-public struct NoteCreateRequest: Encodable {
+public struct NoteCreateRequest: Codable {
     public var spaceId: String
     public var title: String?
     public var body: String
@@ -221,7 +301,7 @@ public struct NoteCreateRequest: Encodable {
     }
 }
 
-public struct NoteUpdateRequest: Encodable {
+public struct NoteUpdateRequest: Codable {
     public var title: String?
     public var body: String?
     public var type: NoteType?
@@ -235,7 +315,7 @@ public struct NoteUpdateRequest: Encodable {
     }
 }
 
-public struct ConvertNoteToTaskRequest: Encodable {
+public struct ConvertNoteToTaskRequest: Codable {
     public var title: String
     public var priority: TaskPriority
     public var dueDate: String?
@@ -247,7 +327,7 @@ public struct ConvertNoteToTaskRequest: Encodable {
     }
 }
 
-public struct LLMKeyRequest: Encodable {
+public struct LLMKeyRequest: Codable {
     public var provider: String
     public var apiKey: String
 
@@ -257,7 +337,7 @@ public struct LLMKeyRequest: Encodable {
     }
 }
 
-public struct AgentCommandRequest: Encodable {
+public struct AgentCommandRequest: Codable {
     public var command: String
     public var arguments: [String: JSONValue]
     public var dryRun: Bool
@@ -269,11 +349,10 @@ public struct AgentCommandRequest: Encodable {
     }
 }
 
-public struct AgentConfirmRequest: Encodable {
+public struct AgentConfirmRequest: Codable {
     public var confirmationToken: String
 
     public init(confirmationToken: String) {
         self.confirmationToken = confirmationToken
     }
 }
-

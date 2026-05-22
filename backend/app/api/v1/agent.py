@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.core.rate_limit import limiter
 from app.schemas.agent import (
     AgentActionLogListResponse,
     AgentCommandRequest,
@@ -47,7 +48,9 @@ def get_tools():
 
 
 @router.post("/commands", response_model=AgentCommandResponse)
+@limiter.limit("30/minute")
 def execute_command(
+    request: Request,
     payload: AgentCommandRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -56,7 +59,9 @@ def execute_command(
 
 
 @router.post("/commands/confirm", response_model=AgentCommandResponse)
+@limiter.limit("30/minute")
 def confirm_command(
+    request: Request,
     payload: AgentConfirmRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -73,4 +78,3 @@ def list_action_logs(
 ):
     items, next_cursor = agent_service.list_action_logs(db, current_user.id, limit, cursor)
     return {"items": items, "next_cursor": next_cursor}
-

@@ -16,8 +16,11 @@ cp .env.example .env
 Edit `.env` if your local PostgreSQL URL differs from the default.
 
 The default auth mode is `AUTH_MODE=local_owner`. In this mode the API lazily creates one
-local owner user plus Personal / Company spaces, and the Apple app can call local APIs without
-JWT login. Set `AUTH_MODE=jwt` when testing the cloud-style login/register flow.
+local owner user plus Personal / Company spaces, and local tools can call APIs without JWT login.
+For v1.1 Apple clients, use `AUTH_MODE=jwt` with Sign in with Apple. Email OTP remains
+available for local/test environments when `EMAIL_OTP_ENABLED=true`, but HZ production keeps it
+disabled. The `OWNER_CLOUD_ACCESS_CODE` path is retained as the personal-account/self-host login
+channel at `/api/v1/auth/owner-login`.
 
 ## Database
 
@@ -73,6 +76,23 @@ pytest
 
 Tests use in-memory SQLite and do not require a local PostgreSQL server.
 
+## Production Deployment
+
+Production deployment is documented in `../deployment.md`. The HZ cloud deployment uses systemd,
+PostgreSQL, `APP_ENV=production`, and `AUTH_MODE=jwt`.
+
+Production secrets must be random and must not use the development defaults:
+
+- `JWT_SECRET_KEY`
+- `POSTGRES_PASSWORD`
+- `LLM_KEY_ENCRYPTION_SECRET`
+- `OWNER_CLOUD_ACCESS_CODE`
+- `EMAIL_OTP_ENABLED=false`
+- `APPLE_ALLOWED_AUDIENCES`
+
+`LLM_KEY_ENCRYPTION_SECRET` is hashed into the Fernet key material at runtime; use a high-entropy
+random value in production, not the example placeholder.
+
 ## Phase 4 Local Smoke
 
 With the API running locally, execute:
@@ -87,6 +107,7 @@ The smoke test registers a disposable test user and verifies auth, spaces, tasks
 ## v1 API Areas
 
 - Auth: `/api/v1/auth/*`
+- Devices: `/api/v1/devices`
 - Spaces: `/api/v1/spaces`
 - Tasks: `/api/v1/tasks`
 - Projects: `/api/v1/projects`

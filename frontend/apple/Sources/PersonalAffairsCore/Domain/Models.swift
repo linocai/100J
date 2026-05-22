@@ -5,6 +5,8 @@ public struct User: Codable, Identifiable, Equatable {
     public let email: String?
     public let displayName: String?
     public let timezone: String
+    public let avatarURL: String?
+    public let locale: String?
 }
 
 public struct Space: Codable, Identifiable, Equatable {
@@ -31,6 +33,44 @@ public struct TaskItem: Codable, Identifiable, Equatable {
     public let createdAt: Date
     public let updatedAt: Date
     public let version: Int
+
+    public init(
+        id: String,
+        userId: String,
+        spaceId: String,
+        projectId: String?,
+        title: String,
+        description: String?,
+        status: TaskStatus,
+        priority: TaskPriority,
+        dueDate: String?,
+        remindAt: Date?,
+        estimatedMinutes: Int?,
+        source: String,
+        completedAt: Date?,
+        archivedAt: Date?,
+        createdAt: Date,
+        updatedAt: Date,
+        version: Int
+    ) {
+        self.id = id
+        self.userId = userId
+        self.spaceId = spaceId
+        self.projectId = projectId
+        self.title = title
+        self.description = description
+        self.status = status
+        self.priority = priority
+        self.dueDate = dueDate
+        self.remindAt = remindAt
+        self.estimatedMinutes = estimatedMinutes
+        self.source = source
+        self.completedAt = completedAt
+        self.archivedAt = archivedAt
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.version = version
+    }
 }
 
 public struct Project: Codable, Identifiable, Equatable {
@@ -47,6 +87,36 @@ public struct Project: Codable, Identifiable, Equatable {
     public let createdAt: Date
     public let updatedAt: Date
     public let version: Int
+
+    public init(
+        id: String,
+        userId: String,
+        spaceId: String,
+        name: String,
+        description: String?,
+        status: ProjectStatus,
+        startDate: String?,
+        targetDate: String?,
+        completedAt: Date?,
+        archivedAt: Date?,
+        createdAt: Date,
+        updatedAt: Date,
+        version: Int
+    ) {
+        self.id = id
+        self.userId = userId
+        self.spaceId = spaceId
+        self.name = name
+        self.description = description
+        self.status = status
+        self.startDate = startDate
+        self.targetDate = targetDate
+        self.completedAt = completedAt
+        self.archivedAt = archivedAt
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.version = version
+    }
 }
 
 public struct CalendarItem: Codable, Identifiable, Equatable {
@@ -70,6 +140,50 @@ public struct CalendarItem: Codable, Identifiable, Equatable {
     public let createdAt: Date
     public let updatedAt: Date
     public let version: Int
+
+    public init(
+        id: String,
+        userId: String,
+        spaceId: String,
+        projectId: String?,
+        relatedTaskId: String?,
+        title: String,
+        description: String?,
+        type: CalendarItemType,
+        allDay: Bool,
+        startDate: String?,
+        endDate: String?,
+        startAt: Date?,
+        endAt: Date?,
+        timezone: String,
+        recurrence: Recurrence?,
+        remindAt: Date?,
+        source: String,
+        createdAt: Date,
+        updatedAt: Date,
+        version: Int
+    ) {
+        self.id = id
+        self.userId = userId
+        self.spaceId = spaceId
+        self.projectId = projectId
+        self.relatedTaskId = relatedTaskId
+        self.title = title
+        self.description = description
+        self.type = type
+        self.allDay = allDay
+        self.startDate = startDate
+        self.endDate = endDate
+        self.startAt = startAt
+        self.endAt = endAt
+        self.timezone = timezone
+        self.recurrence = recurrence
+        self.remindAt = remindAt
+        self.source = source
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.version = version
+    }
 }
 
 public struct Note: Codable, Identifiable, Equatable {
@@ -85,6 +199,34 @@ public struct Note: Codable, Identifiable, Equatable {
     public let createdAt: Date
     public let updatedAt: Date
     public let version: Int
+
+    public init(
+        id: String,
+        userId: String,
+        spaceId: String,
+        title: String?,
+        body: String,
+        type: NoteType,
+        status: NoteStatus,
+        linkedTaskId: String?,
+        source: String,
+        createdAt: Date,
+        updatedAt: Date,
+        version: Int
+    ) {
+        self.id = id
+        self.userId = userId
+        self.spaceId = spaceId
+        self.title = title
+        self.body = body
+        self.type = type
+        self.status = status
+        self.linkedTaskId = linkedTaskId
+        self.source = source
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.version = version
+    }
 }
 
 public struct LLMKey: Codable, Equatable {
@@ -117,4 +259,3 @@ public struct DeleteResponse: Codable, Equatable {
     public let id: String
     public let deletedAt: Date
 }
-

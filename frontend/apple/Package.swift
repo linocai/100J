@@ -5,7 +5,7 @@ let package = Package(
     name: "PersonalAffairsApple",
     platforms: [
         .iOS(.v16),
-        .macOS(.v13)
+        .macOS(.v14)
     ],
     products: [
         .library(name: "PersonalAffairsCore", targets: ["PersonalAffairsCore"]),
@@ -19,7 +19,13 @@ let package = Package(
         .executableTarget(
             name: "PersonalAffairsApp",
             dependencies: ["PersonalAffairsCore"],
-            path: "Sources/PersonalAffairsApp"
+            path: "Sources/PersonalAffairsApp",
+            exclude: ["Resources"]
+        ),
+        .executableTarget(
+            name: "OneHundredJWidgets",
+            dependencies: ["PersonalAffairsCore"],
+            path: "Sources/OneHundredJWidgets"
         ),
         .testTarget(
             name: "PersonalAffairsCoreTests",

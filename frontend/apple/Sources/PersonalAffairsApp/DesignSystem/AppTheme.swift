@@ -1,41 +1,113 @@
 import PersonalAffairsCore
 import SwiftUI
 
+#if os(macOS)
+import AppKit
+#elseif os(iOS)
+import UIKit
+#endif
+
+/// v1.1 重构后的 design token。对齐 `新前端面板演示.html` 的 `:root` 与 Apple HIG 2025。
 enum AppTheme {
+    /// 4pt 网格的间距体系。
     enum Spacing {
         static let xs: CGFloat = 4
         static let sm: CGFloat = 8
         static let md: CGFloat = 12
         static let lg: CGFloat = 16
-        static let xl: CGFloat = 24
-        static let xxl: CGFloat = 32
+        static let xl: CGFloat = 20
+        static let xxl: CGFloat = 24
+        static let xxxl: CGFloat = 32
     }
 
+    /// HIG-friendly 圆角刻度（Sequoia / iOS 26）。
     enum Radius {
+        static let xs: CGFloat = 6
         static let sm: CGFloat = 10
         static let md: CGFloat = 14
         static let lg: CGFloat = 20
         static let xl: CGFloat = 28
+        static let pill: CGFloat = 999
     }
 
-    enum Colors {
-        static let windowBackground = Color(red: 0.93, green: 0.91, blue: 0.87)
-        static let sidebarBackground = Color(red: 0.96, green: 0.94, blue: 0.91)
-        static let surface = Color.white.opacity(0.68)
-        static let surfaceStrong = Color.white.opacity(0.88)
-        static let surfaceSoft = Color.white.opacity(0.44)
-        static let separator = Color.primary.opacity(0.10)
-        static let primaryText = Color.primary
-        static let secondaryText = Color.secondary
-        static let tertiaryText = Color.secondary.opacity(0.72)
-        static let personalAccent = Color(red: 0.17, green: 0.62, blue: 0.43)
-        static let companyAccent = Color(red: 0.26, green: 0.46, blue: 0.96)
-        static let agentAccent = Color(red: 0.51, green: 0.34, blue: 0.85)
-        static let warningAccent = Color(red: 0.84, green: 0.50, blue: 0.16)
-        static let dangerAccent = Color(red: 0.81, green: 0.31, blue: 0.31)
-        static let successAccent = Color(red: 0.20, green: 0.62, blue: 0.39)
+    /// 板块色：与 HTML demo 一一对应，全部为 Apple System Colors。
+    enum Section {
+        static let today    = Color.orange
+        static let plan     = Color.indigo
+        static let calendar = Color.orange
+        static let agent    = Color.purple
+        static let settings = Color.gray
+    }
+
+    /// 状态色，PillView / Card 等通过 status pill 调用。
+    enum Status {
+        static let personal = Color.mint
+        static let company  = Color.indigo
+        static let warning  = Color.orange
+        static let danger   = Color.red
+        static let success  = Color.green
+        static let info     = Color.cyan
+        static let neutral  = Color.secondary
+    }
+
+    /// 玻璃卡片专用的 corner / shadow tokens。
+    enum Glass {
+        static let cardCorner: CGFloat = 14
+        static let sheetCorner: CGFloat = 28
+        static let shadowRadius: CGFloat = 18
+        static let shadowOpacityLight: Double = 0.12
+        static let shadowOpacityDark: Double = 0.42
+    }
+
+    /// 平台无关的语义底色。
+    enum Background {
+        static var canvas: Color {
+            #if os(macOS)
+            return Color(nsColor: .windowBackgroundColor)
+            #else
+            return Color(uiColor: .systemBackground)
+            #endif
+        }
+
+        static var grouped: Color {
+            #if os(macOS)
+            return Color(nsColor: .underPageBackgroundColor)
+            #else
+            return Color(uiColor: .systemGroupedBackground)
+            #endif
+        }
     }
 }
+
+/// 与 v1 兼容的 enum，给 ViewModels 中残留的 PillStyle 引用用。
+/// **v1.1 起 PillStyle 不直接渲染** — 由 `StatusPill(style:)` 选色。
+public enum PillStyle: String, Equatable {
+    case neutral
+    case neutralSubtle
+    case personal
+    case company
+    case calendar
+    case agent
+    case warning
+    case warningSubtle
+    case danger
+    case success
+
+    var color: Color {
+        switch self {
+        case .neutral, .neutralSubtle: return AppTheme.Status.neutral
+        case .personal: return AppTheme.Status.personal
+        case .company: return AppTheme.Status.company
+        case .calendar: return AppTheme.Section.calendar
+        case .agent: return AppTheme.Status.warning  // unused now, will be mapped
+        case .warning, .warningSubtle: return AppTheme.Status.warning
+        case .danger: return AppTheme.Status.danger
+        case .success: return AppTheme.Status.success
+        }
+    }
+}
+
+// MARK: - 域类型扩展（沿用 v1，给 enum 提供 SF Symbol 与 pill 默认）
 
 extension TaskPriority {
     var sortRank: Int {
@@ -53,6 +125,15 @@ extension TaskPriority {
         case .high: return .warning
         case .medium: return .neutral
         case .low: return .neutralSubtle
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .urgent: return "紧急"
+        case .high: return "高优"
+        case .medium: return "中优"
+        case .low: return "低优"
         }
     }
 }
@@ -84,7 +165,7 @@ extension CalendarItemType {
         case .deadline: return .danger
         case .anniversary: return .warningSubtle
         case .appointment: return .company
-        case .reminder: return .agent
+        case .reminder: return .neutral
         }
     }
 }
@@ -99,7 +180,7 @@ extension NoteType {
 
     var pillStyle: PillStyle {
         switch self {
-        case .idea: return .agent
+        case .idea: return .warning
         case .memo: return .neutral
         }
     }
@@ -137,46 +218,4 @@ enum TimeOnlyFormatter {
 func parsedDateOnly(_ value: String?) -> Date? {
     guard let value else { return nil }
     return DateOnlyFormatter.shared.date(from: value)
-}
-
-func sortedForFocus(_ tasks: [TaskItem]) -> [TaskItem] {
-    tasks.sorted { lhs, rhs in
-        if lhs.priority.sortRank != rhs.priority.sortRank {
-            return lhs.priority.sortRank < rhs.priority.sortRank
-        }
-
-        let lhsDate = parsedDateOnly(lhs.dueDate)
-        let rhsDate = parsedDateOnly(rhs.dueDate)
-        switch (lhsDate, rhsDate) {
-        case let (left?, right?) where left != right:
-            return left < right
-        case (_?, nil):
-            return true
-        case (nil, _?):
-            return false
-        default:
-            return lhs.updatedAt > rhs.updatedAt
-        }
-    }
-}
-
-func sortedCalendarItems(_ items: [CalendarItem]) -> [CalendarItem] {
-    items.sorted { lhs, rhs in
-        let lhsDate = calendarSortDate(lhs) ?? .distantFuture
-        let rhsDate = calendarSortDate(rhs) ?? .distantFuture
-        if lhsDate != rhsDate {
-            return lhsDate < rhsDate
-        }
-        if lhs.allDay != rhs.allDay {
-            return lhs.allDay
-        }
-        return lhs.updatedAt > rhs.updatedAt
-    }
-}
-
-func calendarSortDate(_ item: CalendarItem) -> Date? {
-    if item.allDay {
-        return parsedDateOnly(item.startDate)
-    }
-    return item.startAt
 }

@@ -29,8 +29,10 @@ public final class InMemoryTokenStore: TokenStore {
 }
 
 public final class KeychainTokenStore: TokenStore {
-    public static let defaultService = "com.lino.100j.auth"
+    public static let defaultService = "top.linotsai.app.PersonalAffairs.auth"
     public static let legacyService = "PersonalAffairsApp"
+    // Legacy keychain service retained only to migrate existing local sessions.
+    public static let legacyMacService = "com.lino.100j.auth"
 
     private let service: String
     private let legacyServices: [String]
@@ -39,7 +41,7 @@ public final class KeychainTokenStore: TokenStore {
 
     public init(
         service: String = KeychainTokenStore.defaultService,
-        legacyServices: [String] = [KeychainTokenStore.legacyService]
+        legacyServices: [String] = [KeychainTokenStore.legacyService, KeychainTokenStore.legacyMacService]
     ) {
         self.service = service
         self.legacyServices = legacyServices.filter { $0 != service }
@@ -101,13 +103,16 @@ public final class KeychainTokenStore: TokenStore {
     }
 
     private func read(account: String, service: String) -> String? {
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
+        if let group = KeychainAccessGroup.identifier {
+            query[kSecAttrAccessGroup as String] = group
+        }
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         guard status == errSecSuccess, let data = item as? Data else { return nil }
@@ -116,16 +121,23 @@ public final class KeychainTokenStore: TokenStore {
 
     private func save(value: String, account: String, service: String) throws {
         let data = Data(value.utf8)
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        let update: [String: Any] = [kSecValueData as String: data]
+        if let group = KeychainAccessGroup.identifier {
+            query[kSecAttrAccessGroup as String] = group
+        }
+        let update: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
         let status = SecItemUpdate(query as CFDictionary, update as CFDictionary)
         if status == errSecItemNotFound {
             var add = query
             add[kSecValueData as String] = data
+            add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
             let addStatus = SecItemAdd(add as CFDictionary, nil)
             guard addStatus == errSecSuccess else { throw KeychainError.status(addStatus) }
         } else if status != errSecSuccess {
@@ -134,12 +146,27 @@ public final class KeychainTokenStore: TokenStore {
     }
 
     private func delete(account: String, service: String) {
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
+        if let group = KeychainAccessGroup.identifier {
+            query[kSecAttrAccessGroup as String] = group
+        }
         SecItemDelete(query as CFDictionary)
+    }
+}
+
+/// v1.1.3+: 用 access group 作为稳定 Keychain item 身份键，避免 ad-hoc 重签触发重新授权。
+/// 默认 nil（单测 / 未签名运行不受影响）；App 启动时由 `PersonalAffairsApp` 注入正式值。
+public enum KeychainAccessGroup {
+    public static var identifier: String?
+
+    /// App 启动调用一次。entitlements 必须声明 `keychain-access-groups`，否则
+    /// SecItemAdd 会返回 errSecMissingEntitlement (-34018)。
+    public static func configure(_ group: String) {
+        identifier = group
     }
 }
 

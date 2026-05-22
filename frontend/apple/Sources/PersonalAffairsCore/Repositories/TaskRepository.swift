@@ -25,6 +25,17 @@ public final class TaskRepository {
         ))
     }
 
+    public func list(query: TaskListQuery) async throws -> [TaskItem] {
+        try await list(
+            spaceId: query.spaceId,
+            projectId: query.projectId,
+            projectScope: query.projectScope,
+            status: query.status,
+            priority: query.priority,
+            search: query.search
+        )
+    }
+
     public func page(
         spaceId: String? = nil,
         projectId: String? = nil,
@@ -46,6 +57,19 @@ public final class TaskRepository {
         query.append(URLQueryItem(name: "limit", value: "\(limit)"))
         query.appendIfPresent("cursor", cursor)
         return try await api.send("/tasks", query: query, response: PageResponse<TaskItem>.self)
+    }
+
+    public func page(query: TaskListQuery, limit: Int = 100, cursor: String? = nil) async throws -> PageResponse<TaskItem> {
+        try await page(
+            spaceId: query.spaceId,
+            projectId: query.projectId,
+            projectScope: query.projectScope,
+            status: query.status,
+            priority: query.priority,
+            search: query.search,
+            limit: limit,
+            cursor: cursor
+        )
     }
 
     private func taskQuery(

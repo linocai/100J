@@ -9,7 +9,7 @@ public enum AppAuthMode: String, Codable, CaseIterable, Identifiable {
     public var label: String {
         switch self {
         case .localOwner: return "本机 Owner"
-        case .cloudJWT: return "云端登录"
+        case .cloudJWT: return "个人云端"
         }
     }
 }

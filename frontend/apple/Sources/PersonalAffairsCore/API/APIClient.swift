@@ -4,6 +4,7 @@ public enum APIClientError: Error, LocalizedError, Equatable {
     case invalidURL
     case unauthorized
     case server(code: String, message: String)
+    case network(String)
     case transport(String)
 
     public var errorDescription: String? {
@@ -13,6 +14,8 @@ public enum APIClientError: Error, LocalizedError, Equatable {
         case .unauthorized:
             return "登录已过期，请重新登录。"
         case .server(_, let message):
+            return message
+        case .network(let message):
             return message
         case .transport(let message):
             return message
@@ -53,17 +56,20 @@ public final class APIClient {
     private let session: URLSession
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
+    private let diagnostics: DiagnosticLogger
 
     public init(
         baseURL: URL = URL(string: "http://127.0.0.1:8000/api/v1")!,
         authMode: AppAuthMode = .localOwner,
         tokenStore: TokenStore = KeychainTokenStore(),
-        session: URLSession = .shared
+        session: URLSession = .shared,
+        diagnostics: DiagnosticLogger = .shared
     ) {
         self.baseURL = baseURL
         self.authMode = authMode
         self.tokenStore = tokenStore
         self.session = session
+        self.diagnostics = diagnostics
         self.decoder = JSONDecoder.personalAffairs
         self.encoder = JSONEncoder.personalAffairs
     }
@@ -100,10 +106,12 @@ public final class APIClient {
         do {
             (data, urlResponse) = try await session.data(for: request)
         } catch {
-            throw APIClientError.transport(error.localizedDescription)
+            diagnostics.recordAPI(method: method.rawValue, path: path, status: nil, error: "network")
+            throw APIClientError.network(error.localizedDescription)
         }
 
         guard let http = urlResponse as? HTTPURLResponse else {
+            diagnostics.recordAPI(method: method.rawValue, path: path, status: nil, error: "invalid_http_response")
             throw APIClientError.transport("HTTP 响应无效。")
         }
 
@@ -120,12 +128,19 @@ public final class APIClient {
 
         guard (200..<300).contains(http.statusCode) else {
             if let envelope = try? decoder.decode(ErrorEnvelope.self, from: data) {
-                if envelope.error.code == "unauthorized" { throw APIClientError.unauthorized }
+                if envelope.error.code == "unauthorized", shouldTreatUnauthorizedAsExpiredSession(path: path) {
+                    diagnostics.recordAPI(method: method.rawValue, path: path, status: http.statusCode, error: "unauthorized")
+                    try? tokenStore.clear()
+                    throw APIClientError.unauthorized
+                }
+                diagnostics.recordAPI(method: method.rawValue, path: path, status: http.statusCode, error: envelope.error.code)
                 throw APIClientError.server(code: envelope.error.code, message: envelope.error.message)
             }
+            diagnostics.recordAPI(method: method.rawValue, path: path, status: http.statusCode, error: "http_error")
             throw APIClientError.server(code: "http_error", message: "HTTP \(http.statusCode)")
         }
 
+        diagnostics.recordAPI(method: method.rawValue, path: path, status: http.statusCode, error: nil)
         if Response.self == EmptyResponse.self {
             return EmptyResponse() as! Response
         }
@@ -176,6 +191,10 @@ public final class APIClient {
             try? tokenStore.clear()
             return false
         }
+    }
+
+    private func shouldTreatUnauthorizedAsExpiredSession(path: String) -> Bool {
+        !path.hasPrefix("/auth/")
     }
 
     public func fetchAll<Item: Codable>(

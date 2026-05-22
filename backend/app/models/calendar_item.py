@@ -15,7 +15,9 @@ class CalendarItem(IdMixin, TimestampMixin, Base):
             name="ck_calendar_items_type",
         ),
         CheckConstraint("recurrence in ('none', 'yearly', 'monthly')", name="ck_calendar_items_recurrence"),
-        CheckConstraint("source in ('manual', 'agent')", name="ck_calendar_items_source"),
+        CheckConstraint("source in ('manual', 'agent', 'seed_demo')", name="ck_calendar_items_source"),
+        CheckConstraint("length(title) <= 200", name="ck_calendar_title_len"),
+        CheckConstraint("description is null or length(description) <= 8000", name="ck_calendar_desc_len"),
         Index("idx_calendar_items_user_space", "user_id", "space_id"),
         Index("idx_calendar_items_start_date", "start_date"),
         Index("idx_calendar_items_start_at", "start_at"),
@@ -28,7 +30,7 @@ class CalendarItem(IdMixin, TimestampMixin, Base):
     space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id"), nullable=False)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=True)
     related_task_id: Mapped[str] = mapped_column(ForeignKey("tasks.id"), nullable=True)
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=True)
     type: Mapped[str] = mapped_column(String(32), default="appointment", nullable=False)
     all_day: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -44,4 +46,3 @@ class CalendarItem(IdMixin, TimestampMixin, Base):
     space = relationship("Space", back_populates="calendar_items")
     project = relationship("Project", back_populates="calendar_items")
     related_task = relationship("Task")
-

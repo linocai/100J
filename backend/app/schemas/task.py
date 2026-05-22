@@ -4,11 +4,12 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from app.schemas.common import ORMModel
+from app.schemas.limits import LONG_TEXT_MAX_LENGTH, TASK_TITLE_MAX_LENGTH
 
 
 class TaskBase(BaseModel):
-    title: Optional[str] = Field(default=None, min_length=1, max_length=255)
-    description: Optional[str] = None
+    title: Optional[str] = Field(default=None, min_length=1, max_length=TASK_TITLE_MAX_LENGTH)
+    description: Optional[str] = Field(default=None, max_length=LONG_TEXT_MAX_LENGTH)
     priority: Optional[str] = "medium"
     due_date: Optional[date] = None
     remind_at: Optional[datetime] = None
@@ -18,11 +19,11 @@ class TaskBase(BaseModel):
 class TaskCreate(TaskBase):
     space_id: str
     project_id: Optional[str] = None
-    title: str = Field(min_length=1, max_length=255)
+    title: str = Field(min_length=1, max_length=TASK_TITLE_MAX_LENGTH)
 
 
 class ProjectTaskCreate(TaskBase):
-    title: str = Field(min_length=1, max_length=255)
+    title: str = Field(min_length=1, max_length=TASK_TITLE_MAX_LENGTH)
 
 
 class TaskUpdate(TaskBase):
@@ -53,4 +54,3 @@ class TaskRead(ORMModel):
 class TaskListResponse(BaseModel):
     items: List[TaskRead]
     next_cursor: Optional[str] = None
-

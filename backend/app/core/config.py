@@ -1,8 +1,9 @@
+import json
 from functools import lru_cache
-from typing import List
+from typing import Annotated, List
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -19,14 +20,27 @@ class Settings(BaseSettings):
     local_owner_email: str = "owner@100j.app"
     local_owner_display_name: str = "100J Owner"
     local_owner_timezone: str = "Asia/Shanghai"
+    owner_cloud_access_code: str = ""
+    email_otp_enabled: bool = True
+    apple_allowed_audiences: Annotated[List[str], NoDecode] = Field(
+        default_factory=lambda: ["top.linotsai.app.PersonalAffairs"]
+    )
     pending_confirmation_expire_minutes: int = 15
-    cors_origins: List[str] = Field(default_factory=list)
+    cors_origins: Annotated[List[str], NoDecode] = Field(default_factory=list)
 
-    @field_validator("cors_origins", mode="before")
+    @field_validator("cors_origins", "apple_allowed_audiences", mode="before")
     @classmethod
-    def parse_cors_origins(cls, value):
+    def parse_string_list(cls, value):
         if isinstance(value, str):
-            return [item.strip() for item in value.split(",") if item.strip()]
+            stripped = value.strip()
+            if not stripped:
+                return []
+            if stripped.startswith("["):
+                parsed = json.loads(stripped)
+                if not isinstance(parsed, list):
+                    raise ValueError("CORS_ORIGINS JSON value must be a list")
+                return [str(item).strip() for item in parsed if str(item).strip()]
+            return [item.strip() for item in stripped.split(",") if item.strip()]
         return value
 
     @field_validator("auth_mode")

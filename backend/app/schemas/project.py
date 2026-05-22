@@ -4,18 +4,19 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from app.schemas.common import ORMModel
+from app.schemas.limits import LONG_TEXT_MAX_LENGTH, PROJECT_NAME_MAX_LENGTH
 
 
 class ProjectBase(BaseModel):
-    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
-    description: Optional[str] = None
+    name: Optional[str] = Field(default=None, min_length=1, max_length=PROJECT_NAME_MAX_LENGTH)
+    description: Optional[str] = Field(default=None, max_length=LONG_TEXT_MAX_LENGTH)
     start_date: Optional[date] = None
     target_date: Optional[date] = None
 
 
 class ProjectCreate(ProjectBase):
     space_id: str
-    name: str = Field(min_length=1, max_length=255)
+    name: str = Field(min_length=1, max_length=PROJECT_NAME_MAX_LENGTH)
 
 
 class ProjectUpdate(ProjectBase):
@@ -41,4 +42,3 @@ class ProjectRead(ORMModel):
 class ProjectListResponse(BaseModel):
     items: List[ProjectRead]
     next_cursor: Optional[str] = None
-

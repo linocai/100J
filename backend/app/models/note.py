@@ -11,6 +11,8 @@ class Note(IdMixin, TimestampMixin, Base):
         CheckConstraint("type in ('idea', 'memo')", name="ck_notes_type"),
         CheckConstraint("status in ('active', 'archived')", name="ck_notes_status"),
         CheckConstraint("source in ('manual', 'agent')", name="ck_notes_source"),
+        CheckConstraint("title is null or length(title) <= 200", name="ck_notes_title_len"),
+        CheckConstraint("length(body) <= 16000", name="ck_notes_body_len"),
         Index("idx_notes_user_space", "user_id", "space_id"),
         Index("idx_notes_status", "status"),
         Index("idx_notes_updated_at", "updated_at"),
@@ -18,7 +20,7 @@ class Note(IdMixin, TimestampMixin, Base):
 
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
     space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id"), nullable=False)
-    title: Mapped[str] = mapped_column(String(255), nullable=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=True)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     type: Mapped[str] = mapped_column(String(32), default="idea", nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
@@ -27,4 +29,3 @@ class Note(IdMixin, TimestampMixin, Base):
 
     space = relationship("Space", back_populates="notes")
     linked_task = relationship("Task")
-

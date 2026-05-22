@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "codex/**"
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev]"
+      - run: ruff check .
+      - run: pytest
+
+  apple:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: frontend/apple
+    steps:
+      - uses: actions/checkout@v6
+      - run: swift build --scratch-path /tmp/personal-affairs-apple-build
+      - run: swift test --scratch-path /tmp/personal-affairs-apple-build
+      - run: xcodebuild -project PersonalAffairsApp.xcodeproj -scheme PersonalAffairsApp -destination 'generic/platform=iOS' -derivedDataPath /tmp/personal-affairs-xcodeproj-derived CODE_SIGNING_ALLOWED=NO build

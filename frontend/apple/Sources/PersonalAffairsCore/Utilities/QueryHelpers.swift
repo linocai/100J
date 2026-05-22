@@ -8,7 +8,7 @@ extension Array where Element == URLQueryItem {
 }
 
 extension String {
-    var nilIfBlank: String? {
+    public var nilIfBlank: String? {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
