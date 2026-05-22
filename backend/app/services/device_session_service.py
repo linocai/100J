@@ -20,7 +20,6 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
 from app.core.errors import AppError
 from app.core.security import create_access_token
 from app.models import DeviceSession, User
