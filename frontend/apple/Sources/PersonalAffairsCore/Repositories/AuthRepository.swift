@@ -1,6 +1,9 @@
 import Foundation
 
-public final class AuthRepository {
+/// `open` so unit tests can subclass it with stubbed `silentResume()` /
+/// `me()` methods without needing a network. Production code never
+/// subclasses.
+open class AuthRepository {
     private let api: APIClient
     private let deviceSession: DeviceSessionStore
 
@@ -89,20 +92,32 @@ public final class AuthRepository {
 
     /// 启动时调用：如果 Keychain 有 device refresh token，静默换 access token。
     /// 失败抛 APIClientError.unauthorized（调用方应回到登录页）。
-    public func silentResume() async throws {
+    open func silentResume() async throws {
         guard let refreshToken = deviceSession.refreshToken else {
+            // v1.2.4 (#1): no token in Keychain means whatever made us land
+            // here (RootView ResumingPlaceholder) was a stale "hasActiveSession"
+            // signal. Clear DeviceSessionStore so the next render falls
+            // back to SetupScreen instead of looping in the placeholder.
+            deviceSession.clearAll()
             throw APIClientError.unauthorized
         }
-        let tokens: TokenResponse = try await api.send(
-            "/auth/device-refresh",
-            method: .post,
-            body: DeviceRefreshRequest(
-                deviceId: deviceSession.deviceId,
-                refreshToken: refreshToken
-            ),
-            response: TokenResponse.self
-        )
-        try persist(tokens)
+        do {
+            let tokens: TokenResponse = try await api.send(
+                "/auth/device-refresh",
+                method: .post,
+                body: DeviceRefreshRequest(
+                    deviceId: deviceSession.deviceId,
+                    refreshToken: refreshToken
+                ),
+                response: TokenResponse.self
+            )
+            try persist(tokens)
+        } catch APIClientError.unauthorized {
+            // Server says the device session is dead. Clear local state
+            // so the placeholder can clear out and SetupScreen shows up.
+            deviceSession.clearAll()
+            throw APIClientError.unauthorized
+        }
     }
 
     public func logout() async throws {

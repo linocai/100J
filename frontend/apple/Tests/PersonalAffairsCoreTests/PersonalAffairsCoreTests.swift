@@ -361,7 +361,7 @@ final class PersonalAffairsCoreTests: XCTestCase {
     func testAPIClientRefreshesTokenAndRetriesNonAuthUnauthorized() async throws {
         var seenPaths: [String] = []
         let store = InMemoryTokenStore(accessToken: "old-access", refreshToken: "refresh-token")
-        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, session: Self.stubSession { request in
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, deviceSession: nil, session: Self.stubSession { request in
             seenPaths.append(request.url?.path ?? "")
             if request.url?.path == "/api/v1/auth/refresh" {
                 let body = try Self.jsonBody(from: request)
@@ -386,7 +386,7 @@ final class PersonalAffairsCoreTests: XCTestCase {
 
     func testAPIClientClearsTokensWhenRefreshFails() async throws {
         let store = InMemoryTokenStore(accessToken: "old-access", refreshToken: "refresh-token")
-        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, session: Self.stubSession { request in
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, deviceSession: nil, session: Self.stubSession { request in
             if request.url?.path == "/api/v1/auth/refresh" {
                 return (401, #"{"error":{"code":"unauthorized","message":"refresh expired","details":{}}}"#)
             }
@@ -407,7 +407,7 @@ final class PersonalAffairsCoreTests: XCTestCase {
     func testAPIClientClearsTokensWhenRetryAlsoReturnsUnauthorized() async throws {
         var refreshCount = 0
         let store = InMemoryTokenStore(accessToken: "old-access", refreshToken: "refresh-token")
-        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, session: Self.stubSession { request in
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, deviceSession: nil, session: Self.stubSession { request in
             if request.url?.path == "/api/v1/auth/refresh" {
                 refreshCount += 1
                 return (200, #"{"access_token":"new-access","refresh_token":"new-refresh","token_type":"bearer"}"#)

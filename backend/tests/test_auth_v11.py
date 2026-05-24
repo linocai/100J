@@ -1,12 +1,14 @@
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 import app.api.v1.auth as auth_module
 import app.services.apple_auth_service as apple_auth_service
+import app.services.device_session_service as device_session_service
 import app.services.email_otp_service as email_otp_service
 from app.core.config import get_settings
-from app.models import DeviceToken, EmailOTPCode, Task
+from app.models import DeviceSession, DeviceToken, EmailOTPCode, Task, User
 from tests.conftest import TestingSessionLocal, register_and_auth
 
 
@@ -255,6 +257,173 @@ def test_otp_cleanup_removes_expired_rows():
 
     assert deleted == 1
     assert remaining == {"recent@example.com", "live@example.com"}
+
+
+# ---------------------------------------------------------------------------
+# v1.2.4 P1: device-logout hardening + device-session refresh chain
+# ---------------------------------------------------------------------------
+
+_DEVICE_ID = "device-uuid-fixture-1"
+
+
+def _seed_device_session(client) -> tuple[dict, str]:
+    """Register a user, then directly issue a device session for them.
+
+    Returns ({headers, user_id, device_id}, plaintext_refresh_token).
+    """
+    headers, _ = register_and_auth(client)
+    user_id = client.get("/api/v1/me", headers=headers).json()["id"]
+    with TestingSessionLocal() as db:
+        user = db.scalar(
+            select(User).where(User.id == user_id)
+        )
+        issued = device_session_service.issue(
+            db,
+            user=user,
+            device_id=_DEVICE_ID,
+            device_name="Test Mac",
+            platform="macos",
+        )
+        refresh_token = issued.plaintext_refresh_token
+    return {"headers": headers, "user_id": user_id, "device_id": _DEVICE_ID}, refresh_token
+
+
+def test_device_logout_requires_auth_returns_401_when_no_token(client):
+    """P1-1 (#6): device-logout without any auth must 401."""
+    _, _ = _seed_device_session(client)
+
+    response = client.post(
+        "/api/v1/auth/device-logout",
+        json={"device_id": _DEVICE_ID},
+    )
+
+    assert response.status_code == 401, response.text
+    assert response.json()["error"]["code"] == "unauthorized"
+
+    # Session must still be live.
+    with TestingSessionLocal() as db:
+        session = db.scalar(
+            select(DeviceSession).where(DeviceSession.device_id == _DEVICE_ID)
+        )
+        assert session is not None
+        assert session.revoked_at is None
+
+
+def test_device_logout_with_access_jwt_succeeds(client):
+    """P1-1 (#6): valid access JWT belonging to the session owner unlocks revoke."""
+    info, _refresh = _seed_device_session(client)
+
+    response = client.post(
+        "/api/v1/auth/device-logout",
+        headers=info["headers"],
+        json={"device_id": _DEVICE_ID},
+    )
+
+    assert response.status_code == 204, response.text
+    with TestingSessionLocal() as db:
+        session = db.scalar(
+            select(DeviceSession).where(DeviceSession.device_id == _DEVICE_ID)
+        )
+        assert session is not None
+        assert session.revoked_at is not None
+
+
+def test_device_logout_with_refresh_token_succeeds(client):
+    """P1-1 (#6): caller can also authenticate via body.refresh_token."""
+    _, refresh_token = _seed_device_session(client)
+
+    response = client.post(
+        "/api/v1/auth/device-logout",
+        json={"device_id": _DEVICE_ID, "refresh_token": refresh_token},
+    )
+
+    assert response.status_code == 204, response.text
+    with TestingSessionLocal() as db:
+        session = db.scalar(
+            select(DeviceSession).where(DeviceSession.device_id == _DEVICE_ID)
+        )
+        assert session is not None
+        assert session.revoked_at is not None
+
+
+def test_device_logout_with_wrong_refresh_token_returns_401(client):
+    """P1-1 (#6): mismatched refresh_token must be rejected with 401."""
+    _, _ = _seed_device_session(client)
+
+    response = client.post(
+        "/api/v1/auth/device-logout",
+        json={"device_id": _DEVICE_ID, "refresh_token": "totally-wrong"},
+    )
+
+    assert response.status_code == 401, response.text
+    assert response.json()["error"]["code"] == "unauthorized"
+
+    with TestingSessionLocal() as db:
+        session = db.scalar(
+            select(DeviceSession).where(DeviceSession.device_id == _DEVICE_ID)
+        )
+        assert session is not None
+        assert session.revoked_at is None
+
+
+def test_issue_after_revoke_creates_fresh_row_or_resets_cleanly(client):
+    """P1-1 (#25): issue() must NOT silently un-revoke a dead session.
+
+    The new row must have a fresh refresh_token_hash (the old token must
+    not still be valid) and revoked_at must be NULL.
+    """
+    info, refresh_token = _seed_device_session(client)
+    user_id = info["user_id"]
+
+    # 1) Revoke the session.
+    with TestingSessionLocal() as db:
+        device_session_service.revoke(db, device_id=_DEVICE_ID)
+
+    with TestingSessionLocal() as db:
+        session = db.scalar(
+            select(DeviceSession).where(DeviceSession.device_id == _DEVICE_ID)
+        )
+        assert session is not None
+        assert session.revoked_at is not None
+        revoked_row_id = session.id
+
+    # 2) Issue again with the same device_id — must produce a clean row.
+    with TestingSessionLocal() as db:
+        user = db.scalar(
+            select(User).where(User.id == user_id)
+        )
+        reissued = device_session_service.issue(
+            db,
+            user=user,
+            device_id=_DEVICE_ID,
+            device_name="Test Mac",
+            platform="macos",
+        )
+        new_refresh = reissued.plaintext_refresh_token
+
+    with TestingSessionLocal() as db:
+        session = db.scalar(
+            select(DeviceSession).where(DeviceSession.device_id == _DEVICE_ID)
+        )
+        assert session is not None
+        assert session.revoked_at is None, "Re-issued session must NOT carry old revoked_at"
+        # Either the row id changed (delete + insert) or, if reused, hashes differ.
+        # We accept both; the contract is "clean row with new token".
+        assert session.id != revoked_row_id or session.refresh_token_hash != device_session_service._hash(refresh_token)
+
+    # 3) Old refresh token must NOT rotate the new session.
+    response = client.post(
+        "/api/v1/auth/device-refresh",
+        json={"device_id": _DEVICE_ID, "refresh_token": refresh_token},
+    )
+    assert response.status_code == 401, response.text
+
+    # 4) New refresh token DOES rotate (sanity).
+    response = client.post(
+        "/api/v1/auth/device-refresh",
+        json={"device_id": _DEVICE_ID, "refresh_token": new_refresh},
+    )
+    assert response.status_code == 200, response.text
 
 
 def test_db_check_rejects_overlong_task_title(client):

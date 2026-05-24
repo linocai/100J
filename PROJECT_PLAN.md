@@ -886,3 +886,20 @@ P3 / P4 在 P2 完成后可与 P5 并行，但都要先于 P6 完成（P6 客户
 - 覆盖 reviewer 报告 34 条中的 32 条；#14 / #17 明确 deferred 到 v1.2.5。
 - 7 个 phase（P0–P7），按依赖图串行 + 局部并行执行。
 - 版本号目标：v1.2.4 / build 1.126。
+
+### [2026-05-24] P1 施工补充
+- 变更内容：
+  - `device_session_service._verify_token_or_raise` 顺手修复 SQLite 测试环境下 `expires_at` 比较抛 `TypeError`（offset-naive vs offset-aware）的历史 bug。新增 `_as_aware_utc()` 兜底。
+  - `DeviceSessionStore` 由 `final class` 改为 `open class`（含 `refreshToken` / `saveRefreshToken` / `clearRefreshToken` / `info` / `recordIssued` / `clearAll` / `hasActiveSession` / `deviceId`），仅为单测能 subclass 出 hermetic stub；生产代码继续用 concrete class。
+  - `AuthRepository` 由 `final` 改 `open class`，`silentResume()` 标 `open`，同上理由。
+  - `AppModel` 新增 test-only DI init：`init(authMode:, api:, authRepository:, deviceSession:, startsNetworkMonitor:)`；原 `init()` 改 `convenience`。内部所有 `DeviceSessionStore.shared.*` 替换为 `deviceSessionStore` 实例字段。
+  - `APIClient` 401 自动 refresh 增加 `shouldTreatUnauthorizedAsExpiredSession(path:)` 门控：`/auth/*` 路径上的 401（如 owner-login 拒签）不再误触发 refresh / retry。
+  - `APIClient.refreshTokensIfPossible` 失败/无 refresh token 时**不再**主动 `tokenStore.clear()`，把清理决策交给上层 401 envelope 处理器（它已经有 cooldown 逻辑）。
+  - 新增 SwiftPM test target `PersonalAffairsAppTests`，依赖 `PersonalAffairsApp` + `PersonalAffairsCore`，承载 `AppModelAuthFlowTests`。
+- 变更原因：
+  - SQLite tz 比较 bug 暴露于本期新增的 verify() 测试路径，不修则后端测试无法绿。
+  - DeviceSessionStore / AuthRepository 不开放继承则无法写"不打开网络/Keychain"的 hermetic 测试。
+  - AppModel 没有 DI 入口则无法测 `run` / `expireCloudSession`。
+  - 401 refresh 的 `/auth/*` 门控修复：device session refresh 启用后，dev 机 Keychain 里的 device refresh token 会让 `/auth/owner-login` 的 401 误走 refresh→retry 路径，导致原 `testOwnerLoginUnauthorizedKeepsServerMessage` 红。
+  - refreshTokensIfPossible 不再清理 store：cooldown 才有意义；否则两段清理叠加把 cooldown 绕过去。
+- 影响范围：Phase P1（reviewer #1 / #6 / #8 / #12 / #25）；连带影响所有依赖 `DeviceSessionStore`/`AuthRepository` 的代码（生产层兼容，仅是放宽继承约束）。

@@ -52,22 +52,30 @@ public final class APIClient {
     public var baseURL: URL
     public var authMode: AppAuthMode
     public let tokenStore: TokenStore
+    private let deviceSession: DeviceSessionStore?
 
     private let session: URLSession
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
     private let diagnostics: DiagnosticLogger
 
+    /// v1.2.4 (#12): per-path cool-down so a flurry of 401s within the
+    /// same window doesn't trigger expireCloudSession() twice in a row.
+    private var lastUnauthorizedHandledAt: [String: Date] = [:]
+    private let unauthorizedCooldown: TimeInterval = 5
+
     public init(
         baseURL: URL = URL(string: "http://127.0.0.1:8000/api/v1")!,
         authMode: AppAuthMode = .localOwner,
         tokenStore: TokenStore = KeychainTokenStore(),
+        deviceSession: DeviceSessionStore? = .shared,
         session: URLSession = .shared,
         diagnostics: DiagnosticLogger = .shared
     ) {
         self.baseURL = baseURL
         self.authMode = authMode
         self.tokenStore = tokenStore
+        self.deviceSession = deviceSession
         self.session = session
         self.diagnostics = diagnostics
         self.decoder = JSONDecoder.personalAffairs
@@ -115,7 +123,11 @@ public final class APIClient {
             throw APIClientError.transport("HTTP 响应无效。")
         }
 
-        if authMode == .cloudJWT, http.statusCode == 401, allowRefresh, try await refreshTokensIfPossible() {
+        if authMode == .cloudJWT,
+           http.statusCode == 401,
+           allowRefresh,
+           shouldTreatUnauthorizedAsExpiredSession(path: path),
+           try await refreshTokensIfPossible() {
             return try await send(
                 path,
                 method: method,
@@ -130,6 +142,14 @@ public final class APIClient {
             if let envelope = try? decoder.decode(ErrorEnvelope.self, from: data) {
                 if envelope.error.code == "unauthorized", shouldTreatUnauthorizedAsExpiredSession(path: path) {
                     diagnostics.recordAPI(method: method.rawValue, path: path, status: http.statusCode, error: "unauthorized")
+                    if shouldSuppressUnauthorizedSessionExpire(path: path) {
+                        // v1.2.4 (#12): same path 401'd within the cool-down
+                        // — caller already handled it once, don't nuke the
+                        // token store again (which would clobber a fresh
+                        // refresh that just happened in parallel).
+                        throw APIClientError.unauthorized
+                    }
+                    rememberUnauthorized(path: path)
                     try? tokenStore.clear()
                     throw APIClientError.unauthorized
                 }
@@ -174,6 +194,43 @@ public final class APIClient {
 
     private func refreshTokensIfPossible() async throws -> Bool {
         guard authMode == .cloudJWT else { return false }
+
+        // v1.2.4 (#1): if this client has a device-bound refresh token,
+        // prefer /auth/device-refresh — JWT-only /auth/refresh wouldn't
+        // work because v1.2 backend issues access tokens via device session
+        // for cloud users.
+        if let deviceSession, deviceSession.hasActiveSession,
+           let deviceRefreshToken = deviceSession.refreshToken {
+            let body = DeviceRefreshRequest(
+                deviceId: deviceSession.deviceId,
+                refreshToken: deviceRefreshToken
+            )
+            do {
+                let tokens: TokenResponse = try await send(
+                    "/auth/device-refresh",
+                    method: .post,
+                    query: [],
+                    body: body,
+                    response: TokenResponse.self,
+                    allowRefresh: false
+                )
+                try tokenStore.save(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken)
+                try deviceSession.saveRefreshToken(tokens.refreshToken)
+                deviceSession.recordIssued(
+                    deviceName: tokens.deviceName,
+                    expiresAt: tokens.expiresAt.flatMap(Self.iso8601Formatter.date(from:))
+                )
+                return true
+            } catch {
+                // fall through to JWT-only path; some legacy callers may still
+                // have a /auth/refresh path open.
+            }
+        }
+
+        // JWT-only fallback (legacy register / login / email-otp paths).
+        // No clearing here: when refresh isn't possible / fails, we let
+        // the outer 401 handler decide whether to nuke the store (it
+        // respects the cooldown; we don't).
         guard let refreshToken = tokenStore.refreshToken else { return false }
         let body = RefreshRequest(refreshToken: refreshToken)
         do {
@@ -188,7 +245,6 @@ public final class APIClient {
             try tokenStore.save(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken)
             return true
         } catch {
-            try? tokenStore.clear()
             return false
         }
     }
@@ -196,6 +252,21 @@ public final class APIClient {
     private func shouldTreatUnauthorizedAsExpiredSession(path: String) -> Bool {
         !path.hasPrefix("/auth/")
     }
+
+    private func shouldSuppressUnauthorizedSessionExpire(path: String) -> Bool {
+        guard let last = lastUnauthorizedHandledAt[path] else { return false }
+        return Date().timeIntervalSince(last) < unauthorizedCooldown
+    }
+
+    private func rememberUnauthorized(path: String) {
+        lastUnauthorizedHandledAt[path] = Date()
+    }
+
+    private static let iso8601Formatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
 
     public func fetchAll<Item: Codable>(
         _ path: String,

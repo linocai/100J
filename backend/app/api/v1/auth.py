@@ -147,8 +147,61 @@ def device_refresh(request: Request, payload: DeviceRefreshRequest, db: Session 
 
 
 @router.post("/device-logout", status_code=204)
-def device_logout(payload: DeviceLogoutRequest, db: Session = Depends(get_db)):
-    """Revoke a device session by device_id. Idempotent."""
+def device_logout(
+    payload: DeviceLogoutRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Revoke a device session by device_id.
+
+    v1.2.4 (#6): no longer open — caller must prove ownership of the session
+    via either a valid access JWT (Authorization header) or the device's
+    current refresh_token in the body. Otherwise an attacker who learns a
+    device_id (which leaks to logs, screenshots, etc.) could nuke arbitrary
+    sessions.
+    """
+    session = device_session_service.get(db, device_id=payload.device_id)
+    if session is None or session.revoked_at is not None:
+        # Already revoked — idempotent success.
+        # We still 404 if there's literally no row for this device_id, so
+        # callers can distinguish "you never had a session here" from
+        # "your session got cleaned up".
+        if session is None:
+            raise AppError(
+                status_code=404,
+                code="not_found",
+                message="Device session not found.",
+            )
+        return
+
+    # Strategy 1: Authorization: Bearer <access_jwt>
+    authorized = False
+    auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
+    if auth_header and auth_header.lower().startswith("bearer "):
+        access_token = auth_header.split(" ", 1)[1].strip()
+        decoded = decode_token(access_token, expected_type="access")
+        if decoded and decoded.get("sub") == session.user_id:
+            authorized = True
+
+    # Strategy 2: body carries the current refresh_token
+    if not authorized and payload.refresh_token:
+        try:
+            device_session_service.verify(
+                db,
+                device_id=payload.device_id,
+                presented_refresh_token=payload.refresh_token,
+            )
+            authorized = True
+        except AppError:
+            authorized = False
+
+    if not authorized:
+        raise AppError(
+            status_code=401,
+            code="unauthorized",
+            message="Device logout requires auth.",
+        )
+
     device_session_service.revoke(db, device_id=payload.device_id)
 
 

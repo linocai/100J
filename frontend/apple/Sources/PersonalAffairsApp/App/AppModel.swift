@@ -55,6 +55,7 @@ final class AppModel: ObservableObject {
     private let agentRepository: AgentRepository
     private let mutationQueue: MutationQueue
     private let diagnostics: DiagnosticLogger
+    private let deviceSessionStore: DeviceSessionStore
     private var isReplayingMutations = false
     #if canImport(Network)
     private let pathMonitor = NWPathMonitor()
@@ -101,7 +102,7 @@ final class AppModel: ObservableObject {
         companySpace: { [weak self] in self?.companySpace }
     )
 
-    init() {
+    convenience init() {
         let defaultBaseURL = Self.defaultCloudBaseURL
         let storedBaseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? defaultBaseURL
         let storedAuthMode: AppAuthMode
@@ -114,13 +115,34 @@ final class AppModel: ObservableObject {
             UserDefaults.standard.set(AppAuthMode.cloudJWT.rawValue, forKey: "appAuthMode")
             UserDefaults.standard.set(storedBaseURL, forKey: "apiBaseURL")
         }
-        self.authMode = storedAuthMode
         let api = APIClient(
             baseURL: URL(string: storedBaseURL) ?? URL(string: defaultBaseURL)!,
-            authMode: storedAuthMode
+            authMode: storedAuthMode,
+            deviceSession: .shared
         )
+        self.init(
+            authMode: storedAuthMode,
+            api: api,
+            authRepository: AuthRepository(api: api),
+            deviceSession: .shared,
+            startsNetworkMonitor: true
+        )
+    }
+
+    /// Test-only DI seam: lets unit tests inject mock repositories so the
+    /// 401 self-heal flow can be exercised without touching real networks.
+    /// Defaults match the production `init()` for every parameter except
+    /// `authRepository` so tests opt in to mocking just that piece.
+    init(
+        authMode: AppAuthMode,
+        api: APIClient,
+        authRepository: AuthRepository,
+        deviceSession: DeviceSessionStore = .shared,
+        startsNetworkMonitor: Bool = false
+    ) {
+        self.authMode = authMode
         self.api = api
-        self.authRepository = AuthRepository(api: api)
+        self.authRepository = authRepository
         self.spaceRepository = SpaceRepository(api: api)
         self.taskRepository = TaskRepository(api: api)
         self.projectRepository = ProjectRepository(api: api)
@@ -129,7 +151,10 @@ final class AppModel: ObservableObject {
         self.agentRepository = AgentRepository(api: api)
         self.mutationQueue = MutationQueue()
         self.diagnostics = .shared
-        startNetworkMonitor()
+        self.deviceSessionStore = deviceSession
+        if startsNetworkMonitor {
+            startNetworkMonitor()
+        }
         Task {
             await syncPendingMutationCount()
         }
@@ -146,11 +171,11 @@ final class AppModel: ObservableObject {
     }
 
     var hasDeviceSession: Bool {
-        DeviceSessionStore.shared.hasActiveSession
+        deviceSessionStore.hasActiveSession
     }
 
     var deviceSessionInfo: DeviceSessionInfo? {
-        DeviceSessionStore.shared.info
+        deviceSessionStore.info
     }
 
     var apiBaseURLString: String {
@@ -246,7 +271,7 @@ final class AppModel: ObservableObject {
         guard !endpoint.isEmpty, updateBaseURL(endpoint) else { return false }
 
         try? api.tokenStore.clear()
-        DeviceSessionStore.shared.clearAll()
+        deviceSessionStore.clearAll()
         updateAuthMode(.cloudJWT)
         selectedSection = .today
         return true
@@ -257,7 +282,7 @@ final class AppModel: ObservableObject {
         // 任何来自旧版本（v1.1.0 / v1.1.1）残留的纯 JWT token 一律静默清空，
         // 避免触发"云端登录已失效"红条闪一下。
         if authMode == .cloudJWT {
-            guard DeviceSessionStore.shared.hasActiveSession else {
+            guard deviceSessionStore.hasActiveSession else {
                 if api.tokenStore.accessToken != nil || api.tokenStore.refreshToken != nil {
                     try? api.tokenStore.clear()
                 }
@@ -291,7 +316,7 @@ final class AppModel: ObservableObject {
             try await operation()
         } catch APIClientError.unauthorized {
             try? api.tokenStore.clear()
-            DeviceSessionStore.shared.clearAll()
+            deviceSessionStore.clearAll()
             currentUser = nil
             spaces = []
             personalTasks = []
@@ -899,18 +924,38 @@ final class AppModel: ObservableObject {
         do {
             try await operation()
         } catch APIClientError.unauthorized {
+            // v1.2.4 (#8): if we still hold a device session, try a silent
+            // resume + a single retry of the failed operation before
+            // declaring the cloud session dead. This handles the common
+            // case where the 30 min access token simply expired and the
+            // device refresh token is still valid — user should never see
+            // a red banner for that.
+            if authMode == .cloudJWT, hasDeviceSession {
+                do {
+                    try await authRepository.silentResume()
+                    try await operation()
+                    return
+                } catch {
+                    // silent-resume or retry also failed — fall through
+                    // to expireCloudSession.
+                }
+            }
             expireCloudSession()
         } catch {
             errorMessage = UserFacingMessage.translate(error)
         }
     }
 
-    private func expireCloudSession() {
+    func expireCloudSession() {
         guard authMode == .cloudJWT else {
             errorMessage = UserFacingMessage.translate(APIClientError.unauthorized)
             return
         }
         try? api.tokenStore.clear()
+        // v1.2.4 (#8): also nuke DeviceSessionStore — otherwise RootView
+        // still sees hasDeviceSession == true and stays stuck in the
+        // ResumingPlaceholder forever.
+        deviceSessionStore.clearAll()
         currentUser = nil
         spaces = []
         personalTasks = []

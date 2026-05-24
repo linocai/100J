@@ -28,7 +28,10 @@ public struct DeviceSessionInfo: Codable, Equatable {
     }
 }
 
-public final class DeviceSessionStore {
+/// `open` so unit tests can subclass it with an in-memory implementation
+/// without touching real Keychain / UserDefaults. Production callsites
+/// continue to use the concrete class.
+open class DeviceSessionStore {
     public static let shared = DeviceSessionStore()
 
     private let defaults: UserDefaults
@@ -46,7 +49,7 @@ public final class DeviceSessionStore {
 
     // MARK: device_id（每台机器一份，永久）
 
-    public var deviceId: String {
+    open var deviceId: String {
         if let existing = defaults.string(forKey: deviceIdKey), !existing.isEmpty {
             return existing
         }
@@ -81,21 +84,21 @@ public final class DeviceSessionStore {
 
     private let refreshAccount = "device_refresh_token"
 
-    public var refreshToken: String? {
+    open var refreshToken: String? {
         readKeychain(account: refreshAccount)
     }
 
-    public func saveRefreshToken(_ token: String) throws {
+    open func saveRefreshToken(_ token: String) throws {
         try writeKeychain(value: token, account: refreshAccount)
     }
 
-    public func clearRefreshToken() {
+    open func clearRefreshToken() {
         deleteKeychain(account: refreshAccount)
     }
 
     // MARK: 元数据
 
-    public var info: DeviceSessionInfo? {
+    open var info: DeviceSessionInfo? {
         get {
             guard let data = defaults.data(forKey: infoKey) else { return nil }
             return try? JSONDecoder().decode(DeviceSessionInfo.self, from: data)
@@ -109,7 +112,7 @@ public final class DeviceSessionStore {
         }
     }
 
-    public func recordIssued(deviceName: String?, expiresAt: Date?) {
+    open func recordIssued(deviceName: String?, expiresAt: Date?) {
         info = DeviceSessionInfo(
             deviceId: deviceId,
             deviceName: deviceName ?? Self.defaultDeviceName,
@@ -118,7 +121,7 @@ public final class DeviceSessionStore {
         )
     }
 
-    public func clearAll() {
+    open func clearAll() {
         clearRefreshToken()
         defaults.removeObject(forKey: infoKey)
         // device_id 保留 — 同一台机器再次登录可以复用，方便服务器端识别同设备
@@ -126,7 +129,7 @@ public final class DeviceSessionStore {
 
     // MARK: 是否有效
 
-    public var hasActiveSession: Bool {
+    open var hasActiveSession: Bool {
         refreshToken != nil
     }
 
