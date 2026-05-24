@@ -3977,6 +3977,17 @@
               }
             ],
             "title": "Status"
+          },
+          "linked_task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linked Task Id"
           }
         },
         "type": "object",

@@ -948,3 +948,24 @@ P3 / P4 在 P2 完成后可与 P5 并行，但都要先于 P6 完成（P6 客户
   - 后端 `tests/test_auth_v11.py` 中三条 existing Apple test（`test_apple_signin_creates_default_spaces_and_reuses_sub` / `test_apple_signin_binds_existing_email_user` / `test_apple_signin_rejects_unknown_audience`）原本默认开启 → 现统一加 `monkeypatch.setenv("APPLE_SIGN_IN_ENABLED", "true")` + `get_settings.cache_clear()` 包 try/finally，使行为测试在 flag 翻开下继续验证 service 层逻辑。
   - 前端 `PersonalAffairsCoreTests.testAuthRepositoryEncodesAppleSignInAndStoresTokens` 删除（plan 第 488 行明确"删除涉及 Apple Sign-In 的现有 test case"，且 method 已 deprecated，留着会产生 deprecation warning 噪音）。
 - 影响范围：Phase P3（reviewer #2 / #11 / #13）；改变 `/auth/apple` 可用性契约（默认 404）与匹配语义契约（hint 不再用于匹配既有 user）。前端 Apple Sign-In UI 整段下线（SetupScreen 本身原本就没有 Apple 按钮入口，对用户体验零影响）。`AuthRepository.signInWithApple` 仍保留 public API（deprecated）以维持 PersonalAffairsCore 包 ABI 兼容。
+
+### [2026-05-24] P4 施工补充
+- 变更内容：
+  - P4-1：在 `calendar_service` 新增私有 helper `_normalize_calendar_all_day_fields(merged, mirror_into=None)`，create 与 update 路径在 `validate_calendar_fields` 之前都调用一次。update 路径传入 `mirror_into=data`，把规整后的 `None` 同步写回 `data`，确保后续 `setattr(item, field, value)` 循环真正把原列清空。
+  - P4-2：`validate_calendar_fields` 末尾追加 end >= start 校验，all_day 路径比 `end_date` vs `start_date`，timed 路径比 `end_at` vs `start_at`；end 为 None 时跳过。
+  - P4-3：`schemas/note.py` 的 `NoteUpdate` 新增 `linked_task_id: Optional[str] = None`（原 schema 不含此字段，PATCH 根本不能设置；plan 描述的 "PATCH 无校验" 隐含字段需要先暴露）。`update_note` 在合并 `data` 后，若 `linked_task_id` 非空：`get_owned_task(db, user_id, ...)` → `get_owned_space(...)` → 校验 `space.type == "personal"`，否则 422。Plan 提到 "personal-space 校验是可选"，但 Note 本身已强制只能在 personal space，linked task 不限同空间会破业务一致性，所以选择实现。
+  - P4-4：`CalendarViewState.updateRequest` 改为先用本地常量 `encodedStartDate` / `encodedStartAt` 计算编码值再 `assert`，断言"all_day=true 时 startDate 必须非 nil 且 startAt 必须 nil"。Plan 原文给出的断言 `startDate != nil || !allDay` 在当前 `startDate: Date`（非 Optional）下永远为真，会被 lint 警告 "tautological"；改用编码后值的等价条件，达到 plan 的"防御未来回归"意图，同时实质可观察。
+  - `tests/openapi_snapshot.json`：NoteUpdate schema 块新增 `linked_task_id` 字段（追加在 status 之后以匹配 pydantic 字段声明顺序）。
+- 变更原因：
+  - `_normalize_calendar_all_day_fields` 抽 helper 而非两处复制：create 路径需要规整但**不需要** `mirror_into`（因 `CalendarItem(**data)` 直接以 data 构造）；update 路径需要 `mirror_into` 让 setattr 真正清列。一个 helper 用一个可选参数表达这俩 case 比写两份干净。
+  - `NoteUpdate.linked_task_id` 必须先在 schema 暴露：reviewer #23 描述 "PATCH 无校验"，但代码现状是连 PATCH 都无法触达字段（pydantic 直接丢弃未声明的 key）；不暴露 schema 校验逻辑就是死代码。补 schema + 补校验同步上线才能闭环 #23。
+  - debug-only assert 用编码后值而非 plan 原文条件：plan 原文在 `startDate: Date` 非 Optional 现状下退化为 noop，编辑后的版本既保留"未来重构 startDate 为 Optional 也仍然能 catch"的意图，又能在当前代码路径下真实校验 encoder 输出。
+  - openapi snapshot 必须同步：`test_openapi_schema_matches_snapshot` 在 NoteUpdate schema 改后失败，是预期的；按 P2 同款风格直接更新 snapshot 文件。
+- 测试新增：
+  - 后端 `tests/test_business_rules.py` 增 4 条：
+    - `test_calendar_update_switches_from_timed_to_all_day_clears_start_at`（P4-1 主路径：先建 timed → PATCH all_day=True+start_date → 200，且 start_at/end_at 清空）
+    - `test_calendar_update_switches_from_all_day_to_timed_clears_start_date`（P4-1 反向路径）
+    - `test_calendar_update_rejects_end_before_start`（P4-2，all_day 与 timed 两种 422）
+    - `test_note_update_rejects_linked_task_from_other_user`（P4-3，跨 user task_id → 404）
+  - 前端 `ViewModelTests.swift` 增 1 条：`test_calendarDraft_updateRequest_all_day_true_omits_startAt`（先 timed sanity check，再切 all_day=true 验 startAt nil + startDate 非 nil）。
+- 影响范围：Phase P4（reviewer #4 / #22 / #23）。`PATCH /api/v1/calendar-items/{id}` 行为放宽——以前 all_day 切换会因为前端没清 start_at 而 422，现在后端兜底自动规整；同时新增 end>=start 422 边界。`PATCH /api/v1/notes/{id}` 行为收紧——新增 `linked_task_id` 可 PATCH 字段，但必须是本人 personal-space task，否则 404 / 422。`NoteUpdate` schema 新增字段，老 client 不传则零影响。

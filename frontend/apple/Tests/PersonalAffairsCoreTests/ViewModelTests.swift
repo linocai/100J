@@ -95,6 +95,35 @@ final class ViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.lastError)
     }
 
+    // MARK: - v1.2.4 P4-4 (#4): calendar draft encoder respects all_day toggle
+
+    func test_calendarDraft_updateRequest_all_day_true_omits_startAt() {
+        let dayStart = ISO8601DateFormatter().date(from: "2026-06-01T09:00:00Z")!
+        var draft = CalendarDraftState(
+            spaceType: .personal,
+            title: "Was timed",
+            type: .appointment,
+            allDay: false,
+            startDate: dayStart,
+            startAt: dayStart
+        )
+
+        // Sanity check: timed branch sends startAt and clears startDate.
+        let timedRequest = draft.updateRequest(timezone: "America/New_York")
+        XCTAssertNil(timedRequest.startDate)
+        XCTAssertNotNil(timedRequest.startAt)
+
+        // Flip to all-day and confirm startAt is dropped while startDate fills.
+        draft.allDay = true
+        let allDayRequest = draft.updateRequest(timezone: "America/New_York")
+        XCTAssertEqual(allDayRequest.allDay, true)
+        XCTAssertNotNil(allDayRequest.startDate)
+        XCTAssertNil(
+            allDayRequest.startAt,
+            "all-day update must omit startAt so backend persists a pure date"
+        )
+    }
+
     @MainActor
     func testAgentViewModelHandlesRequiresConfirmationAndConfirm() async throws {
         var sawConfirm = false

@@ -159,11 +159,17 @@ def validate_calendar_fields(data: Dict[str, Any]) -> None:
             raise validation_error("All-day calendar items require start_date.")
         if data.get("start_at") is not None or data.get("end_at") is not None:
             raise validation_error("All-day calendar items cannot have start_at or end_at.")
+        end_date = data.get("end_date")
+        if end_date is not None and end_date < data["start_date"]:
+            raise validation_error("end_date must be greater than or equal to start_date.")
     else:
         if not data.get("start_at"):
             raise validation_error("Timed calendar items require start_at.")
         if data.get("start_date") is not None:
             raise validation_error("Timed calendar items cannot have start_date.")
+        end_at = data.get("end_at")
+        if end_at is not None and end_at < data["start_at"]:
+            raise validation_error("end_at must be greater than or equal to start_at.")
 
 
 def validate_calendar_relations(
