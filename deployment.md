@@ -184,31 +184,152 @@ Set `RUN_PROD_CHECK=1` to include the HZ production check in the same run:
 RUN_PROD_CHECK=1 scripts/verify-release.sh
 ```
 
-## v1.2.4 Upgrade Notes
+## v1.2.4 Deployment Runbook
 
-Mandatory steps when upgrading an existing HZ deployment from v1.2.3 to v1.2.4:
+End-to-end procedure for upgrading the HZ deployment from v1.2.3 to v1.2.4. Treat the whole runbook as a single maintenance window (≈15 minutes); LLM agent calls should be paused until step 7 completes.
 
-1. Run the LLM key re-derivation migration before restarting the API service:
+### 0. Prerequisites (run from your laptop, not the server)
 
-   ```bash
-   ssh deploy@118.178.122.194 \
-     "cd /opt/100j/current/backend && /opt/100j/venv/bin/python -m scripts.migrate_llm_keys_v124"
-   ```
+```bash
+# Confirm local main is at v1.2.4 and CI was green
+cd /Users/linotsai/Lino/100%J
+git fetch --tags
+git log --oneline -1 v1.2.4           # expect: 8987b8d
+scripts/verify-release.sh              # full local gate, must exit 0
+```
 
-   P0-2 changed the LLM key encryption derivation. Existing encrypted keys must be re-derived once; the migrator is idempotent.
+If anything in step 0 fails, stop — do not touch the server.
 
-2. Confirm `/opt/100j/env/100j.env` contains the v1.2.4 settings before the first restart:
+### 1. Snapshot the production database
 
-   - `REGISTER_INVITE_TOKEN=` (empty in production unless onboarding a new owner; gates `/auth/register`).
-   - `SMTP_HOST=...` when `EMAIL_OTP_ENABLED=true`; the runtime validator now refuses to boot in production if OTP is on without SMTP configured.
-   - `APPLE_SIGN_IN_ENABLED=false` (default; flip to `true` only after entitlements + AppleID + privacy policy land in v1.3.0).
+Always take a fresh backup before a schema-changing release. v1.2.4 adds `0006_refresh_token_jti` and rewrites every row in `llm_provider_keys`.
 
-3. `alembic upgrade head` will execute `0006_refresh_token_jti`. This migration adds the refresh-token JTI blacklist table required for rotation. `scripts/deploy-hz.sh` runs Alembic via systemd as part of the normal deploy.
+```bash
+ssh deploy@118.178.122.194 "/opt/100j/current/scripts/hz-db-backup.sh"
+# Expect: a new file appears under /opt/100j/backups/100j_YYYYMMDD_HHMMSS.dump
+ssh deploy@118.178.122.194 "ls -lt /opt/100j/backups/ | head -3"
+```
 
-4. The systemd unit `100j-api.service` `ExecStart` now appends `--proxy-headers --forwarded-allow-ips=127.0.0.1` so that rate-limit key derivation sees the real client IP through Nginx. `scripts/deploy-hz.sh` writes the new unit file, but existing machines must be reloaded explicitly:
+### 2. Edit the production env file (still on the server)
 
-   ```bash
-   ssh deploy@118.178.122.194 "sudo systemctl daemon-reload && sudo systemctl restart 100j-api"
-   ```
+```bash
+ssh deploy@118.178.122.194 "sudo vim /opt/100j/env/100j.env"
+```
 
-After deploy, run `scripts/prod-check.sh` to verify the new auth surface (`/auth/register` 404 without invite, `/auth/device-logout` 401 without auth, real client IP visible to the rate limiter).
+Add or confirm these keys:
+
+```dotenv
+# v1.2.4 — registration is closed by default. Leave empty unless onboarding a new owner.
+REGISTER_INVITE_TOKEN=
+
+# v1.2.4 — Apple Sign-In remains feature-gated off until v1.3.0.
+APPLE_SIGN_IN_ENABLED=false
+
+# v1.2.4 — required only if EMAIL_OTP_ENABLED=true. HZ keeps OTP disabled, so leave SMTP_* empty.
+# SMTP_HOST=
+# SMTP_PORT=465
+# SMTP_USER=
+# SMTP_PASSWORD=
+# SMTP_FROM=
+
+# v1.2.4 #15 — LLM key encryption salt. Must be >=16 bytes in prod; generate fresh:
+#   openssl rand -hex 16
+LLM_KEY_ENCRYPTION_SALT=<paste-16+ bytes of hex>
+```
+
+Keep the file mode at `600`:
+
+```bash
+ssh deploy@118.178.122.194 "sudo chmod 600 /opt/100j/env/100j.env && sudo chown deploy:deploy /opt/100j/env/100j.env"
+```
+
+If `JWT_SECRET_KEY` or `LLM_KEY_ENCRYPTION_SECRET` was ever set to a short or `change-me` value, rotate it now — the v1.2.4 runtime validator (`validate_runtime_settings`) refuses to boot otherwise. Rotating `LLM_KEY_ENCRYPTION_SECRET` means existing LLM keys must be re-entered by the user; coordinate that out-of-band.
+
+### 3. Deploy the code (from your laptop)
+
+```bash
+cd /Users/linotsai/Lino/100%J
+scripts/deploy-hz.sh
+```
+
+What this does, in order:
+
+1. rsyncs `backend/` to `/opt/100j/current`
+2. installs the new venv (`/opt/100j/venv`)
+3. runs `alembic upgrade head` — applies `0006_refresh_token_jti`
+4. rewrites the systemd unit so `ExecStart` includes `--proxy-headers --forwarded-allow-ips=127.0.0.1`
+5. `daemon-reload` + `restart 100j-api`
+6. local health check on the server
+
+A clean run ends with `deploy-hz: OK`. Any non-zero exit stops here — investigate before continuing.
+
+### 4. Migrate LLM provider keys (must run **after** step 3)
+
+The script needs v1.2.4 code on disk to import the new `llm_key_encryption_salt` setting. Run it immediately after the deploy and **before** the owner uses the agent again.
+
+```bash
+ssh deploy@118.178.122.194 \
+  "cd /opt/100j/current/backend && /opt/100j/venv/bin/python -m scripts.migrate_llm_keys_v124"
+```
+
+Expected output:
+
+```
+migrate_llm_keys_v124 done: total=N migrated=N already_new=0 failed=0
+```
+
+`already_new=N` on a re-run is fine — the script is idempotent. If `failed > 0`, see Recovery below.
+
+### 5. Reload nginx if its config changed
+
+`deploy-hz.sh` does not touch `/etc/nginx/sites-available/100j`. If you have ever added or removed an `X-Forwarded-For` directive, run:
+
+```bash
+ssh deploy@118.178.122.194 "sudo nginx -t && sudo systemctl reload nginx"
+```
+
+### 6. Verify the deployment
+
+From your laptop (smoke + auth-surface checks):
+
+```bash
+cd /Users/linotsai/Lino/100%J
+RUN_PROD_CHECK=1 scripts/verify-release.sh
+```
+
+This runs the full local gate plus `scripts/prod-check.sh`, which now asserts:
+
+- `POST /auth/register` returns `404` (registration disabled in prod)
+- `POST /auth/device-logout` returns `401` without auth headers
+- `GET /health` honors `X-Forwarded-For` through nginx (no 5xx)
+- `/api/v1/health` and the smoke suite both succeed against the public URL
+
+On the server, spot-check:
+
+```bash
+ssh deploy@118.178.122.194 "systemctl status 100j-api --no-pager | head -20"
+ssh deploy@118.178.122.194 "journalctl -u 100j-api -n 100 --no-pager | grep -iE 'error|traceback' || echo 'no errors'"
+ssh deploy@118.178.122.194 "psql -d 100j -c 'SELECT count(*) FROM refresh_token_jti'"
+```
+
+`refresh_token_jti` should be `0` immediately after deploy and grow as users sign in / refresh.
+
+### 7. Owner smoke checklist
+
+Run through these manually on the real Apple clients (this is the v1.2.4 critical-fix acceptance from `PROJECT_PLAN_v1.2.4.md` §7.3):
+
+- macOS: sign in → leave the app open 30+ minutes → keep using it; no "session expired" toast (#1 device session refresh)
+- macOS: edit a Calendar item, toggle timed ↔ all-day, save; the change persists, no silent 422 (#4)
+- macOS: trigger a risky Agent operation → dismiss the confirmation sheet → use the new banner on AgentScreen to reopen it → confirm (#32)
+- iOS: turn airplane mode on, create 3 tasks, turn airplane mode off; all three sync (no `dropPermanent` in DiagnosticLogger) (#26 #31)
+- iOS: sign out user A, sign in as a different account; user A's offline writes do not surface on the new account (#9)
+
+### Recovery
+
+| Symptom | Action |
+| --- | --- |
+| `alembic upgrade head` fails in step 3 | systemd will not start. Restore from the backup taken in step 1 (`pg_restore`), then `git checkout v1.2.3` on the server and redeploy. |
+| Step 4 reports `failed > 0` | A row's ciphertext is corrupt or used a different secret. Identify the row from stderr (`id`, `user_id`), have the owner re-enter the LLM key via the Agent settings; the new write uses v1.2.4 derivation directly. |
+| `/auth/login` returns 500 for everyone | Likely `validate_runtime_settings` rejected the env. Tail `journalctl -u 100j-api -n 50` and read the boot error; usually `JWT_SECRET_KEY` or `LLM_KEY_ENCRYPTION_SECRET` is too short or contains `change-me`. Fix the env, then `sudo systemctl restart 100j-api`. |
+| Rate-limit attribution still looks like 127.0.0.1 | The systemd unit was not refreshed. `ssh deploy@... "sudo systemctl daemon-reload && sudo systemctl restart 100j-api"`. |
+| Full rollback | `ssh deploy@... "cd /opt/100j/current && git checkout v1.2.3 && /opt/100j/venv/bin/alembic downgrade -1 && sudo systemctl restart 100j-api"`. LLM keys written by v1.2.4 will not decrypt under v1.2.3; restore the DB backup if the owner used LLM features after step 4. |
