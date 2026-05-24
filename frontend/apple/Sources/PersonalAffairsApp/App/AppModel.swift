@@ -53,6 +53,17 @@ final class AppModel: ObservableObject {
     private let diagnostics: DiagnosticLogger
     private let deviceSessionStore: DeviceSessionStore
     private var isReplayingMutations = false
+    /// v1.2.4 P6-4 (#27): timestamp of the last `refreshAll` data fetch.
+    /// `refreshAll(force:)` short-circuits if called again within
+    /// `refreshAllThrottleSeconds` of this timestamp, so chatty view-appear
+    /// `.task` blocks do not hammer the network on every navigation.
+    /// Internal-not-private so unit tests can prime the timestamp without a
+    /// real network round-trip (`AppModelRefreshThrottleTests`).
+    var lastRefreshAllAt: Date?
+    /// Exposed for tests. Production callers should never touch this; pass
+    /// `force: true` to `refreshAll` if you really need to bypass the throttle
+    /// (e.g. user tapped a "立即同步" button).
+    static let refreshAllThrottleSeconds: TimeInterval = 30
     #if canImport(Network)
     private let pathMonitor = NWPathMonitor()
     private let pathMonitorQueue = DispatchQueue(label: "top.linotsai.app.PersonalAffairs.network")
@@ -404,6 +415,15 @@ final class AppModel: ObservableObject {
             await bootstrapIfPossible()
             return
         }
+        // v1.2.4 P6-3 (#9): drain the offline queue before we forget who we
+        // are. Anything pending gets archived to MutationQueue.orphanedMutations.json
+        // so the next user's login cannot pick it up. We do this **before**
+        // the network logout so a server logout failure can't leave the queue
+        // dangling.
+        await mutationQueue.archiveAllForCurrentUserAndClear()
+        pendingMutationCount = 0
+        lastRefreshAllAt = nil
+
         await run {
             try await self.authRepository.logout()
             self.currentUser = nil
@@ -419,7 +439,24 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// v1.2.4 P6-4 (#27): default throttled refresh. Multiple view-appear
+    /// `.task` blocks coalesce into one network round-trip per 30 s window.
+    /// Derived viewmodels are still re-driven so UI updates on every call.
     func refreshAll() async {
+        await refreshAll(force: false)
+    }
+
+    /// Pass `force: true` for explicit user-driven refreshes (menu "刷新",
+    /// Settings "立即同步" button). Force bypasses the 30 s throttle.
+    func refreshAll(force: Bool) async {
+        if !force,
+           let last = lastRefreshAllAt,
+           Date().timeIntervalSince(last) < Self.refreshAllThrottleSeconds {
+            // Throttled — still rerun derive so dependent screens see the
+            // latest in-memory state (Top 3 / Agenda recomputes etc.).
+            refreshDerivedViewModels()
+            return
+        }
         await run {
             if self.spaces.isEmpty {
                 self.currentUser = try await self.authRepository.me()
@@ -427,6 +464,7 @@ final class AppModel: ObservableObject {
             }
             try await self.loadCoreData()
             await self.loadSupportData()
+            self.lastRefreshAllAt = Date()
         }
     }
 
@@ -1008,7 +1046,10 @@ final class AppModel: ObservableObject {
     }
 
     private func queueOfflineMutation(_ mutation: PendingMutation, optimistic: () -> Void) async throws {
-        let count = try await mutationQueue.enqueue(mutation)
+        // v1.2.4 P6-3 (#9 / #26): stamp the current user id onto the mutation
+        // before it goes on disk so a later logout → login-as-different-user
+        // cannot pick it up.
+        let count = try await mutationQueue.enqueue(mutation, userId: localUserId())
         pendingMutationCount = count
         isNetworkReachable = false
         optimistic()
@@ -1027,7 +1068,9 @@ final class AppModel: ObservableObject {
         guard count > 0 else { return }
 
         isReplayingMutations = true
-        let result = await mutationQueue.replay(using: api)
+        // v1.2.4 P6-3 (#9): replay scopes to the current user so we never
+        // execute the previous account's pending writes against this one.
+        let result = await mutationQueue.replay(using: api, currentUserId: localUserId())
         isReplayingMutations = false
         pendingMutationCount = result.remaining
 

@@ -118,6 +118,39 @@ def test_long_text_payloads_are_rejected(client):
     assert calendar.status_code == 422
 
 
+def test_note_body_at_16000_chars_succeeds(client):
+    """v1.2.4 P6-6 (#33): exactly NOTE_BODY_MAX_LENGTH chars must pass."""
+    headers, spaces = register_and_auth(client)
+
+    response = client.post(
+        "/api/v1/notes",
+        headers=headers,
+        json={
+            "space_id": spaces["personal"]["id"],
+            "body": "x" * 16_000,
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assert len(response.json()["body"]) == 16_000
+
+
+def test_note_body_at_16001_chars_rejected(client):
+    """v1.2.4 P6-6 (#33): one byte over the limit must be 422."""
+    headers, spaces = register_and_auth(client)
+
+    response = client.post(
+        "/api/v1/notes",
+        headers=headers,
+        json={
+            "space_id": spaces["personal"]["id"],
+            "body": "x" * 16_001,
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_calendar_all_day_and_timed_validation(client):
     headers, spaces = register_and_auth(client)
 

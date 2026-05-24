@@ -177,7 +177,9 @@ struct SettingsSheet: View {
             LabeledContent("笔记", value: "\(model.notes.count) 条")
             LabeledContent("日程", value: "\(model.calendarItems.count) 条")
             Button {
-                Task { await model.refreshAll() }
+                // v1.2.4 P6-4 (#27): "立即同步" is an explicit user action and
+                // should always bypass the 30 s throttle.
+                Task { await model.refreshAll(force: true) }
             } label: {
                 Label("立即同步", systemImage: "arrow.clockwise")
             }

@@ -986,3 +986,46 @@ P3 / P4 在 P2 完成后可与 P5 并行，但都要先于 P6 完成（P6 客户
     - `test_jsonValue_object_description_is_sorted`：三组断言——基础 3 键、打乱顺序的同样 3 键、嵌套对象——都验证按 key 字母序输出。
 - 影响范围：Phase P5（reviewer #10 / #32 / #34；#15 已在 P0-2 处理）。`POST /api/v1/agent/commands/confirm` 行为收紧：同一 token 两并发只有一个成功，第二个 404；已使用 token 的二次 confirm 现在统一 404（plan 接口契约要求）。前端 Agent UX 改进：sheet swipe-dismiss 后用户能从 AgentScreen 顶部 banner 重新进入；硬取消（点 sheet "取消"）行为不变。`JSONValue.description` 输出格式变化（key 顺序确定）——如果有人在 snapshot 测试里把 unsorted 输出 hard-coded 进 expected 字符串，会一次性 fix。
 - 执行环境备注（不影响代码改动）：当前仓库根 `100%J` 的 `%` 字符触发 Swift toolchain `swift build` 失败（路径在 clang module / index writer 内被误处理为 printf format，pcm 写入零字节、index 文件名变形）。绕过办法是 `swift build --scratch-path /tmp/p5-build` 把 `.build` 重定向到非 `%` 路径。这是 host 环境问题不是代码问题，但 CI 如果跑在不带 `%` 的路径上不会遇到。
+
+### [2026-05-24] P6 施工补充
+- 变更内容：
+  - P6-1（最小版本）：`OneHundredJWidgetsBundle` 加 `init()`，启动时 `WidgetSnapshotStore.useAppGroup("group.top.linotsai.app.PersonalAffairs")`。WidgetBundle 是 struct，SwiftUI runtime 调用 init，Swift Package 能编译。**不做** macOS fallback 兜底（实际 widget extension 都没装上，用不到）。
+  - P6-3：`PendingMutation` 加 `userId: String`（默认 `"unknown"`）和 `attempts: Int`（默认 0）两字段；自定义 `init(from:)` 用 `decodeIfPresent` graceful 兼容旧 v1.2.3 客户端写过的、不带这俩字段的 `mutation-queue.json`，解码失败回退 `"unknown"`/`0`。新增 `withUserId(_:)` 和 fileprivate `bumpingAttempts()` helper。
+  - P6-3：`MutationQueue.enqueue` 改双签名：原 `enqueue(_:)` 保留作为兼容入口，新 `enqueue(_:userId:)` 在 push 前调 `withUserId` 把当前用户 id 烙印到 row 上。AppModel 的 `queueOfflineMutation` 改走带 userId 的版本，从 `localUserId()` 取值。
+  - P6-3：`MutationQueue.replay(using:)` 改成 `replay(using:currentUserId:)`，签名变更。循环开头跳过 `mutation.userId != currentUserId` 的 row → 移到 `MutationQueue.orphanedMutations.json`（与 live queue 同目录），不删；新结果字段 `orphanedSkipped` 暴露给上层（plan 未列出，但不加无法测试）。网络错误从 `break` 改成 `attempts++` 回写 + `attempts >= 5` 才 dropPermanent；非网络错误（4xx/服务端错）维持原行为立即 drop。
+  - P6-3：新增 module-level 常量 `mutationQueueMaxNetworkAttempts = 5` 和纯函数 `mutationQueueRetryDelaySeconds(attemptNumber:) -> TimeInterval` 实现 `min(2^N, 30)` 指数退避表，公开导出供测试和上层 reconnect loop 使用。Queue 自身只**记录** attempts，**不**自己 sleep；wait 在 caller 端（network monitor）做，这样不同 trigger（手动 / 网络恢复）能各自决定何时再 replay。
+  - P6-3：新增 `archiveAllForCurrentUserAndClear()` actor method。`AppModel.logout()` 在调 `authRepository.logout()` **之前**先调它，把所有 pending（含跨用户 stale row）一次性归档到 orphan 文件再清空 live queue；同时 `pendingMutationCount = 0` / `lastRefreshAllAt = nil` reset。"logout 前 archive" 是为了即使 server logout 失败（401/网络）也不会留下 dangling queue。
+  - P6-4：`AppModel` 新增 `var lastRefreshAllAt: Date?`（internal-not-private，便于 `@testable` 单测注入）+ 静态 `refreshAllThrottleSeconds: TimeInterval = 30`。`refreshAll()` 改为 `refreshAll(force: Bool = false)` 重载（保留无参版本作为兼容入口走 `force: false`）；body 头部检查 `Date().timeIntervalSince(last) < refreshAllThrottleSeconds` → 直接 `refreshDerivedViewModels()` 并 return。
+  - P6-4：menu/UI 三处手动刷新入口（`PersonalAffairsApp.swift` 的 ⌘R menu / `MacShell.swift` 的 ⌘R menu / `SettingsSheet.swift` 的"立即同步"按钮）改成 `await model.refreshAll(force: true)`。TodayScreen `.task` / CalendarScreen `reload()` 保持调无参版本走节流。`replayPendingMutations()` 内部 success 后 callback 也保持走无参 throttled 版本（避免风暴）。
+  - P6-5：`LocalNotificationCenter.sync(items:)` 开头先 `await center.notificationSettings()`，按 `authorizationStatus` 分派：`.notDetermined` → `requestAuthorization(...)`；`.denied` → 直接 return；其他（`.authorized` / `.provisional` / `.ephemeral`） → 不再 prompt 直接走 schedule 逻辑。原来无脑每次 `requestAuthorization` 既无意义又每次 TCC 调用都有 cost。
+  - P6-6：`tests/test_business_rules.py` 新增 `test_note_body_at_16000_chars_succeeds`（边界等于 `NOTE_BODY_MAX_LENGTH`，201 + 实际长度 16000）与 `test_note_body_at_16001_chars_rejected`（超 1 字节 → 422）。
+- Deferred 项（**v1.2.4 不做**，明确 defer 到 v1.2.5）：
+  - **P6-1 macOS fallback**：plan 写了"macOS widget 加运行时 fallback：若 useAppGroup 后 load() 仍 empty 且 platform 是 macOS → 回退读 UserDefaults.standard"。**不做**。理由：widget extension 当前根本没注册到 Xcode 工程，macOS 上根本装不上 widget，这条 fallback 路径无任何触发点。
+  - **P6-2 entitlement / pbxproj**：plan 写了"`PersonalAffairsApp.iOS.entitlements` 加 application-groups + widget extension entitlements + `project.pbxproj` 的 `CODE_SIGN_ENTITLEMENTS` 指向"。**完全 defer 到 v1.2.5**。根本原因：调查发现 `frontend/apple/PersonalAffairsApp.xcodeproj/project.pbxproj` 里**根本没有 widget extension target**——`OneHundredJWidgets` 只存在于 Swift Package（`Package.swift` 的 `executableTarget`），iOS 用户从 App Store / TestFlight 装上 app 时**根本没有 widget**。reviewer #3 描述的"widget 空数据"是因为 widget 根本没装上，而不是 useAppGroup 没调。把 widget extension 加进 Xcode 工程需要 Xcode GUI 操作（新建 widget extension target、配 bundle id `top.linotsai.app.PersonalAffairs.Widgets`、code signing、provisioning profile、entitlements 文件、Embed Foundation Extensions build phase），不是 builder agent 能干的活，也不是 1 行 pbxproj edit 能搞定的事。v1.2.4 的最小努力是 P6-1 的 `init()`——这样**将来 widget extension 真的加进 Xcode 工程后，代码侧无需再改一行**。
+- 变更原因：
+  - `PendingMutation` 加 `userId` 用自定义 `init(from:)` + `decodeIfPresent` 而非 Optional 字段：旧 v1.2.3 用户磁盘上的 `mutation-queue.json` 没这个字段，强制 decode 会让整个 queue 加载失败、丢光所有 pending（dataloss）。`decodeIfPresent + default "unknown"` 让旧 row 进入 orphan 文件而非被丢弃。同理 `attempts` 默认 0。
+  - 双签名 enqueue（带和不带 userId）：把 userId 注入收敛到 `enqueue(_:userId:)`，AppModel 不用 thread userId 通过 ~16 个 factory 函数；无参版本保留是为了让现有 `PersonalAffairsCoreTests` 那 3 条老测试改动量最小（实际改了 4 行）。
+  - `replay` 签名加 `currentUserId` 是 breaking change：唯一生产 caller 是 AppModel；老测试也只 3 处，全部更新走 `"test-user"`。这是 plan 明确要求的 #9 致命修复，没法做向后兼容（不要 userId 的版本会让 #9 的攻击面留着）。
+  - `mutationQueueRetryDelaySeconds` 设计成纯函数 + module level 常量、queue 不自己 sleep：reconnect 触发可能来自 network monitor / 手动刷新 / 后台 wake，让 caller 决定何时调下一轮 replay 比 queue 自己 sleep 更灵活，也让单测能直接断言曲线而非驱动真实时钟。
+  - `archiveAllForCurrentUserAndClear` 在 logout 中先调（在 server logout 之前）：plan 写"`logout()` 内：调 archive"，没指定先后；选择前置是因为 server logout 可能 401/网络失败，那种情况下 queue 必须仍然清空，不然就违反 #9 的隔离契约。
+  - `lastRefreshAllAt` 改为 internal-not-private：测试无法走真网络路径验证 throttle（要 stub 6 个 repository），但能验证 timestamp 守卫的契约——前置 timestamp，throttled 调用必须不改 timestamp（证明 body 提前 return 了）。这是测试可观察性 vs 封装的权衡，倾向可观察性。
+  - LocalNotificationCenter `.ephemeral` / `.provisional` 也走 schedule 路径而非默认 return：plan 只列了 `.notDetermined` / `.denied`，剩下三种 `default` 走"已授权"逻辑。`.ephemeral`（App Clips）和 `.provisional`（iOS 12+ trial）都允许 schedule notification，应当一并放行。
+- 测试新增：
+  - 后端 `tests/test_business_rules.py` 增 2 条（P6-6）：见上。
+  - 前端 `Tests/PersonalAffairsCoreTests/MutationQueueTests.swift`（新文件）4 条：
+    - `test_replay_skips_other_user_mutations_and_archives_them`（#9 头条修复证明：current user 的 row 成功重放，stranger 的 row 走 orphan 文件归档而非执行）
+    - `test_replay_uses_exponential_backoff_up_to_30s`（#31 退避曲线：N=1..4 走 2/4/8/16，N>=5 全部 30；负数和 0 都 clamp 到 1）
+    - `test_replay_does_not_drop_permanent_on_network_error_within_5_attempts`（#26 错误归类：前 4 轮 attempts 累加到 4 但 droppedPermanent==0；第 5 轮才 drop）
+    - `test_logout_archives_queue_for_current_user`（#9 logout 路径：3 row 全部进 orphan，live queue 空）
+  - 前端 `Tests/PersonalAffairsAppTests/AppModelRefreshThrottleTests.swift`（新文件）1 条：`test_refreshAll_within_30s_is_skipped_unless_forced`（throttled 调用 lastRefreshAllAt 不动且 errorMessage 不变；force 调用 body 真的执行）。
+  - 前端 `Tests/PersonalAffairsCoreTests/PersonalAffairsCoreTests.swift` 中 3 条 existing MutationQueue 测试（`testMutationQueuePersistsAndReplaysFIFO` / `testMutationQueueKeepsNetworkFailuresForNextReplay` / `testMutationQueueDropsPermanentReplayFailure`）改为传 `userId: "test-user"` 到 enqueue 和 `currentUserId: "test-user"` 到 replay，行为契约不变。
+- 与 plan 的差异：
+  - P6-1 砍掉 macOS fallback（理由见 Deferred 项）。
+  - P6-2 整段 defer 到 v1.2.5（理由见 Deferred 项）。
+  - P6-3 plan 写 `replay(using api: APIClient, currentUserId: String)` 用一个新参；实际除此之外还加了 `MutationReplayResult.orphanedSkipped`（plan 未列），不加上层无法区分 orphan-skip 和 success/drop。
+  - P6-3 plan 写 "网络错误回写 attempts++"；实际还在 `PendingMutation` 上加了 `attempts: Int` 字段并 persist 到 JSON——plan 没明写"持久化 attempts"，但若 attempts 在内存而 disk 没存，进程重启就丢，重启即重置攻击窗口，违背 5-attempts 上限的契约。
+  - P6-3 plan 写 "logout 时调 archiveAllForCurrentUserAndClear"；实际放在 `try await authRepository.logout()` **之前**（理由见上）。
+  - P6-3 plan 写"重试间隔 `min(2^N, 30s)`"暗示 queue 内部 sleep；实际抽成纯函数 `mutationQueueRetryDelaySeconds(attemptNumber:)` 让 caller 决定 sleep（理由见上）。
+  - P6-4 plan 写 "AppModel 加 `private var lastRefreshAllAt`"；实际改为 internal（理由见上）。
+  - P6-5 plan 写 `requestAuthorization(options: [.alert, .sound])`；实际保留原代码的 `[.alert, .badge, .sound]`（原 sync 函数也是这个 options，三者皆是 calendar 提醒应有，砍 `.badge` 没理由）。
+- 影响范围：Phase P6（reviewer #9 / #26 / #27 / #28 / #31 / #33；#3 部分修复 + defer 到 v1.2.5）。`MutationQueue.replay(using:)` 签名 breaking change，仅生产 caller `AppModel` 和 3 个内部测试，全部更新；`PendingMutation` 增字段，旧 JSON 格式向后兼容（unknown userId fallback）。`AppModel.refreshAll()` 行为变化：30s 内的重入只跑 derive，手动入口 force=true 绕过。`LocalNotificationCenter.sync` 不再无脑 requestAuthorization，已 deny 的用户不再每次都被打扰。`NoteCreate` schema 不变，新增 16000/16001 边界测试覆盖 reviewer #33。Widget 端用户实际行为零变化（widget 还没装上）；v1.2.5 加 Xcode target 后 widget 内 `init()` 自动生效。

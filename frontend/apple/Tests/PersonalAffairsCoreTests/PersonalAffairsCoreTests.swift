@@ -478,8 +478,11 @@ final class PersonalAffairsCoreTests: XCTestCase {
     func testMutationQueuePersistsAndReplaysFIFO() async throws {
         let fileURL = Self.temporaryQueueURL()
         let queue = MutationQueue(fileURL: fileURL, diagnostics: DiagnosticLogger(directoryURL: fileURL.deletingLastPathComponent()))
-        _ = try await queue.enqueue(try PendingMutation.taskCreate(TaskCreateRequest(spaceId: "personal", title: "Offline task")))
-        _ = try await queue.enqueue(PendingMutation.projectComplete(id: "project-1"))
+        // v1.2.4 P6-3 (#9): enqueue stamps a userId so we can route replay
+        // to the right account. Tests use the public "test-user" so the
+        // replay below matches.
+        _ = try await queue.enqueue(try PendingMutation.taskCreate(TaskCreateRequest(spaceId: "personal", title: "Offline task")), userId: "test-user")
+        _ = try await queue.enqueue(PendingMutation.projectComplete(id: "project-1"), userId: "test-user")
 
         let restored = MutationQueue(fileURL: fileURL, diagnostics: DiagnosticLogger(directoryURL: fileURL.deletingLastPathComponent()))
         let pending = await restored.allPending()
@@ -490,7 +493,7 @@ final class PersonalAffairsCoreTests: XCTestCase {
             seen.append(request.url?.path ?? "")
             return (204, "")
         })
-        let result = await restored.replay(using: client)
+        let result = await restored.replay(using: client, currentUserId: "test-user")
 
         XCTAssertEqual(seen, ["/api/v1/tasks", "/api/v1/projects/project-1/complete"])
         XCTAssertEqual(result.succeeded, 2)
@@ -502,12 +505,12 @@ final class PersonalAffairsCoreTests: XCTestCase {
     func testMutationQueueKeepsNetworkFailuresForNextReplay() async throws {
         let fileURL = Self.temporaryQueueURL()
         let queue = MutationQueue(fileURL: fileURL, diagnostics: DiagnosticLogger(directoryURL: fileURL.deletingLastPathComponent()))
-        _ = try await queue.enqueue(try PendingMutation.noteCreate(NoteCreateRequest(spaceId: "personal", body: "Offline note")))
+        _ = try await queue.enqueue(try PendingMutation.noteCreate(NoteCreateRequest(spaceId: "personal", body: "Offline note")), userId: "test-user")
         let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: InMemoryTokenStore(accessToken: "access"), session: Self.stubSession { _ in
             throw URLError(.notConnectedToInternet)
         })
 
-        let result = await queue.replay(using: client)
+        let result = await queue.replay(using: client, currentUserId: "test-user")
 
         XCTAssertEqual(result.succeeded, 0)
         XCTAssertEqual(result.remaining, 1)
@@ -518,12 +521,12 @@ final class PersonalAffairsCoreTests: XCTestCase {
     func testMutationQueueDropsPermanentReplayFailure() async throws {
         let fileURL = Self.temporaryQueueURL()
         let queue = MutationQueue(fileURL: fileURL, diagnostics: DiagnosticLogger(directoryURL: fileURL.deletingLastPathComponent()))
-        _ = try await queue.enqueue(try PendingMutation.calendarCreate(CalendarItemCreateRequest(spaceId: "personal", title: "Bad calendar")))
+        _ = try await queue.enqueue(try PendingMutation.calendarCreate(CalendarItemCreateRequest(spaceId: "personal", title: "Bad calendar")), userId: "test-user")
         let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: InMemoryTokenStore(accessToken: "access"), session: Self.stubSession { _ in
             (422, #"{"error":{"code":"validation_error","message":"bad payload","details":{}}}"#)
         })
 
-        let result = await queue.replay(using: client)
+        let result = await queue.replay(using: client, currentUserId: "test-user")
 
         XCTAssertEqual(result.droppedPermanent, 1)
         XCTAssertEqual(result.remaining, 0)

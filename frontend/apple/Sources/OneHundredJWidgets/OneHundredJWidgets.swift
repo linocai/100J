@@ -5,6 +5,20 @@ import WidgetKit
 
 @main
 struct OneHundredJWidgetsBundle: WidgetBundle {
+    /// SwiftUI runtime instantiates this struct when the widget extension launches.
+    /// We use the init to point WidgetSnapshotStore at the App Group container so
+    /// host writes (from PersonalAffairsApp on iOS) are readable here.
+    ///
+    /// NOTE (v1.2.4): the widget extension is **not yet registered as a target in
+    /// the Xcode project**, so this code does not actually ship in v1.2.4 builds.
+    /// Wiring the extension into PersonalAffairsApp.xcodeproj (and adding the
+    /// matching App Group entitlement to the widget target) is deferred to v1.2.5.
+    /// Keeping this init in place means no code-side change is required once the
+    /// extension target lands.
+    init() {
+        WidgetSnapshotStore.useAppGroup("group.top.linotsai.app.PersonalAffairs")
+    }
+
     var body: some Widget {
         TodayFocusWidget()
         TodayAgendaWidget()

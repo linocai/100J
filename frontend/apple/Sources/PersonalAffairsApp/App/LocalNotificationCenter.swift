@@ -10,8 +10,22 @@ final class LocalNotificationCenter {
 
     func sync(items: [CalendarItem]) async {
         let center = UNUserNotificationCenter.current()
-        guard (try? await center.requestAuthorization(options: [.alert, .badge, .sound])) == true else {
+
+        // v1.2.4 P6-5 (#28): inspect the current authorization state first.
+        // Calling `requestAuthorization` unconditionally on every sync used
+        // to re-prompt users who had already denied (and silently did
+        // nothing for users who had already granted, while still costing a
+        // TCC round-trip). Only prompt when the user has never been asked.
+        let settings = await center.notificationSettings()
+        switch settings.authorizationStatus {
+        case .notDetermined:
+            _ = try? await center.requestAuthorization(options: [.alert, .badge, .sound])
+        case .denied:
+            // Honour the user's choice — no prompts, no scheduled reminders.
             return
+        default:
+            // .authorized / .provisional / .ephemeral — proceed to sync.
+            break
         }
 
         let pendingCalendarIdentifiers = await center.pendingNotificationRequests()

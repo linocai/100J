@@ -118,7 +118,9 @@ struct MacShell: View {
             .keyboardShortcut("k", modifiers: .command)
 
             Button("Refresh") {
-                Task { await model.refreshAll() }
+                // v1.2.4 P6-4 (#27): explicit user-driven refresh always
+                // bypasses the throttle.
+                Task { await model.refreshAll(force: true) }
             }
             .keyboardShortcut("r", modifiers: .command)
             .disabled(model.isLoading)
