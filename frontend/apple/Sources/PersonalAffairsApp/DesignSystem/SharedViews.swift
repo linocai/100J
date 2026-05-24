@@ -37,16 +37,18 @@ struct ErrorBanner: View {
                 .foregroundStyle(.red)
             Text(message)
                 .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer()
             Button(action: dismiss) {
                 Image(systemName: "xmark")
             }
             .buttonStyle(.borderless)
+            .frame(width: 44, height: 44)
         }
         .padding(12)
         .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .shadow(radius: 8)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: Color.black.opacity(0.14), radius: 14, x: 0, y: 8)
     }
 }
 

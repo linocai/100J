@@ -150,7 +150,7 @@ private enum AppIntentCommandRunner {
     }
 
     private static func makeAPIClient() -> APIClient {
-        let defaultBaseURL = "https://100j.linotsai.top/api/v1"
+        let defaultBaseURL = AppModel.defaultCloudBaseURL
         let storedBaseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? defaultBaseURL
         let authMode = UserDefaults.standard.string(forKey: "appAuthMode")
             .flatMap(AppAuthMode.init(rawValue:)) ?? .cloudJWT

@@ -147,7 +147,7 @@ struct SetupScreen: View {
 private struct AdvancedServerSheet: View {
     @EnvironmentObject private var model: AppModel
     @Binding var isPresented: Bool
-    @State private var baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "https://100j.linotsai.top/api/v1"
+    @State private var baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? AppModel.defaultCloudBaseURL
 
     var body: some View {
         NavigationStack {
@@ -163,7 +163,7 @@ private struct AdvancedServerSheet: View {
                 } header: {
                     Text("自部署服务器")
                 } footer: {
-                    Text("默认 https://100j.linotsai.top/api/v1 — 只在你跑了自己的 100J 服务器时改。")
+                    Text("默认 \(AppModel.defaultCloudBaseURL) — 只在你跑了自己的 100J 服务器时改。")
                         .font(.footnote)
                 }
 

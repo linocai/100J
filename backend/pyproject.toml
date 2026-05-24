@@ -1,6 +1,6 @@
 [project]
 name = "personal-affairs-backend"
-version = "0.1.0"
+version = "1.2.3"
 description = "Personal Affairs App backend v1"
 requires-python = ">=3.9"
 dependencies = [

@@ -2,18 +2,20 @@ import PersonalAffairsCore
 import SwiftUI
 
 /// 设置 sheet —— 必有 Done 按钮，下拉可关。
-/// 4 段：账号 / 数据 / Agent / 关于。
+/// 5 段：账号 / 连接 / 数据 / Agent / 关于。
 struct SettingsSheet: View {
     @EnvironmentObject private var model: AppModel
     @Binding var isPresented: Bool
     @State private var llmProvider: String = "openai"
     @State private var llmKeyDraft: String = ""
     @State private var showingLLMSheet = false
+    @State private var showingCloudSetupConfirmation = false
 
     var body: some View {
         NavigationStack {
             Form {
                 accountSection
+                connectionSection
                 dataSection
                 agentSection
                 aboutSection
@@ -29,6 +31,20 @@ struct SettingsSheet: View {
                         .keyboardShortcut(.defaultAction)
                 }
             }
+        }
+        .confirmationDialog(
+            "连接个人云端",
+            isPresented: $showingCloudSetupConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("进入云端绑定", role: .destructive) {
+                if model.prepareCloudOwnerSetup() {
+                    isPresented = false
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("会退出当前本地/设备会话，并回到访问码绑定页。Mac 和 iPhone 的登录态不会自动共享。")
         }
         .sheet(isPresented: $showingLLMSheet) {
             LLMKeyEditor(provider: $llmProvider, apiKey: $llmKeyDraft) {
@@ -109,6 +125,48 @@ struct SettingsSheet: View {
             ?? "100J User"
     }
 
+    // MARK: 连接
+
+    private var connectionSection: some View {
+        Section {
+            LabeledContent("模式", value: model.authMode.label)
+            LabeledContent("服务器", value: model.apiServerHost)
+            Text(model.apiBaseURLString)
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .textSelection(.enabled)
+
+            if model.isLocalDevelopmentConnection {
+                Label {
+                    Text("当前是本地开发连接。iPhone 上的 127.0.0.1 指向手机本机，不会连接你的 Mac 或云服务器。")
+                        .font(.footnote)
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                }
+                .foregroundStyle(.orange)
+            }
+
+            Button {
+                showingCloudSetupConfirmation = true
+            } label: {
+                Label(cloudSetupButtonTitle, systemImage: "cloud.fill")
+            }
+        } header: {
+            Text("连接")
+        } footer: {
+            Text("每台设备都需要单独绑定云端访问码；Mac 已连接不会自动让 iPhone 登录。")
+        }
+    }
+
+    private var cloudSetupButtonTitle: String {
+        if model.authMode == .cloudJWT, model.currentUser != nil {
+            return "重新绑定个人云端"
+        }
+        return "连接个人云端"
+    }
+
     // MARK: 数据
 
     private var dataSection: some View {
@@ -168,7 +226,6 @@ struct SettingsSheet: View {
         Section {
             LabeledContent("版本", value: appVersion)
             LabeledContent("构建", value: appBuild)
-            LabeledContent("服务器", value: serverHost)
             Link(destination: URL(string: "https://100j.linotsai.top/privacy")!) {
                 Label("隐私政策", systemImage: "lock.shield")
             }
@@ -188,9 +245,6 @@ struct SettingsSheet: View {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "dev"
     }
 
-    private var serverHost: String {
-        URL(string: UserDefaults.standard.string(forKey: "apiBaseURL") ?? "")?.host ?? "100j.linotsai.top"
-    }
 }
 
 private struct LLMKeyEditor: View {

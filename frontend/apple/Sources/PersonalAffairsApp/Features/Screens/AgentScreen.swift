@@ -12,38 +12,22 @@ struct AgentScreen: View {
                 header
                 grid
             }
-            .padding(.horizontal, padding)
-            .padding(.vertical, AppTheme.Spacing.xxl)
-            .frame(maxWidth: 1200, alignment: .leading)
+            .padding(.horizontal, AdaptivePageLayout.horizontalPadding)
+            .padding(.top, AdaptivePageLayout.topPadding)
+            .padding(.bottom, AdaptivePageLayout.bottomPadding)
+            .frame(maxWidth: AdaptivePageLayout.maxContentWidth, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .center)
         }
         .task { await model.reloadAgentSupport() }
     }
 
-    private var padding: CGFloat {
-        #if os(macOS)
-        return AppTheme.Spacing.xxxl
-        #else
-        return AppTheme.Spacing.lg
-        #endif
-    }
-
     private var header: some View {
-        HStack(alignment: .lastTextBaseline, spacing: AppTheme.Spacing.lg) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("系统")
-                    .font(.caption.weight(.bold))
-                    .tracking(0.08)
-                    .textCase(.uppercase)
-                    .foregroundStyle(.purple)
-                Text("Agent")
-                    .font(.system(size: 32, weight: .bold))
-                    .tracking(-0.5)
-                Text("事务助理负责解析、预演和审核。写操作走二次确认，所有动作进入 action log。")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
+        AdaptiveHeroHeader(
+            eyebrow: "系统",
+            title: "Agent",
+            subtitle: "事务助理负责解析、预演和审核。写操作走二次确认，所有动作进入 action log。",
+            accent: .purple
+        ) {
             llmStatus
         }
     }

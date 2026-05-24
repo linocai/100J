@@ -22,21 +22,14 @@ struct CalendarScreen: View {
 
                 grid
             }
-            .padding(.horizontal, padding)
-            .padding(.vertical, AppTheme.Spacing.xxl)
-            .frame(maxWidth: 1200, alignment: .leading)
+            .padding(.horizontal, AdaptivePageLayout.horizontalPadding)
+            .padding(.top, AdaptivePageLayout.topPadding)
+            .padding(.bottom, AdaptivePageLayout.bottomPadding)
+            .frame(maxWidth: AdaptivePageLayout.maxContentWidth, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .center)
         }
         .onChange(of: scopeFilter) { _, _ in Task { await reload() } }
         .task { await reload() }
-    }
-
-    private var padding: CGFloat {
-        #if os(macOS)
-        return AppTheme.Spacing.xxxl
-        #else
-        return AppTheme.Spacing.lg
-        #endif
     }
 
     private func filterLabel(_ f: CalendarScopeFilter) -> String {
@@ -49,37 +42,69 @@ struct CalendarScreen: View {
     }
 
     private var header: some View {
-        HStack(alignment: .lastTextBaseline, spacing: AppTheme.Spacing.lg) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("日程")
-                    .font(.caption.weight(.bold))
-                    .tracking(0.08)
-                    .textCase(.uppercase)
-                    .foregroundStyle(.orange)
-                Text(monthTitle)
-                    .font(.system(size: 32, weight: .bold))
-                    .tracking(-0.5)
-                Text("只显示固定时间事项；弹性待办在 Plan 里。")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
-            HStack(spacing: 4) {
-                Button { shiftMonth(-1) } label: { Image(systemName: "chevron.left") }
-                    .buttonStyle(.bordered)
-                Button("今天") { anchorDate = Date(); selectedDate = Date() }
-                    .buttonStyle(.bordered)
-                Button { shiftMonth(1) } label: { Image(systemName: "chevron.right") }
-                    .buttonStyle(.bordered)
-            }
-            Button {
+        AdaptiveHeroHeader(
+            eyebrow: "日程",
+            title: monthTitle,
+            subtitle: "只显示固定时间事项；弹性待办在 Plan 里。",
+            accent: .orange
+        ) {
+            calendarActions
+        }
+    }
+
+    @ViewBuilder
+    private var calendarActions: some View {
+        #if os(iOS)
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+            monthStepper
+            AdaptiveHeroActionButton(
+                fullTitle: "新建日程",
+                compactTitle: "新建",
+                systemImage: "plus",
+                style: .prominent(.orange)
+            ) {
                 model.universalComposerViewModel.open(prefill: "固定日程 ")
-            } label: {
-                Label("新建日程", systemImage: "plus")
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.orange)
-            .controlSize(.large)
+        }
+        #else
+        HStack(spacing: AppTheme.Spacing.sm) {
+            monthStepper
+            AdaptiveHeroActionButton(
+                fullTitle: "新建日程",
+                compactTitle: "新建",
+                systemImage: "plus",
+                style: .prominent(.orange)
+            ) {
+                model.universalComposerViewModel.open(prefill: "固定日程 ")
+            }
+        }
+        #endif
+    }
+
+    private var monthStepper: some View {
+        HStack(spacing: AppTheme.Spacing.sm) {
+            HStack(spacing: 4) {
+                Button { shiftMonth(-1) } label: {
+                    Image(systemName: "chevron.left")
+                        .frame(width: 28, height: 28)
+                }
+                    .buttonStyle(.bordered)
+                Button {
+                    anchorDate = Date()
+                    selectedDate = Date()
+                } label: {
+                    Text("今天")
+                        .font(.body.weight(.semibold))
+                        .fixedSize(horizontal: true, vertical: false)
+                        .frame(minWidth: 44, minHeight: 28)
+                }
+                    .buttonStyle(.bordered)
+                Button { shiftMonth(1) } label: {
+                    Image(systemName: "chevron.right")
+                        .frame(width: 28, height: 28)
+                }
+                    .buttonStyle(.bordered)
+            }
         }
     }
 
