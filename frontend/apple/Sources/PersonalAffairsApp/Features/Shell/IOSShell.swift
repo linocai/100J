@@ -29,15 +29,17 @@ struct IOSShell: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
-            .sheet(item: confirmationPrompt) { prompt in
-                AgentConfirmationSheet(
-                    prompt: prompt,
-                    onConfirm: { Task { await model.confirmAgentCommand() } },
-                    onCancel: { model.cancelAgentCommand() }
-                )
-                .environmentObject(model)
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
+            .sheet(isPresented: confirmationSheetBinding) {
+                if let prompt = model.agentReview.pendingConfirmation {
+                    AgentConfirmationSheet(
+                        prompt: prompt,
+                        onConfirm: { Task { await model.confirmAgentCommand() } },
+                        onCancel: { model.cancelAgentCommand() }
+                    )
+                    .environmentObject(model)
+                    .presentationDetents([.medium])
+                    .presentationDragIndicator(.visible)
+                }
             }
             .onChange(of: model.universalComposerViewModel.isOpen) { _, newValue in
                 showingComposer = newValue
@@ -109,12 +111,17 @@ struct IOSShell: View {
         showingComposer = true
     }
 
-    private var confirmationPrompt: Binding<AgentConfirmationPrompt?> {
+    // v1.2.4 P5-2 (#32): visibility-only binding. Dismissing the sheet hides
+    // it but keeps ``pendingConfirmation`` around so the AgentScreen banner
+    // can re-present it. Use ``model.cancelAgentCommand()`` for hard cancel.
+    private var confirmationSheetBinding: Binding<Bool> {
         Binding(
-            get: { model.agentReview.pendingConfirmation },
+            get: { model.agentReview.showConfirmationSheet && model.agentReview.pendingConfirmation != nil },
             set: { newValue in
-                if newValue == nil, model.agentReview.pendingConfirmation != nil {
-                    model.cancelAgentCommand()
+                if newValue {
+                    model.openAgentConfirmationSheet()
+                } else {
+                    model.dismissAgentConfirmationSheet()
                 }
             }
         )

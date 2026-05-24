@@ -165,6 +165,97 @@ final class ViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.lastError)
     }
 
+    // MARK: - v1.2.4 P5-2 (#32): AgentScreen banner needs a stable
+    // ``pendingConfirmation`` + ``showConfirmationSheet`` signal so that
+    // dismissing the sheet doesn't drop the prompt and a banner can
+    // re-present it.
+
+    @MainActor
+    func test_agentScreen_shows_banner_when_pending_confirmation_present() async throws {
+        let client = APIClient(
+            baseURL: URL(string: "http://unit.test/api/v1")!,
+            authMode: .localOwner,
+            tokenStore: InMemoryTokenStore(),
+            session: Self.stubSession { _ in
+                (200, #"{"status":"requires_confirmation","result":null,"would_execute":null,"reason":"Archive project","confirmation_token":"token-banner"}"#)
+            }
+        )
+        let viewModel = AgentViewModel(
+            repo: AgentRepository(api: client),
+            personalSpace: { Self.space(id: "personal", type: .personal) },
+            companySpace: { Self.space(id: "company", type: .company) }
+        )
+        viewModel.review = AgentReviewSession(
+            pendingCommand: AgentCommandDraft(
+                intent: ParsedCaptureIntent(target: .companyProject, title: "Release"),
+                command: "archive_project",
+                arguments: ["project_id": .string("project-1")],
+                summary: "归档公司项目：Release"
+            )
+        )
+
+        // Fresh session: nothing pending, no sheet open, no banner needed.
+        XCTAssertNil(viewModel.review.pendingConfirmation)
+        XCTAssertFalse(viewModel.review.showConfirmationSheet)
+        XCTAssertFalse(bannerVisible(viewModel.review))
+
+        // Server demands confirmation → sheet should auto-open, banner hidden
+        // (the sheet itself is the entry point).
+        await viewModel.execute(dryRun: false)
+        XCTAssertNotNil(viewModel.review.pendingConfirmation)
+        XCTAssertTrue(viewModel.review.showConfirmationSheet)
+        XCTAssertFalse(bannerVisible(viewModel.review))
+
+        // User dismisses the sheet without confirming. The prompt must
+        // survive so the banner takes over as the re-entry point.
+        viewModel.review.showConfirmationSheet = false
+        XCTAssertNotNil(viewModel.review.pendingConfirmation)
+        XCTAssertTrue(bannerVisible(viewModel.review))
+
+        // Explicit cancel clears the prompt → banner goes away.
+        viewModel.cancel()
+        XCTAssertNil(viewModel.review.pendingConfirmation)
+        XCTAssertFalse(viewModel.review.showConfirmationSheet)
+        XCTAssertFalse(bannerVisible(viewModel.review))
+    }
+
+    // Same predicate the AgentScreen view uses to decide whether to render
+    // the banner. Keeping it as a tiny local helper keeps the test honest
+    // about what UI signal it's validating.
+    private func bannerVisible(_ review: AgentReviewSession) -> Bool {
+        review.pendingConfirmation != nil && !review.showConfirmationSheet
+    }
+
+    // MARK: - v1.2.4 P5-3 (#34): JSONValue.description for .object must
+    // iterate keys in sorted order so logs / snapshots are reproducible.
+
+    func test_jsonValue_object_description_is_sorted() {
+        let object: JSONValue = .object([
+            "zeta": .string("z"),
+            "alpha": .string("a"),
+            "mu": .string("m")
+        ])
+        XCTAssertEqual(object.description, "alpha: a, mu: m, zeta: z")
+
+        // Re-run with a different insertion order to prove we don't rely on
+        // dictionary iteration order (which is intentionally randomised
+        // across Swift runtime versions).
+        let reordered: JSONValue = .object([
+            "mu": .string("m"),
+            "alpha": .string("a"),
+            "zeta": .string("z")
+        ])
+        XCTAssertEqual(reordered.description, "alpha: a, mu: m, zeta: z")
+
+        // Nested object — outer sort happens, inner description recurses
+        // and therefore inherits the same sorted invariant.
+        let nested: JSONValue = .object([
+            "b": .object(["y": .string("2"), "x": .string("1")]),
+            "a": .string("0")
+        ])
+        XCTAssertEqual(nested.description, "a: 0, b: x: 1, y: 2")
+    }
+
     // MARK: - v1.2.4 P1-2 (#1, #12): device-session-aware APIClient refresh
 
     @MainActor

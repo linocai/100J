@@ -45,7 +45,9 @@ public enum JSONValue: Codable, Hashable, CustomStringConvertible {
         case .number(let value): return String(value)
         case .bool(let value): return String(value)
         case .object(let value):
-            return value.map { "\($0): \($1)" }.joined(separator: ", ")
+            // Sort keys so description is deterministic — needed for log
+            // diffs, snapshot tests, and any reproducible serialisation (#34).
+            return value.keys.sorted().map { key in "\(key): \(value[key]!)" }.joined(separator: ", ")
         case .array(let value):
             return value.map(\.description).joined(separator: ", ")
         case .null:

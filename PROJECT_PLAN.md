@@ -969,3 +969,20 @@ P3 / P4 在 P2 完成后可与 P5 并行，但都要先于 P6 完成（P6 客户
     - `test_note_update_rejects_linked_task_from_other_user`（P4-3，跨 user task_id → 404）
   - 前端 `ViewModelTests.swift` 增 1 条：`test_calendarDraft_updateRequest_all_day_true_omits_startAt`（先 timed sanity check，再切 all_day=true 验 startAt nil + startDate 非 nil）。
 - 影响范围：Phase P4（reviewer #4 / #22 / #23）。`PATCH /api/v1/calendar-items/{id}` 行为放宽——以前 all_day 切换会因为前端没清 start_at 而 422，现在后端兜底自动规整；同时新增 end>=start 422 边界。`PATCH /api/v1/notes/{id}` 行为收紧——新增 `linked_task_id` 可 PATCH 字段，但必须是本人 personal-space task，否则 404 / 422。`NoteUpdate` schema 新增字段，老 client 不传则零影响。
+
+### [2026-05-24] P5 施工补充
+- 变更内容：
+  - P5-1：`agent_service.confirm_command` 重写为 dialect-aware 原子消费：PostgreSQL（含其他支持 `DELETE ... RETURNING` 的方言）走 `db.execute(delete(...).where(...).returning(command, arguments, expires_at))` 单语句完成 "find+delete+read"；SQLite 退化为 `SELECT ... with_for_update()` + 带 `rowcount` 守卫的 `delete()`，借助 SQLite 文件级单写者特性达到等价语义（两并发请求只有一个 rowcount=1，另一个 rowcount=0 → 404）。过期判定保留：拿到（已消费的）`expires_at` 后比较，过期照样 404。错误文案统一为 plan 指定的 "Confirmation token not found or already used."
+  - P5-2：`AgentReviewSession` 新增 `showConfirmationSheet: Bool`（默认 false）。`apply(response:dryRun:)` 在收到新的 `requires_confirmation` 响应时自动置 true 触发 sheet；`compose()` / `cancel()` 同步重置。两端 Shell（`MacShell` / `IOSShell`）的 `.sheet(item:)` 改为 `.sheet(isPresented:)`，绑定到新的 `showConfirmationSheet && pendingConfirmation != nil` 复合条件；dismiss 不再调用 `cancelAgentCommand()`（只翻 flag），把 prompt 留给 banner 接管。`AppModel` 新增 `dismissAgentConfirmationSheet()` / `openAgentConfirmationSheet()` 两个 helper。`AgentScreen` 顶部插入 `PendingConfirmationBanner`，仅当 `pendingConfirmation != nil && !showConfirmationSheet` 时显示，"查看" 按钮调用 `openAgentConfirmationSheet()`。
+  - P5-3：`JSONValue.description` 的 `.object(let value)` 分支改为 `value.keys.sorted().map { ... }`，保证字典输出顺序确定。
+- 与 plan 的差异：
+  - P5-1 plan 设想的 SQLite 退化路径直接用 `with_for_update() + delete()`；实测在 `with_for_update()` 后还需要带 `rowcount == 0 → 404` 的守卫，否则同事务 SELECT 拿到 row 但另一线程已 DELETE 时仍可能跑到执行分支。多一层防御。
+  - P5-2 plan 写 "暴露 pendingConfirmation 让 SwiftUI 监听（如已存在则只需暴露 public getter）"——`pendingConfirmation` 已经是 `var`，无需改；真正缺的是 sheet 可见性 flag，所以新增了 `showConfirmationSheet`。
+  - P5-2 `cancel()` 在 sheet 里仍是硬取消（清 prompt），符合 sheet "取消" 按钮语义；只有 swipe-dismiss 这种隐式关闭走 "保留 prompt + 翻 flag" 路径。
+- 测试新增：
+  - 后端 `tests/test_agent.py` 增 1 条：`test_confirm_command_atomic_under_concurrency`。需要在隔离的文件型 SQLite engine 上跑（默认 conftest 的 `sqlite:///:memory:` + `StaticPool` 共享单 connection，两线程同时驱动会段错误）；测试自己建临时 db 文件、override `get_db`、用 `threading.Barrier(2)` 让两个 worker 同时进入 `confirm_command`，断言 1 成功 + 1 拿 404，并对已消费 token 做一次 replay 再断言 404。验收要求 100 次稳定通过 → 用 shell 循环跑 100 遍，100/100 通过。
+  - 前端 `ViewModelTests.swift` 增 2 条：
+    - `test_agentScreen_shows_banner_when_pending_confirmation_present`：完整跑一遍 "fresh → execute() 返回 requires_confirmation → sheet 自动打开（banner 不显）→ 用户 dismiss sheet（pendingConfirmation 仍在、banner 显）→ cancel() （banner 消失）" 状态机；用本地 `bannerVisible(_:)` 助手对应 AgentScreen 的渲染条件。
+    - `test_jsonValue_object_description_is_sorted`：三组断言——基础 3 键、打乱顺序的同样 3 键、嵌套对象——都验证按 key 字母序输出。
+- 影响范围：Phase P5（reviewer #10 / #32 / #34；#15 已在 P0-2 处理）。`POST /api/v1/agent/commands/confirm` 行为收紧：同一 token 两并发只有一个成功，第二个 404；已使用 token 的二次 confirm 现在统一 404（plan 接口契约要求）。前端 Agent UX 改进：sheet swipe-dismiss 后用户能从 AgentScreen 顶部 banner 重新进入；硬取消（点 sheet "取消"）行为不变。`JSONValue.description` 输出格式变化（key 顺序确定）——如果有人在 snapshot 测试里把 unsorted 输出 hard-coded 进 expected 字符串，会一次性 fix。
+- 执行环境备注（不影响代码改动）：当前仓库根 `100%J` 的 `%` 字符触发 Swift toolchain `swift build` 失败（路径在 clang module / index writer 内被误处理为 printf format，pcm 写入零字节、index 文件名变形）。绕过办法是 `swift build --scratch-path /tmp/p5-build` 把 `.build` 重定向到非 `%` 路径。这是 host 环境问题不是代码问题，但 CI 如果跑在不带 `%` 的路径上不会遇到。

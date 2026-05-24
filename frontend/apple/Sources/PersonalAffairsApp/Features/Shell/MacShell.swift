@@ -45,14 +45,16 @@ struct MacShell: View {
                 .environmentObject(model)
                 .frame(width: 560, height: 620)
         }
-        .sheet(item: confirmationPrompt) { prompt in
-            AgentConfirmationSheet(
-                prompt: prompt,
-                onConfirm: { Task { await model.confirmAgentCommand() } },
-                onCancel: { model.cancelAgentCommand() }
-            )
-            .environmentObject(model)
-            .frame(width: 480)
+        .sheet(isPresented: confirmationSheetBinding) {
+            if let prompt = model.agentReview.pendingConfirmation {
+                AgentConfirmationSheet(
+                    prompt: prompt,
+                    onConfirm: { Task { await model.confirmAgentCommand() } },
+                    onCancel: { model.cancelAgentCommand() }
+                )
+                .environmentObject(model)
+                .frame(width: 480)
+            }
         }
         .background(keyboardCommands)
         .onChange(of: model.universalComposerViewModel.isOpen) { _, newValue in
@@ -92,12 +94,15 @@ struct MacShell: View {
         }
     }
 
-    private var confirmationPrompt: Binding<AgentConfirmationPrompt?> {
+    // v1.2.4 P5-2 (#32): visibility-only binding (see IOSShell for rationale).
+    private var confirmationSheetBinding: Binding<Bool> {
         Binding(
-            get: { model.agentReview.pendingConfirmation },
+            get: { model.agentReview.showConfirmationSheet && model.agentReview.pendingConfirmation != nil },
             set: { newValue in
-                if newValue == nil, model.agentReview.pendingConfirmation != nil {
-                    model.cancelAgentCommand()
+                if newValue {
+                    model.openAgentConfirmationSheet()
+                } else {
+                    model.dismissAgentConfirmationSheet()
                 }
             }
         )

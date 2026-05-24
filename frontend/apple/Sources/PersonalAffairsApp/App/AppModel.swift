@@ -846,6 +846,18 @@ final class AppModel: ObservableObject {
         agentReview = agentViewModel.review
     }
 
+    // v1.2.4 P5-2 (#32): dismissing the confirmation sheet should not destroy
+    // the pendingConfirmation — the AgentScreen banner reopens it via
+    // ``showConfirmationSheet``. Only the visibility flag flips here.
+    func dismissAgentConfirmationSheet() {
+        agentReview.showConfirmationSheet = false
+    }
+
+    func openAgentConfirmationSheet() {
+        guard agentReview.pendingConfirmation != nil else { return }
+        agentReview.showConfirmationSheet = true
+    }
+
     func reloadAgentSupport() async {
         await run {
             await self.agentViewModel.reloadSupport()
