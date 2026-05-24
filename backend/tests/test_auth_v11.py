@@ -8,7 +8,7 @@ import app.services.apple_auth_service as apple_auth_service
 import app.services.device_session_service as device_session_service
 import app.services.email_otp_service as email_otp_service
 from app.core.config import get_settings
-from app.models import DeviceSession, DeviceToken, EmailOTPCode, Task, User
+from app.models import DeviceSession, DeviceToken, EmailOTPCode, RefreshTokenJTI, Task, User
 from tests.conftest import TestingSessionLocal, register_and_auth
 
 
@@ -424,6 +424,202 @@ def test_issue_after_revoke_creates_fresh_row_or_resets_cleanly(client):
         json={"device_id": _DEVICE_ID, "refresh_token": new_refresh},
     )
     assert response.status_code == 200, response.text
+
+
+# ---------------------------------------------------------------------------
+# v1.2.4 P2: /auth/refresh rotation + jti blacklist (#19)
+# ---------------------------------------------------------------------------
+
+
+def test_refresh_rotates_jti_and_invalidates_old_token(client):
+    """P2-3 (#19): refresh must hand back a NEW refresh_token and the OLD
+    one must immediately stop working (replay attack mitigation)."""
+
+    headers, _ = register_and_auth(client)
+    # register_and_auth already issued a refresh token; pull it out via login
+    # (cleaner than rummaging in the response of register_and_auth itself).
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "user@example.com", "password": "password123"},
+    )
+    assert login.status_code == 200, login.text
+    first_refresh = login.json()["refresh_token"]
+    assert first_refresh, "issue_tokens must return a refresh_token"
+
+    rotated = client.post("/api/v1/auth/refresh", json={"refresh_token": first_refresh})
+    assert rotated.status_code == 200, rotated.text
+    second_refresh = rotated.json()["refresh_token"]
+    assert second_refresh and second_refresh != first_refresh, (
+        "rotation must mint a fresh refresh_token"
+    )
+
+    # Replaying the original token must fail.
+    replay = client.post("/api/v1/auth/refresh", json={"refresh_token": first_refresh})
+    assert replay.status_code == 401, replay.text
+    assert replay.json()["error"]["code"] == "unauthorized"
+
+    # The new token still works.
+    rotated_again = client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": second_refresh}
+    )
+    assert rotated_again.status_code == 200, rotated_again.text
+    third_refresh = rotated_again.json()["refresh_token"]
+    assert third_refresh and third_refresh != second_refresh
+
+
+def test_refresh_revoked_jti_returns_401(client):
+    """P2-3 (#19): a jti whose row was explicitly revoked must 401."""
+
+    register_and_auth(client)
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "user@example.com", "password": "password123"},
+    )
+    assert login.status_code == 200, login.text
+    refresh_token = login.json()["refresh_token"]
+
+    # Decode the jti out of the token (test-side: we know the signing key).
+    from app.core.security import decode_token
+
+    decoded = decode_token(refresh_token, expected_type="refresh")
+    assert decoded and decoded.get("jti")
+    jti = decoded["jti"]
+
+    with TestingSessionLocal() as db:
+        row = db.scalar(select(RefreshTokenJTI).where(RefreshTokenJTI.jti == jti))
+        assert row is not None, "issue_tokens must persist a jti row"
+        row.revoked_at = datetime.now(timezone.utc)
+        db.commit()
+
+    response = client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": refresh_token}
+    )
+    assert response.status_code == 401, response.text
+    assert response.json()["error"]["code"] == "unauthorized"
+
+
+def test_refresh_expired_jti_returns_401(client):
+    """P2-3 (#19): expired jti row must 401 even if JWT signature still verifies."""
+
+    register_and_auth(client)
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "user@example.com", "password": "password123"},
+    )
+    assert login.status_code == 200, login.text
+    refresh_token = login.json()["refresh_token"]
+
+    from app.core.security import decode_token
+
+    decoded = decode_token(refresh_token, expected_type="refresh")
+    jti = decoded["jti"]
+
+    with TestingSessionLocal() as db:
+        row = db.scalar(select(RefreshTokenJTI).where(RefreshTokenJTI.jti == jti))
+        assert row is not None
+        # Force the row to be already-expired by 1 minute.
+        row.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        db.commit()
+
+    response = client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": refresh_token}
+    )
+    assert response.status_code == 401, response.text
+    assert response.json()["error"]["code"] == "unauthorized"
+
+
+def test_refresh_missing_jti_payload_returns_401(client, monkeypatch):
+    """P2-3 (#19): a refresh token minted without a jti claim (legacy v1.2.3
+    survivor) must NOT be accepted — otherwise the blacklist gives no security."""
+
+    from app.core.security import create_token
+
+    register_and_auth(client)
+    me_id = client.get(
+        "/api/v1/me",
+        headers={"Authorization": "Bearer " + client.post(
+            "/api/v1/auth/login",
+            json={"email": "user@example.com", "password": "password123"},
+        ).json()["access_token"]},
+    ).json()["id"]
+
+    legacy_token = create_token(
+        subject=me_id,
+        token_type="refresh",
+        expires_delta=timedelta(days=30),
+    )  # no extra_claims => no jti
+    response = client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": legacy_token}
+    )
+    assert response.status_code == 401, response.text
+    assert response.json()["error"]["code"] == "unauthorized"
+
+
+# ---------------------------------------------------------------------------
+# v1.2.4 P2: /auth/register lockdown (#5)
+# ---------------------------------------------------------------------------
+
+
+def test_register_in_prod_without_invite_returns_404(client, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("REGISTER_INVITE_TOKEN", "")
+    get_settings.cache_clear()
+    try:
+        response = client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": "blocked@example.com",
+                "password": "password123",
+                "display_name": "Blocked",
+                "timezone": "America/New_York",
+            },
+        )
+    finally:
+        get_settings.cache_clear()
+
+    assert response.status_code == 404, response.text
+    assert response.json()["error"]["code"] == "not_found"
+
+    # No user must have been created.
+    with TestingSessionLocal() as db:
+        row = db.scalar(select(User).where(User.email == "blocked@example.com"))
+        assert row is None
+
+
+def test_register_in_prod_with_invite_succeeds(client, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("REGISTER_INVITE_TOKEN", "super-secret-invite")
+    get_settings.cache_clear()
+    try:
+        response = client.post(
+            "/api/v1/auth/register",
+            headers={"X-Invite-Token": "super-secret-invite"},
+            json={
+                "email": "invited@example.com",
+                "password": "password123",
+                "display_name": "Invited",
+                "timezone": "America/New_York",
+            },
+        )
+        # Wrong / missing invite must 401 (not 404 — invite token is configured).
+        wrong = client.post(
+            "/api/v1/auth/register",
+            headers={"X-Invite-Token": "wrong-token"},
+            json={
+                "email": "rejected@example.com",
+                "password": "password123",
+                "display_name": "Rejected",
+                "timezone": "America/New_York",
+            },
+        )
+    finally:
+        get_settings.cache_clear()
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["access_token"] and body["refresh_token"]
+    assert wrong.status_code == 401, wrong.text
+    assert wrong.json()["error"]["code"] == "unauthorized"
 
 
 def test_db_check_rejects_overlong_task_title(client):

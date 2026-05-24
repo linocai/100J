@@ -427,6 +427,56 @@ final class PersonalAffairsCoreTests: XCTestCase {
         }
     }
 
+    /// v1.2.4 P2-4: when the backend rotates the device refresh_token on
+    /// every call (P2-3 behavior for JWT, already shipped for device sessions
+    /// in v1.2), the client must persist the freshly returned token. Two
+    /// consecutive ``silentResume()`` calls should:
+    ///
+    /// 1. both succeed
+    /// 2. each hit ``/api/v1/auth/device-refresh`` with the most recent token
+    /// 3. leave the device-session store holding the latest rotated token
+    func testSilentResumeHandlesRotationAndSavesNewRefreshToken() async throws {
+        let deviceSession = InMemorySilentResumeDeviceSession(
+            deviceId: "device-uuid-1",
+            initialRefreshToken: "rt-0"
+        )
+        var seenRefreshTokens: [String] = []
+        let store = InMemoryTokenStore(accessToken: "old-access", refreshToken: "rt-0")
+        let client = APIClient(
+            baseURL: URL(string: "http://unit.test/api/v1")!,
+            authMode: .cloudJWT,
+            tokenStore: store,
+            deviceSession: deviceSession,
+            session: Self.stubSession { request in
+                XCTAssertEqual(request.url?.path, "/api/v1/auth/device-refresh")
+                let body = try Self.jsonBody(from: request)
+                XCTAssertEqual(body["device_id"] as? String, "device-uuid-1")
+                let presented = try XCTUnwrap(body["refresh_token"] as? String)
+                seenRefreshTokens.append(presented)
+                let next = "rt-\(seenRefreshTokens.count)"
+                let access = "access-\(seenRefreshTokens.count)"
+                return (
+                    200,
+                    #"{"access_token":"\#(access)","refresh_token":"\#(next)","token_type":"bearer","device_id":"device-uuid-1","device_name":"Test Mac","expires_at":"2027-01-01T00:00:00.000Z"}"#
+                )
+            }
+        )
+        let repository = AuthRepository(api: client, deviceSession: deviceSession)
+
+        try await repository.silentResume()
+        try await repository.silentResume()
+
+        XCTAssertEqual(
+            seenRefreshTokens,
+            ["rt-0", "rt-1"],
+            "second silentResume must present the rotated token from the first call"
+        )
+        XCTAssertEqual(deviceSession.refreshToken, "rt-2")
+        XCTAssertEqual(store.accessToken, "access-2")
+        XCTAssertEqual(store.refreshToken, "rt-2")
+        XCTAssertNotNil(deviceSession.info, "recordIssued must persist the rotated session metadata")
+    }
+
     func testUserFacingMessageTranslations() {
         XCTAssertEqual(
             UserFacingMessage.translate(APIClientError.server(code: "rate_limited", message: "raw")),
@@ -919,4 +969,43 @@ private final class StubURLProtocol: URLProtocol {
     }
 
     override func stopLoading() {}
+}
+
+/// v1.2.4 P2-4 helper: in-memory DeviceSessionStore so tests never touch
+/// the real Keychain / UserDefaults. Subclasses are valid because the
+/// production class is declared `open`.
+private final class InMemorySilentResumeDeviceSession: DeviceSessionStore {
+    private let stubDeviceId: String
+    private var stubRefreshToken: String?
+    private var stubInfo: DeviceSessionInfo?
+
+    init(deviceId: String, initialRefreshToken: String?) {
+        self.stubDeviceId = deviceId
+        self.stubRefreshToken = initialRefreshToken
+        super.init(
+            defaults: UserDefaults(suiteName: "stub-silentresume-\(UUID().uuidString)")!,
+            keychainService: "stub-silentresume-\(UUID().uuidString)"
+        )
+    }
+
+    override var deviceId: String { stubDeviceId }
+    override var refreshToken: String? { stubRefreshToken }
+    override func saveRefreshToken(_ token: String) throws { stubRefreshToken = token }
+    override func clearRefreshToken() { stubRefreshToken = nil }
+    override var info: DeviceSessionInfo? {
+        get { stubInfo }
+        set { stubInfo = newValue }
+    }
+    override func recordIssued(deviceName: String?, expiresAt: Date?) {
+        stubInfo = DeviceSessionInfo(
+            deviceId: stubDeviceId,
+            deviceName: deviceName ?? "Test Device",
+            expiresAt: expiresAt
+        )
+    }
+    override func clearAll() {
+        stubRefreshToken = nil
+        stubInfo = nil
+    }
+    override var hasActiveSession: Bool { stubRefreshToken != nil }
 }

@@ -903,3 +903,22 @@ P3 / P4 在 P2 完成后可与 P5 并行，但都要先于 P6 完成（P6 客户
   - 401 refresh 的 `/auth/*` 门控修复：device session refresh 启用后，dev 机 Keychain 里的 device refresh token 会让 `/auth/owner-login` 的 401 误走 refresh→retry 路径，导致原 `testOwnerLoginUnauthorizedKeepsServerMessage` 红。
   - refreshTokensIfPossible 不再清理 store：cooldown 才有意义；否则两段清理叠加把 cooldown 绕过去。
 - 影响范围：Phase P1（reviewer #1 / #6 / #8 / #12 / #25）；连带影响所有依赖 `DeviceSessionStore`/`AuthRepository` 的代码（生产层兼容，仅是放宽继承约束）。
+
+### [2026-05-24] P2 施工补充
+- 变更内容：
+  - `create_refresh_token(subject, jti=None)` 签名改为返回 `tuple[str, str]`（token + jti），原先只返 token。callers 必须解包以拿到 jti 落库。
+  - `issue_tokens(user)` 改为 `issue_tokens(user, db: Session)`，所有 5 处 callers（register / login / owner-login bundle / email-otp-verify / refresh / apple bundle 在 `_bundle_response` 回退）同步更新。
+  - 新增 `RefreshTokenJTI` 模型（`backend/app/models/refresh_token_jti.py`）；jti 走 `String(64)` 主键（UUID4 hex 32 字符，预留余量）。
+  - Alembic 0006 显式建 `ix_refresh_token_jti_user_id` 单列索引以匹配 `Column(index=True)` 的 SQLAlchemy 自动行为；plan 仅写了复合索引，单列索引是 SQLAlchemy `index=True` 的副产物，保证 drift guard 不告警。
+  - `tests/openapi_snapshot.json` 因 `/auth/register` 和 `/auth/refresh` 新增 docstring 需要重生，已用 `json.dumps(..., indent=2)` 不带 sort_keys 保持原插入顺序，diff 控制在 2 行内。
+  - `_jwks()` 容错改写：所有 `urlopen` / `json.load` 异常一并捕获后走 stale-cache / 503 分支，避免 token-decode 错误被混杂进 503。
+- 变更原因：
+  - `create_refresh_token` 必须把 jti 暴露给 caller，否则落库时无法保证 token claim 与 DB row 一致。
+  - `issue_tokens` 需要 db 才能写 jti 行；不加 db 参数则要在函数内部自己拿 Session（与现有 service 风格不符）。
+  - `String(64)` 比 UUID 36 字符宽松，给未来 longer jti（如加前缀 `usr_<uuid>`）留余量，且不会浪费 SQLite/Postgres 字节。
+  - openapi snapshot 默认非排序，强行排序会产生 4000+ 行噪音 diff。
+- 测试新增：
+  - 后端：`test_refresh_rotates_jti_and_invalidates_old_token` / `test_refresh_revoked_jti_returns_401` / `test_refresh_expired_jti_returns_401` / `test_refresh_missing_jti_payload_returns_401`（plan 多 1，覆盖 legacy 无 jti token 必须拒绝的安全边界）/ `test_register_in_prod_without_invite_returns_404` / `test_register_in_prod_with_invite_succeeds`（合并到一个测，包含错 token 401 子断言）。
+  - 后端新文件 `tests/test_apple_auth.py`：`test_apple_sign_in_falls_back_to_stale_jwks_when_remote_unreachable` / `test_apple_jwks_raises_503_when_no_cache_and_remote_down`（plan 多 1，覆盖空缓存 503 路径）/ `test_apple_jwks_refreshes_when_cache_expired_and_remote_ok`（plan 多 1，正常 path sanity check）。
+  - 前端：`testSilentResumeHandlesRotationAndSavesNewRefreshToken` 加在 `PersonalAffairsCoreTests`（plan 第 360 行点名 `AuthRepository.silentResume` 是 Core 模块的方法，所以测试归属 CoreTests 而非 AppTests）。
+- 影响范围：Phase P2（reviewer #5 / #18 / #19；#16 / #20 已在 P0 完成）；改变 `/auth/refresh` 行为契约（rotation）和 `/auth/register` 可用性契约（prod 默认 404 + 限流）。前端 `AuthRepository.silentResume` / `APIClient.refreshTokensIfPossible` 现有 `persist()` 已能保存返回的新 refresh token，零改动即兼容。

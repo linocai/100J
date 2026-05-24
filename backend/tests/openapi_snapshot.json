@@ -73,6 +73,7 @@
           "auth"
         ],
         "summary": "Register",
+        "description": "v1.2.4 P2-1 (#5): registration is no longer publicly open.\n\n- In production (``APP_ENV=production``) with no invite token configured\n  the endpoint behaves as if it doesn't exist (404). This keeps random\n  internet scanners away from the user table.\n- Otherwise callers must present ``X-Invite-Token`` matching\n  ``settings.register_invite_token``. In dev (both empty by default) the\n  empty header still matches the empty config, so local workflows and\n  the existing test suite keep working without touching headers.",
         "operationId": "register_api_v1_auth_register_post",
         "requestBody": {
           "content": {
@@ -312,6 +313,7 @@
           "auth"
         ],
         "summary": "Refresh",
+        "description": "v1.2.4 P2-3 (#19): refresh now rotates and blacklists the presented jti.\n\nContract changes vs. v1.2.3:\n- Missing / replayed / expired / revoked jti \u2192 401 ``unauthorized``\n- On success the returned refresh_token is **always** new; clients MUST\n  persist it. This applies to JWT-only callers (register / login /\n  email-otp). Device-bound clients go through /auth/device-refresh.",
         "operationId": "refresh_api_v1_auth_refresh_post",
         "requestBody": {
           "content": {

@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 import urllib.request
 from typing import Optional
@@ -12,20 +13,58 @@ from app.core.errors import AppError
 from app.models import User
 from app.services.auth_service import create_default_spaces
 
+logger = logging.getLogger(__name__)
+
 APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys"
 APPLE_ISSUER = "https://appleid.apple.com"
 JWKS_TTL_SECONDS = 24 * 60 * 60
+# P2-2 (#18): when Apple is unreachable we extend stale cache by this much
+# so a transient outage doesn't lock every Apple user out for 24h.
+JWKS_STALE_GRACE_SECONDS = 60 * 60
 
 _jwks_cache: dict = {"expires_at": 0.0, "keys": None}
 
 
 def _jwks() -> dict:
+    """v1.2.4 P2-2 (#18): fall back to stale cache when Apple is unreachable.
+
+    Previously a single failed fetch raised straight through, taking every
+    in-flight Apple sign-in down. Now:
+
+    * fresh cache → returned as-is (fast path)
+    * stale cache + remote OK → refresh + cache
+    * stale cache + remote down → log warning, extend ``expires_at`` by 1h,
+      reuse stale keys (Apple rotates keys slowly, this is safe for a brief
+      outage)
+    * empty cache + remote down → 503 ``upstream_unavailable`` (first launch
+      against a broken Apple endpoint; nothing else we can do)
+    """
     now = time.time()
     if _jwks_cache["keys"] and _jwks_cache["expires_at"] > now:
         return _jwks_cache["keys"]
 
-    with urllib.request.urlopen(APPLE_JWKS_URL, timeout=5) as response:
-        keys = json.load(response)
+    try:
+        with urllib.request.urlopen(APPLE_JWKS_URL, timeout=5) as response:
+            keys = json.load(response)
+    except Exception as exc:  # network errors, JSON errors, timeouts — all
+        # collapse to "remote unavailable" so callers see one consistent
+        # signal. We intentionally do NOT catch this in _verify_apple_id_token
+        # because then a token-decode error would also pop a 503.
+        if _jwks_cache["keys"]:
+            logger.warning(
+                "apple_jwks_unreachable, reusing stale cache for %ss: %s",
+                JWKS_STALE_GRACE_SECONDS,
+                exc,
+            )
+            _jwks_cache["expires_at"] = now + JWKS_STALE_GRACE_SECONDS
+            return _jwks_cache["keys"]
+        logger.error("apple_jwks_unreachable and no stale cache: %s", exc)
+        raise AppError(
+            status_code=503,
+            code="upstream_unavailable",
+            message="Apple JWKS unreachable.",
+        )
+
     _jwks_cache["keys"] = keys
     _jwks_cache["expires_at"] = now + JWKS_TTL_SECONDS
     return keys
