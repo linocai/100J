@@ -102,13 +102,23 @@ public struct CalendarDraftState: Equatable {
     }
 
     public func updateRequest(timezone: String = TimeZone.current.identifier) -> CalendarItemUpdateRequest {
-        CalendarItemUpdateRequest(
+        // P4-4 (#4): the backend now normalises mismatched all-day vs timed
+        // fields, but keep a debug-only assert so future encoder regressions
+        // (e.g. accidentally sending startAt while allDay==true) surface
+        // during development rather than as 422s in production.
+        let encodedStartDate = allDay ? CalendarViewState.dayKey(startDate) : nil
+        let encodedStartAt: Date? = allDay ? nil : startAt
+        assert(
+            !allDay || (encodedStartDate != nil && encodedStartAt == nil),
+            "all-day calendar update must encode startDate and omit startAt"
+        )
+        return CalendarItemUpdateRequest(
             title: title,
             description: trimmedDescription,
             type: type,
             allDay: allDay,
-            startDate: allDay ? CalendarViewState.dayKey(startDate) : nil,
-            startAt: allDay ? nil : startAt,
+            startDate: encodedStartDate,
+            startAt: encodedStartAt,
             timezone: timezone,
             recurrence: recurrence,
             remindAt: hasReminder ? remindAt : nil,

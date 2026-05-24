@@ -3,12 +3,17 @@ import Foundation
 public final class DiagnosticLogger {
     public static let shared = DiagnosticLogger()
 
+    /// Maximum size of the active diagnostics file before it is rotated to
+    /// `<name>.1.log`. Exposed for tests (#29).
+    public static let rotationThresholdBytes: Int = 1_000_000
+
     private let fileManager: FileManager
     private let lock = NSLock()
     private let encoder = JSONEncoder.personalAffairs
 
     public let directoryURL: URL
     public let fileURL: URL
+    public let rotatedFileURL: URL
 
     public init(
         fileManager: FileManager = .default,
@@ -20,6 +25,7 @@ public final class DiagnosticLogger {
             .appendingPathComponent("100J", isDirectory: true) ?? fileManager.temporaryDirectory.appendingPathComponent("100J", isDirectory: true)
         self.directoryURL = baseDirectory
         self.fileURL = baseDirectory.appendingPathComponent("diagnostics.jsonl")
+        self.rotatedFileURL = baseDirectory.appendingPathComponent("diagnostics.1.log")
     }
 
     public func recordAPI(method: String, path: String, status: Int?, error: String?) {
@@ -104,8 +110,29 @@ public final class DiagnosticLogger {
             } else {
                 try line.write(to: fileURL)
             }
+            rotateIfNeededLocked()
         } catch {
             // Diagnostics must never block the user's primary workflow.
+        }
+    }
+
+    /// Caller MUST hold `lock`. Moves the active log to `diagnostics.1.log` when
+    /// its size exceeds `rotationThresholdBytes`, then re-creates an empty
+    /// active log. Best-effort: any IO failure is swallowed so diagnostics
+    /// never block user flows.
+    private func rotateIfNeededLocked() {
+        let attributes = try? fileManager.attributesOfItem(atPath: fileURL.path)
+        let size = (attributes?[.size] as? NSNumber)?.intValue ?? 0
+        guard size > DiagnosticLogger.rotationThresholdBytes else { return }
+        do {
+            if fileManager.fileExists(atPath: rotatedFileURL.path) {
+                try fileManager.removeItem(at: rotatedFileURL)
+            }
+            try fileManager.moveItem(at: fileURL, to: rotatedFileURL)
+            try Data().write(to: fileURL)
+        } catch {
+            // Rotation failures must not surface to the user; the next write
+            // will just retry. Worst case the active log grows past threshold.
         }
     }
 }

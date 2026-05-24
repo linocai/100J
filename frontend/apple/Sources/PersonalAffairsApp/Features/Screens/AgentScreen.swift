@@ -10,6 +10,7 @@ struct AgentScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.xxl) {
                 header
+                pendingConfirmationBanner
                 grid
             }
             .padding(.horizontal, AdaptivePageLayout.horizontalPadding)
@@ -19,6 +20,21 @@ struct AgentScreen: View {
             .frame(maxWidth: .infinity, alignment: .center)
         }
         .task { await model.reloadAgentSupport() }
+    }
+
+    // v1.2.4 P5-2 (#32): if a confirmation prompt is still alive but the sheet
+    // was dismissed (or the user navigated away), surface a banner so they
+    // have an obvious way back into the sheet before the 15-minute token
+    // expires.
+    @ViewBuilder
+    private var pendingConfirmationBanner: some View {
+        if let prompt = model.agentReview.pendingConfirmation,
+           !model.agentReview.showConfirmationSheet {
+            PendingConfirmationBanner(
+                command: prompt.command,
+                action: { model.openAgentConfirmationSheet() }
+            )
+        }
     }
 
     private var header: some View {
@@ -179,6 +195,36 @@ private struct ChatBubble: View {
                 )
             if role == .bot { Spacer(minLength: 36) }
         }
+    }
+}
+
+private struct PendingConfirmationBanner: View {
+    let command: String
+    let action: () -> Void
+
+    var body: some View {
+        HStack(spacing: AppTheme.Spacing.md) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.title3)
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(Color.orange, in: Circle())
+            Text("有一条待你确认的操作：\(command)")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+            Spacer(minLength: 0)
+            Button("查看", action: action)
+                .buttonStyle(.borderedProminent)
+                .tint(.orange)
+                .controlSize(.regular)
+        }
+        .padding(AppTheme.Spacing.md)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.orange.opacity(0.35), lineWidth: 0.5)
+        )
     }
 }
 

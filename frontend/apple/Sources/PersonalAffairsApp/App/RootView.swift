@@ -15,6 +15,20 @@ struct RootView: View {
                 // 有 device session：要么正在 silent resume，要么即将开始
                 // 永远不让 SetupScreen 闪现
                 ResumingPlaceholder()
+                    .task {
+                        // v1.2.4 (#8): self-heal the placeholder.
+                        // Kick off bootstrapIfPossible() here in addition to
+                        // PersonalAffairsApp's .task — so re-entering this
+                        // branch (e.g. after a botched silent resume) still
+                        // retries. If nothing recovers within 5s we treat
+                        // the device session as dead and fall back to
+                        // SetupScreen rather than hanging here forever.
+                        await model.bootstrapIfPossible()
+                        try? await Task.sleep(nanoseconds: 5_000_000_000)
+                        if !model.isAuthenticated, model.hasDeviceSession {
+                            model.expireCloudSession()
+                        }
+                    }
             } else {
                 SetupScreen()
             }

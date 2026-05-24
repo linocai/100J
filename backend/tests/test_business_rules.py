@@ -118,6 +118,39 @@ def test_long_text_payloads_are_rejected(client):
     assert calendar.status_code == 422
 
 
+def test_note_body_at_16000_chars_succeeds(client):
+    """v1.2.4 P6-6 (#33): exactly NOTE_BODY_MAX_LENGTH chars must pass."""
+    headers, spaces = register_and_auth(client)
+
+    response = client.post(
+        "/api/v1/notes",
+        headers=headers,
+        json={
+            "space_id": spaces["personal"]["id"],
+            "body": "x" * 16_000,
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assert len(response.json()["body"]) == 16_000
+
+
+def test_note_body_at_16001_chars_rejected(client):
+    """v1.2.4 P6-6 (#33): one byte over the limit must be 422."""
+    headers, spaces = register_and_auth(client)
+
+    response = client.post(
+        "/api/v1/notes",
+        headers=headers,
+        json={
+            "space_id": spaces["personal"]["id"],
+            "body": "x" * 16_001,
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_calendar_all_day_and_timed_validation(client):
     headers, spaces = register_and_auth(client)
 
@@ -196,6 +229,148 @@ def test_calendar_date_window_uses_date_binds_for_postgres(monkeypatch):
     assert compiled.params["date_2"] == date(2026, 11, 15)
     assert compiled.binds["date_1"].type.python_type is date
     assert compiled.binds["date_2"].type.python_type is date
+
+
+def test_calendar_update_switches_from_timed_to_all_day_clears_start_at(client):
+    """P4-1 (#4): toggling all_day=True on a previously-timed event must
+    clear start_at/end_at server-side instead of 422-ing on stale fields."""
+    headers, spaces = register_and_auth(client)
+    timed = client.post(
+        "/api/v1/calendar-items",
+        headers=headers,
+        json={
+            "space_id": spaces["personal"]["id"],
+            "title": "Therapy session",
+            "type": "appointment",
+            "all_day": False,
+            "start_at": "2026-06-01T09:00:00-04:00",
+            "end_at": "2026-06-01T10:00:00-04:00",
+        },
+    ).json()
+
+    response = client.patch(
+        "/api/v1/calendar-items/{}".format(timed["id"]),
+        headers=headers,
+        json={"all_day": True, "start_date": "2026-06-01"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["all_day"] is True
+    assert body["start_date"] == "2026-06-01"
+    assert body["start_at"] is None
+    assert body["end_at"] is None
+
+
+def test_calendar_update_switches_from_all_day_to_timed_clears_start_date(client):
+    """P4-1 (#4): toggling all_day=False must clear start_date/end_date."""
+    headers, spaces = register_and_auth(client)
+    all_day = client.post(
+        "/api/v1/calendar-items",
+        headers=headers,
+        json={
+            "space_id": spaces["personal"]["id"],
+            "title": "Anniversary",
+            "type": "anniversary",
+            "all_day": True,
+            "start_date": "2026-08-01",
+            "end_date": "2026-08-01",
+        },
+    ).json()
+
+    response = client.patch(
+        "/api/v1/calendar-items/{}".format(all_day["id"]),
+        headers=headers,
+        json={
+            "all_day": False,
+            "start_at": "2026-08-01T09:00:00-04:00",
+            "end_at": "2026-08-01T10:00:00-04:00",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["all_day"] is False
+    assert body["start_date"] is None
+    assert body["end_date"] is None
+    assert body["start_at"] is not None
+    assert body["end_at"] is not None
+
+
+def test_calendar_update_rejects_end_before_start(client):
+    """P4-2 (#22): end < start must 422 for both all-day and timed."""
+    headers, spaces = register_and_auth(client)
+
+    bad_all_day = client.post(
+        "/api/v1/calendar-items",
+        headers=headers,
+        json={
+            "space_id": spaces["personal"]["id"],
+            "title": "Bad span all day",
+            "type": "anniversary",
+            "all_day": True,
+            "start_date": "2026-08-05",
+            "end_date": "2026-08-01",
+        },
+    )
+    assert bad_all_day.status_code == 422
+    assert bad_all_day.json()["error"]["code"] == "validation_error"
+
+    bad_timed = client.post(
+        "/api/v1/calendar-items",
+        headers=headers,
+        json={
+            "space_id": spaces["personal"]["id"],
+            "title": "Bad span timed",
+            "type": "appointment",
+            "all_day": False,
+            "start_at": "2026-08-01T10:00:00-04:00",
+            "end_at": "2026-08-01T09:00:00-04:00",
+        },
+    )
+    assert bad_timed.status_code == 422
+    assert bad_timed.json()["error"]["code"] == "validation_error"
+
+
+def test_note_update_rejects_linked_task_from_other_user(client):
+    """P4-3 (#23): PATCH /notes/{id} with someone else's task_id must 404
+    instead of silently stitching cross-tenant data."""
+    headers, spaces = register_and_auth(client)
+
+    # Note belonging to the authenticated user.
+    note = client.post(
+        "/api/v1/notes",
+        headers=headers,
+        json={"space_id": spaces["personal"]["id"], "body": "Mine"},
+    ).json()
+
+    # A second user with their own personal task.
+    other = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "other@example.com",
+            "password": "password123",
+            "display_name": "Other",
+            "timezone": "America/New_York",
+        },
+    )
+    assert other.status_code == 201, other.text
+    other_headers = {"Authorization": "Bearer {}".format(other.json()["access_token"])}
+    other_spaces = client.get("/api/v1/spaces", headers=other_headers).json()["items"]
+    other_personal = next(s for s in other_spaces if s["type"] == "personal")
+    other_task = client.post(
+        "/api/v1/tasks",
+        headers=other_headers,
+        json={"space_id": other_personal["id"], "title": "Not yours"},
+    ).json()
+
+    response = client.patch(
+        "/api/v1/notes/{}".format(note["id"]),
+        headers=headers,
+        json={"linked_task_id": other_task["id"]},
+    )
+    assert response.status_code == 404, response.text
+    assert response.json()["error"]["code"] == "not_found"
 
 
 def test_note_convert_to_task_keeps_note(client):

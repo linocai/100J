@@ -1,12 +1,19 @@
+import secrets
+from datetime import datetime, timedelta, timezone
 from secrets import compare_digest
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.errors import AppError
 from app.core.security import create_access_token, create_refresh_token, hash_password, verify_password
-from app.models import Space, User
+from app.models import RefreshTokenJTI, Space, User
+
+# P2-3: lazy cleanup probability (1%) — runs inline inside issue_tokens so we
+# don't rely on an external cron in v1.2.4. Mirrors email_otp_service's
+# CLEANUP_TRIGGER_DENOMINATOR pattern.
+JTI_CLEANUP_TRIGGER_DENOMINATOR = 100
 
 
 def create_default_spaces(db: Session, user: User) -> None:
@@ -90,9 +97,53 @@ def get_or_create_local_owner(db: Session) -> User:
     return user
 
 
-def issue_tokens(user: User) -> dict:
+def cleanup_expired_jti(db: Session, older_than_days: int = 1) -> int:
+    """P2-3 (#19): drop ``refresh_token_jti`` rows whose ``expires_at`` is
+    older than ``older_than_days`` days.
+
+    Returns the number of rows deleted. Best-effort; callers should swallow
+    exceptions because this runs inline on the request path.
+    """
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
+    result = db.execute(
+        delete(RefreshTokenJTI).where(RefreshTokenJTI.expires_at < cutoff)
+    )
+    db.commit()
+    return int(result.rowcount or 0)
+
+
+def issue_tokens(user: User, db: Session) -> dict:
+    """v1.2.4 P2-3 (#19): each call now persists the refresh-token jti so
+    /auth/refresh can rotate-and-blacklist instead of replaying the same
+    token forever.
+
+    ``db`` is required so we can write the jti row. All known callers
+    already have a Session in scope; passing it explicitly keeps the
+    function dependency-free of FastAPI request state.
+    """
+    settings = get_settings()
+    refresh_token, jti = create_refresh_token(user.id)
+    now = datetime.now(timezone.utc)
+    db.add(
+        RefreshTokenJTI(
+            jti=jti,
+            user_id=user.id,
+            issued_at=now,
+            expires_at=now + timedelta(days=settings.refresh_token_expire_days),
+        )
+    )
+    db.commit()
+
+    # Lazy cleanup — same pattern as email_otp_service.request_code.
+    if secrets.randbelow(JTI_CLEANUP_TRIGGER_DENOMINATOR) == 0:
+        try:
+            cleanup_expired_jti(db)
+        except Exception:  # pragma: no cover — best-effort
+            db.rollback()
+
     return {
         "access_token": create_access_token(user.id),
-        "refresh_token": create_refresh_token(user.id),
+        "refresh_token": refresh_token,
         "token_type": "bearer",
     }

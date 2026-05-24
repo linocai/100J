@@ -12,9 +12,11 @@ from app.services.task_service import create_task
 from app.services.validation_service import (
     get_owned_note,
     get_owned_space,
+    get_owned_task,
     validate_note_space,
     validate_note_status,
     validate_note_type,
+    validation_error,
 )
 
 
@@ -63,6 +65,20 @@ def update_note(db: Session, user_id: str, note_id: str, payload: NoteUpdate) ->
         validate_note_type(data["type"])
     if "status" in data and data["status"] is not None:
         validate_note_status(data["status"])
+    if "linked_task_id" in data and data["linked_task_id"] is not None:
+        # Reviewer #23: PATCH previously accepted any string as linked_task_id
+        # with zero ownership checks. Route through get_owned_task so a hostile
+        # client cannot stitch another user's task onto its own note (and so a
+        # typo silently 404s on read). Personal-space alignment matches the
+        # v1.2.x business rule that notes live in personal space, so their
+        # linked task should too.
+        task = get_owned_task(db, user_id, data["linked_task_id"])
+        task_space = get_owned_space(db, user_id, task.space_id)
+        if task_space.type != "personal":
+            raise validation_error(
+                "Linked task must belong to a personal space.",
+                {"linked_task_id": data["linked_task_id"]},
+            )
     for field, value in data.items():
         setattr(note, field, value)
     note.version += 1

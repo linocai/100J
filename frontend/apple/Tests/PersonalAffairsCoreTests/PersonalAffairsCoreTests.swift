@@ -263,31 +263,10 @@ final class PersonalAffairsCoreTests: XCTestCase {
         XCTAssertEqual(store.refreshToken, "refresh")
     }
 
-    func testAuthRepositoryEncodesAppleSignInAndStoresTokens() async throws {
-        let store = InMemoryTokenStore()
-        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, session: Self.stubSession { request in
-            XCTAssertEqual(request.url?.path, "/api/v1/auth/apple")
-            XCTAssertEqual(request.httpMethod, "POST")
-            let body = try Self.jsonBody(from: request)
-            XCTAssertEqual(body["id_token"] as? String, "apple-token")
-            XCTAssertEqual(body["bundle_id"] as? String, "top.linotsai.app.PersonalAffairs")
-            XCTAssertEqual(body["email"] as? String, "user@example.com")
-            XCTAssertEqual(body["full_name"] as? String, "Lino Tsai")
-            return (200, #"{"access_token":"apple-access","refresh_token":"apple-refresh","token_type":"bearer"}"#)
-        })
-        let repository = AuthRepository(api: client)
-
-        let tokens = try await repository.signInWithApple(
-            idToken: "apple-token",
-            email: "user@example.com",
-            fullName: "Lino Tsai",
-            bundleId: "top.linotsai.app.PersonalAffairs"
-        )
-
-        XCTAssertEqual(tokens.accessToken, "apple-access")
-        XCTAssertEqual(store.accessToken, "apple-access")
-        XCTAssertEqual(store.refreshToken, "apple-refresh")
-    }
+    // v1.2.4 P3-3 (#13): `testAuthRepositoryEncodesAppleSignInAndStoresTokens`
+    // removed. The endpoint now returns 404 by default (apple_sign_in_enabled
+    // gate) and the client-side method is deprecated. v1.3.0 will reintroduce
+    // both the test and the live entrypoint together.
 
     func testAuthRepositorySeedDemoUsesMeRouteAndDecodesResponse() async throws {
         let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: InMemoryTokenStore(accessToken: "access"), session: Self.stubSession { request in
@@ -361,7 +340,7 @@ final class PersonalAffairsCoreTests: XCTestCase {
     func testAPIClientRefreshesTokenAndRetriesNonAuthUnauthorized() async throws {
         var seenPaths: [String] = []
         let store = InMemoryTokenStore(accessToken: "old-access", refreshToken: "refresh-token")
-        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, session: Self.stubSession { request in
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, deviceSession: nil, session: Self.stubSession { request in
             seenPaths.append(request.url?.path ?? "")
             if request.url?.path == "/api/v1/auth/refresh" {
                 let body = try Self.jsonBody(from: request)
@@ -386,7 +365,7 @@ final class PersonalAffairsCoreTests: XCTestCase {
 
     func testAPIClientClearsTokensWhenRefreshFails() async throws {
         let store = InMemoryTokenStore(accessToken: "old-access", refreshToken: "refresh-token")
-        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, session: Self.stubSession { request in
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, deviceSession: nil, session: Self.stubSession { request in
             if request.url?.path == "/api/v1/auth/refresh" {
                 return (401, #"{"error":{"code":"unauthorized","message":"refresh expired","details":{}}}"#)
             }
@@ -407,7 +386,7 @@ final class PersonalAffairsCoreTests: XCTestCase {
     func testAPIClientClearsTokensWhenRetryAlsoReturnsUnauthorized() async throws {
         var refreshCount = 0
         let store = InMemoryTokenStore(accessToken: "old-access", refreshToken: "refresh-token")
-        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, session: Self.stubSession { request in
+        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, deviceSession: nil, session: Self.stubSession { request in
             if request.url?.path == "/api/v1/auth/refresh" {
                 refreshCount += 1
                 return (200, #"{"access_token":"new-access","refresh_token":"new-refresh","token_type":"bearer"}"#)
@@ -425,6 +404,56 @@ final class PersonalAffairsCoreTests: XCTestCase {
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
+    }
+
+    /// v1.2.4 P2-4: when the backend rotates the device refresh_token on
+    /// every call (P2-3 behavior for JWT, already shipped for device sessions
+    /// in v1.2), the client must persist the freshly returned token. Two
+    /// consecutive ``silentResume()`` calls should:
+    ///
+    /// 1. both succeed
+    /// 2. each hit ``/api/v1/auth/device-refresh`` with the most recent token
+    /// 3. leave the device-session store holding the latest rotated token
+    func testSilentResumeHandlesRotationAndSavesNewRefreshToken() async throws {
+        let deviceSession = InMemorySilentResumeDeviceSession(
+            deviceId: "device-uuid-1",
+            initialRefreshToken: "rt-0"
+        )
+        var seenRefreshTokens: [String] = []
+        let store = InMemoryTokenStore(accessToken: "old-access", refreshToken: "rt-0")
+        let client = APIClient(
+            baseURL: URL(string: "http://unit.test/api/v1")!,
+            authMode: .cloudJWT,
+            tokenStore: store,
+            deviceSession: deviceSession,
+            session: Self.stubSession { request in
+                XCTAssertEqual(request.url?.path, "/api/v1/auth/device-refresh")
+                let body = try Self.jsonBody(from: request)
+                XCTAssertEqual(body["device_id"] as? String, "device-uuid-1")
+                let presented = try XCTUnwrap(body["refresh_token"] as? String)
+                seenRefreshTokens.append(presented)
+                let next = "rt-\(seenRefreshTokens.count)"
+                let access = "access-\(seenRefreshTokens.count)"
+                return (
+                    200,
+                    #"{"access_token":"\#(access)","refresh_token":"\#(next)","token_type":"bearer","device_id":"device-uuid-1","device_name":"Test Mac","expires_at":"2027-01-01T00:00:00.000Z"}"#
+                )
+            }
+        )
+        let repository = AuthRepository(api: client, deviceSession: deviceSession)
+
+        try await repository.silentResume()
+        try await repository.silentResume()
+
+        XCTAssertEqual(
+            seenRefreshTokens,
+            ["rt-0", "rt-1"],
+            "second silentResume must present the rotated token from the first call"
+        )
+        XCTAssertEqual(deviceSession.refreshToken, "rt-2")
+        XCTAssertEqual(store.accessToken, "access-2")
+        XCTAssertEqual(store.refreshToken, "rt-2")
+        XCTAssertNotNil(deviceSession.info, "recordIssued must persist the rotated session metadata")
     }
 
     func testUserFacingMessageTranslations() {
@@ -449,8 +478,11 @@ final class PersonalAffairsCoreTests: XCTestCase {
     func testMutationQueuePersistsAndReplaysFIFO() async throws {
         let fileURL = Self.temporaryQueueURL()
         let queue = MutationQueue(fileURL: fileURL, diagnostics: DiagnosticLogger(directoryURL: fileURL.deletingLastPathComponent()))
-        _ = try await queue.enqueue(try PendingMutation.taskCreate(TaskCreateRequest(spaceId: "personal", title: "Offline task")))
-        _ = try await queue.enqueue(PendingMutation.projectComplete(id: "project-1"))
+        // v1.2.4 P6-3 (#9): enqueue stamps a userId so we can route replay
+        // to the right account. Tests use the public "test-user" so the
+        // replay below matches.
+        _ = try await queue.enqueue(try PendingMutation.taskCreate(TaskCreateRequest(spaceId: "personal", title: "Offline task")), userId: "test-user")
+        _ = try await queue.enqueue(PendingMutation.projectComplete(id: "project-1"), userId: "test-user")
 
         let restored = MutationQueue(fileURL: fileURL, diagnostics: DiagnosticLogger(directoryURL: fileURL.deletingLastPathComponent()))
         let pending = await restored.allPending()
@@ -461,7 +493,7 @@ final class PersonalAffairsCoreTests: XCTestCase {
             seen.append(request.url?.path ?? "")
             return (204, "")
         })
-        let result = await restored.replay(using: client)
+        let result = await restored.replay(using: client, currentUserId: "test-user")
 
         XCTAssertEqual(seen, ["/api/v1/tasks", "/api/v1/projects/project-1/complete"])
         XCTAssertEqual(result.succeeded, 2)
@@ -473,12 +505,12 @@ final class PersonalAffairsCoreTests: XCTestCase {
     func testMutationQueueKeepsNetworkFailuresForNextReplay() async throws {
         let fileURL = Self.temporaryQueueURL()
         let queue = MutationQueue(fileURL: fileURL, diagnostics: DiagnosticLogger(directoryURL: fileURL.deletingLastPathComponent()))
-        _ = try await queue.enqueue(try PendingMutation.noteCreate(NoteCreateRequest(spaceId: "personal", body: "Offline note")))
+        _ = try await queue.enqueue(try PendingMutation.noteCreate(NoteCreateRequest(spaceId: "personal", body: "Offline note")), userId: "test-user")
         let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: InMemoryTokenStore(accessToken: "access"), session: Self.stubSession { _ in
             throw URLError(.notConnectedToInternet)
         })
 
-        let result = await queue.replay(using: client)
+        let result = await queue.replay(using: client, currentUserId: "test-user")
 
         XCTAssertEqual(result.succeeded, 0)
         XCTAssertEqual(result.remaining, 1)
@@ -489,12 +521,12 @@ final class PersonalAffairsCoreTests: XCTestCase {
     func testMutationQueueDropsPermanentReplayFailure() async throws {
         let fileURL = Self.temporaryQueueURL()
         let queue = MutationQueue(fileURL: fileURL, diagnostics: DiagnosticLogger(directoryURL: fileURL.deletingLastPathComponent()))
-        _ = try await queue.enqueue(try PendingMutation.calendarCreate(CalendarItemCreateRequest(spaceId: "personal", title: "Bad calendar")))
+        _ = try await queue.enqueue(try PendingMutation.calendarCreate(CalendarItemCreateRequest(spaceId: "personal", title: "Bad calendar")), userId: "test-user")
         let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: InMemoryTokenStore(accessToken: "access"), session: Self.stubSession { _ in
             (422, #"{"error":{"code":"validation_error","message":"bad payload","details":{}}}"#)
         })
 
-        let result = await queue.replay(using: client)
+        let result = await queue.replay(using: client, currentUserId: "test-user")
 
         XCTAssertEqual(result.droppedPermanent, 1)
         XCTAssertEqual(result.remaining, 0)
@@ -919,4 +951,43 @@ private final class StubURLProtocol: URLProtocol {
     }
 
     override func stopLoading() {}
+}
+
+/// v1.2.4 P2-4 helper: in-memory DeviceSessionStore so tests never touch
+/// the real Keychain / UserDefaults. Subclasses are valid because the
+/// production class is declared `open`.
+private final class InMemorySilentResumeDeviceSession: DeviceSessionStore {
+    private let stubDeviceId: String
+    private var stubRefreshToken: String?
+    private var stubInfo: DeviceSessionInfo?
+
+    init(deviceId: String, initialRefreshToken: String?) {
+        self.stubDeviceId = deviceId
+        self.stubRefreshToken = initialRefreshToken
+        super.init(
+            defaults: UserDefaults(suiteName: "stub-silentresume-\(UUID().uuidString)")!,
+            keychainService: "stub-silentresume-\(UUID().uuidString)"
+        )
+    }
+
+    override var deviceId: String { stubDeviceId }
+    override var refreshToken: String? { stubRefreshToken }
+    override func saveRefreshToken(_ token: String) throws { stubRefreshToken = token }
+    override func clearRefreshToken() { stubRefreshToken = nil }
+    override var info: DeviceSessionInfo? {
+        get { stubInfo }
+        set { stubInfo = newValue }
+    }
+    override func recordIssued(deviceName: String?, expiresAt: Date?) {
+        stubInfo = DeviceSessionInfo(
+            deviceId: stubDeviceId,
+            deviceName: deviceName ?? "Test Device",
+            expiresAt: expiresAt
+        )
+    }
+    override func clearAll() {
+        stubRefreshToken = nil
+        stubInfo = nil
+    }
+    override var hasActiveSession: Bool { stubRefreshToken != nil }
 }

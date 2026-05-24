@@ -1,3 +1,8 @@
+import os
+import tempfile
+import threading
+from concurrent.futures import ThreadPoolExecutor
+
 from tests.conftest import register_and_auth
 
 
@@ -288,3 +293,123 @@ def test_agent_update_calendar_time_requires_confirmation(client):
     statuses = [log["status"] for log in logs]
     assert "requires_confirmation" in statuses
     assert "success" in statuses
+
+
+# v1.2.4 P5-1 (#10): two concurrent confirm calls on the same token must not
+# both succeed. One wins, the other gets 404.
+#
+# We can't run this on the default conftest fixture: that uses
+# ``sqlite:///:memory:`` with ``StaticPool``, i.e. a single underlying
+# connection shared across threads. Two threads driving the same SQLite
+# connection segfaults the interpreter long before we can prove anything about
+# atomicity. So this test builds an isolated file-based SQLite engine that
+# can hand each worker its own connection (SQLite serialises writers at the
+# database-file level, which is the property we are actually testing).
+def test_confirm_command_atomic_under_concurrency():
+    from datetime import datetime, timedelta, timezone
+    from fastapi.testclient import TestClient
+    from sqlalchemy.orm import sessionmaker
+
+    from app.core.database import Base, build_engine, get_db
+    from app.core.errors import AppError
+    from app.core.rate_limit import limiter
+    from app.main import create_app
+    from app.models import AgentPendingConfirmation
+    from app.services import agent_service
+
+    tmp_dir = tempfile.mkdtemp(prefix="agent_confirm_race_")
+    db_path = os.path.join(tmp_dir, "race.sqlite")
+    isolated_engine = build_engine("sqlite:///{}".format(db_path))
+    IsolatedSession = sessionmaker(
+        bind=isolated_engine,
+        autoflush=False,
+        autocommit=False,
+        expire_on_commit=False,
+    )
+    Base.metadata.create_all(bind=isolated_engine)
+
+    try:
+        app = create_app()
+
+        def override_get_db():
+            session = IsolatedSession()
+            try:
+                yield session
+            finally:
+                session.close()
+
+        app.dependency_overrides[get_db] = override_get_db
+        storage = getattr(limiter, "_storage", None)
+        if storage is not None and hasattr(storage, "reset"):
+            storage.reset()
+        local_client = TestClient(app)
+
+        headers, spaces = register_and_auth(local_client)
+        project = local_client.post(
+            "/api/v1/projects",
+            headers=headers,
+            json={
+                "space_id": spaces["company"]["id"],
+                "name": "Concurrency target",
+                "description": "",
+            },
+        ).json()
+        project_id = project["id"]
+
+        pending = local_client.post(
+            "/api/v1/agent/commands",
+            headers=headers,
+            json={"command": "archive_project", "arguments": {"project_id": project_id}},
+        ).json()
+        assert pending["status"] == "requires_confirmation"
+        token = pending["confirmation_token"]
+
+        with IsolatedSession() as bootstrap_session:
+            row = bootstrap_session.get(AgentPendingConfirmation, token)
+            assert row is not None
+            user_id = row.user_id
+            # Push expiry comfortably into the future so the race outcome is
+            # not influenced by clock skew.
+            row.expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+            bootstrap_session.commit()
+
+        barrier = threading.Barrier(2)
+
+        def race():
+            session = IsolatedSession()
+            try:
+                barrier.wait(timeout=5)
+                try:
+                    return ("ok", agent_service.confirm_command(session, user_id, token))
+                except AppError as exc:
+                    return ("err", exc.status_code)
+                except Exception as exc:  # pragma: no cover - debug aid
+                    return ("err", repr(exc))
+            finally:
+                session.close()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = [future.result() for future in [pool.submit(race), pool.submit(race)]]
+
+        outcomes = [tag for tag, _ in results]
+        assert outcomes.count("ok") == 1, results
+        assert outcomes.count("err") == 1, results
+        err_status = next(payload for tag, payload in results if tag == "err")
+        assert err_status == 404, results
+
+        replay = local_client.post(
+            "/api/v1/agent/commands/confirm",
+            headers=headers,
+            json={"confirmation_token": token},
+        )
+        assert replay.status_code == 404
+    finally:
+        isolated_engine.dispose()
+        try:
+            os.remove(db_path)
+        except OSError:
+            pass
+        try:
+            os.rmdir(tmp_dir)
+        except OSError:
+            pass

@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from cryptography.fernet import Fernet
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -70,8 +70,12 @@ def list_tools() -> list:
 
 
 def _fernet() -> Fernet:
-    secret = get_settings().llm_key_encryption_secret.encode("utf-8")
-    key = base64.urlsafe_b64encode(hashlib.sha256(secret).digest())
+    settings = get_settings()
+    secret = settings.llm_key_encryption_secret.encode("utf-8")
+    salt = settings.llm_key_encryption_salt
+    # scrypt parameters: n=2**14 (cost), r=8 (block), p=1 (parallel), dklen=32 (Fernet key).
+    derived = hashlib.scrypt(secret, salt=salt, n=2**14, r=8, p=1, dklen=32)
+    key = base64.urlsafe_b64encode(derived)
     return Fernet(key)
 
 
@@ -202,28 +206,104 @@ def execute_command(db: Session, user_id: str, request: AgentCommandRequest) -> 
 
 
 def confirm_command(db: Session, user_id: str, confirmation_token: str) -> Dict[str, Any]:
-    pending = db.scalar(
-        select(AgentPendingConfirmation).where(
-            AgentPendingConfirmation.token == confirmation_token,
-            AgentPendingConfirmation.user_id == user_id,
+    """Atomically consume the pending-confirmation row and execute the command.
+
+    The find + delete must be a single atomic step so that two concurrent
+    requests with the same token can never both succeed (#10).
+
+    Strategy:
+      * PostgreSQL (and any dialect that supports DELETE ... RETURNING) — use a
+        single ``DELETE ... RETURNING`` statement so the row is consumed in one
+        round trip with no window between SELECT and DELETE.
+      * SQLite (and other dialects without RETURNING support) — fall back to
+        ``SELECT ... FOR UPDATE`` followed by ``DELETE``. SQLAlchemy's
+        ``with_for_update()`` is a no-op on SQLite, but SQLite serialises
+        writers at the database-file level, so a same-transaction
+        SELECT-then-DELETE is still effectively atomic for our purposes
+        (one writer wins, the other sees zero affected rows).
+
+    Either way: if zero rows were consumed we raise 404; otherwise we evaluate
+    the (already removed) row's ``expires_at`` and either reject as expired
+    or hand off to ``_execute_and_log``.
+    """
+
+    dialect_name = db.bind.dialect.name if db.bind is not None else ""
+    supports_returning = dialect_name != "sqlite"
+
+    command: str
+    arguments: Dict[str, Any]
+    expires_at: datetime
+
+    if supports_returning:
+        result = db.execute(
+            delete(AgentPendingConfirmation)
+            .where(
+                AgentPendingConfirmation.token == confirmation_token,
+                AgentPendingConfirmation.user_id == user_id,
+            )
+            .returning(
+                AgentPendingConfirmation.command,
+                AgentPendingConfirmation.arguments,
+                AgentPendingConfirmation.expires_at,
+            )
         )
-    )
-    if not pending:
-        raise AppError(status_code=404, code="not_found", message="Confirmation token not found.")
+        row = result.first()
+        if row is None:
+            db.commit()
+            raise AppError(
+                status_code=404,
+                code="not_found",
+                message="Confirmation token not found or already used.",
+            )
+        db.commit()
+        command, raw_arguments, expires_at = row
+        arguments = dict(raw_arguments or {})
+    else:
+        pending = db.scalar(
+            select(AgentPendingConfirmation)
+            .where(
+                AgentPendingConfirmation.token == confirmation_token,
+                AgentPendingConfirmation.user_id == user_id,
+            )
+            .with_for_update()
+        )
+        if pending is None:
+            raise AppError(
+                status_code=404,
+                code="not_found",
+                message="Confirmation token not found or already used.",
+            )
+        command = pending.command
+        arguments = dict(pending.arguments or {})
+        expires_at = pending.expires_at
+        # Delete by primary key with a row-count guard so a racing winner
+        # (already removed the row) makes us a clean loser, not a silent
+        # double-execute.
+        result = db.execute(
+            delete(AgentPendingConfirmation).where(
+                AgentPendingConfirmation.token == confirmation_token,
+                AgentPendingConfirmation.user_id == user_id,
+            )
+        )
+        if result.rowcount == 0:
+            db.commit()
+            raise AppError(
+                status_code=404,
+                code="not_found",
+                message="Confirmation token not found or already used.",
+            )
+        db.commit()
 
     now = datetime.now(timezone.utc)
-    expires_at = pending.expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
     if expires_at <= now:
-        db.delete(pending)
-        db.commit()
-        raise AppError(status_code=404, code="not_found", message="Confirmation token expired.")
+        raise AppError(
+            status_code=404,
+            code="not_found",
+            message="Confirmation token expired.",
+        )
 
-    command = pending.command
-    arguments = dict(pending.arguments or {})
-    db.delete(pending)
-    db.commit()
     return _execute_and_log(db, user_id, command, arguments)
 
 

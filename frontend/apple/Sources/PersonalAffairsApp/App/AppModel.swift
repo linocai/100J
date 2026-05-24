@@ -5,10 +5,6 @@ import PersonalAffairsCore
 import Network
 #endif
 
-#if canImport(AuthenticationServices)
-import AuthenticationServices
-#endif
-
 #if canImport(WidgetKit)
 import WidgetKit
 #endif
@@ -55,7 +51,19 @@ final class AppModel: ObservableObject {
     private let agentRepository: AgentRepository
     private let mutationQueue: MutationQueue
     private let diagnostics: DiagnosticLogger
+    private let deviceSessionStore: DeviceSessionStore
     private var isReplayingMutations = false
+    /// v1.2.4 P6-4 (#27): timestamp of the last `refreshAll` data fetch.
+    /// `refreshAll(force:)` short-circuits if called again within
+    /// `refreshAllThrottleSeconds` of this timestamp, so chatty view-appear
+    /// `.task` blocks do not hammer the network on every navigation.
+    /// Internal-not-private so unit tests can prime the timestamp without a
+    /// real network round-trip (`AppModelRefreshThrottleTests`).
+    var lastRefreshAllAt: Date?
+    /// Exposed for tests. Production callers should never touch this; pass
+    /// `force: true` to `refreshAll` if you really need to bypass the throttle
+    /// (e.g. user tapped a "立即同步" button).
+    static let refreshAllThrottleSeconds: TimeInterval = 30
     #if canImport(Network)
     private let pathMonitor = NWPathMonitor()
     private let pathMonitorQueue = DispatchQueue(label: "top.linotsai.app.PersonalAffairs.network")
@@ -101,7 +109,7 @@ final class AppModel: ObservableObject {
         companySpace: { [weak self] in self?.companySpace }
     )
 
-    init() {
+    convenience init() {
         let defaultBaseURL = Self.defaultCloudBaseURL
         let storedBaseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? defaultBaseURL
         let storedAuthMode: AppAuthMode
@@ -114,13 +122,34 @@ final class AppModel: ObservableObject {
             UserDefaults.standard.set(AppAuthMode.cloudJWT.rawValue, forKey: "appAuthMode")
             UserDefaults.standard.set(storedBaseURL, forKey: "apiBaseURL")
         }
-        self.authMode = storedAuthMode
         let api = APIClient(
             baseURL: URL(string: storedBaseURL) ?? URL(string: defaultBaseURL)!,
-            authMode: storedAuthMode
+            authMode: storedAuthMode,
+            deviceSession: .shared
         )
+        self.init(
+            authMode: storedAuthMode,
+            api: api,
+            authRepository: AuthRepository(api: api),
+            deviceSession: .shared,
+            startsNetworkMonitor: true
+        )
+    }
+
+    /// Test-only DI seam: lets unit tests inject mock repositories so the
+    /// 401 self-heal flow can be exercised without touching real networks.
+    /// Defaults match the production `init()` for every parameter except
+    /// `authRepository` so tests opt in to mocking just that piece.
+    init(
+        authMode: AppAuthMode,
+        api: APIClient,
+        authRepository: AuthRepository,
+        deviceSession: DeviceSessionStore = .shared,
+        startsNetworkMonitor: Bool = false
+    ) {
+        self.authMode = authMode
         self.api = api
-        self.authRepository = AuthRepository(api: api)
+        self.authRepository = authRepository
         self.spaceRepository = SpaceRepository(api: api)
         self.taskRepository = TaskRepository(api: api)
         self.projectRepository = ProjectRepository(api: api)
@@ -129,7 +158,10 @@ final class AppModel: ObservableObject {
         self.agentRepository = AgentRepository(api: api)
         self.mutationQueue = MutationQueue()
         self.diagnostics = .shared
-        startNetworkMonitor()
+        self.deviceSessionStore = deviceSession
+        if startsNetworkMonitor {
+            startNetworkMonitor()
+        }
         Task {
             await syncPendingMutationCount()
         }
@@ -146,11 +178,11 @@ final class AppModel: ObservableObject {
     }
 
     var hasDeviceSession: Bool {
-        DeviceSessionStore.shared.hasActiveSession
+        deviceSessionStore.hasActiveSession
     }
 
     var deviceSessionInfo: DeviceSessionInfo? {
-        DeviceSessionStore.shared.info
+        deviceSessionStore.info
     }
 
     var apiBaseURLString: String {
@@ -246,7 +278,7 @@ final class AppModel: ObservableObject {
         guard !endpoint.isEmpty, updateBaseURL(endpoint) else { return false }
 
         try? api.tokenStore.clear()
-        DeviceSessionStore.shared.clearAll()
+        deviceSessionStore.clearAll()
         updateAuthMode(.cloudJWT)
         selectedSection = .today
         return true
@@ -257,7 +289,7 @@ final class AppModel: ObservableObject {
         // 任何来自旧版本（v1.1.0 / v1.1.1）残留的纯 JWT token 一律静默清空，
         // 避免触发"云端登录已失效"红条闪一下。
         if authMode == .cloudJWT {
-            guard DeviceSessionStore.shared.hasActiveSession else {
+            guard deviceSessionStore.hasActiveSession else {
                 if api.tokenStore.accessToken != nil || api.tokenStore.refreshToken != nil {
                     try? api.tokenStore.clear()
                 }
@@ -291,7 +323,7 @@ final class AppModel: ObservableObject {
             try await operation()
         } catch APIClientError.unauthorized {
             try? api.tokenStore.clear()
-            DeviceSessionStore.shared.clearAll()
+            deviceSessionStore.clearAll()
             currentUser = nil
             spaces = []
             personalTasks = []
@@ -319,38 +351,10 @@ final class AppModel: ObservableObject {
         }
     }
 
-    #if canImport(AuthenticationServices)
-    func handleAppleSignIn(_ result: Result<ASAuthorization, Error>) async {
-        guard case .success(let authorization) = result else {
-            if case .failure(let error) = result {
-                errorMessage = error.localizedDescription
-            } else {
-                errorMessage = "无法完成 Apple 登录。"
-            }
-            return
-        }
-        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
-              let tokenData = credential.identityToken,
-              let idToken = String(data: tokenData, encoding: .utf8)
-        else {
-            errorMessage = "无法获取 Apple 身份令牌。"
-            return
-        }
-        updateAuthMode(.cloudJWT)
-        await run {
-            _ = try await self.authRepository.signInWithApple(
-                idToken: idToken,
-                email: credential.email,
-                fullName: credential.fullName?.formatted(),
-                bundleId: Bundle.main.bundleIdentifier ?? "top.linotsai.app.PersonalAffairs"
-            )
-            self.currentUser = try await self.authRepository.me()
-            self.spaces = try await self.spaceRepository.list()
-            try await self.loadCoreData()
-            await self.loadSupportData()
-        }
-    }
-    #endif
+    // v1.2.4 P3-3 (#13): Apple Sign-In is gated off for v1.2.4. The
+    // `handleAppleSignIn` entry point + `AppleSignInButton` UI were
+    // removed; the underlying repository method stays (deprecated) so
+    // v1.3.0 can reintroduce the feature in one place.
 
     func requestEmailOTP(email: String) async {
         let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -411,6 +415,15 @@ final class AppModel: ObservableObject {
             await bootstrapIfPossible()
             return
         }
+        // v1.2.4 P6-3 (#9): drain the offline queue before we forget who we
+        // are. Anything pending gets archived to MutationQueue.orphanedMutations.json
+        // so the next user's login cannot pick it up. We do this **before**
+        // the network logout so a server logout failure can't leave the queue
+        // dangling.
+        await mutationQueue.archiveAllForCurrentUserAndClear()
+        pendingMutationCount = 0
+        lastRefreshAllAt = nil
+
         await run {
             try await self.authRepository.logout()
             self.currentUser = nil
@@ -426,7 +439,24 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// v1.2.4 P6-4 (#27): default throttled refresh. Multiple view-appear
+    /// `.task` blocks coalesce into one network round-trip per 30 s window.
+    /// Derived viewmodels are still re-driven so UI updates on every call.
     func refreshAll() async {
+        await refreshAll(force: false)
+    }
+
+    /// Pass `force: true` for explicit user-driven refreshes (menu "刷新",
+    /// Settings "立即同步" button). Force bypasses the 30 s throttle.
+    func refreshAll(force: Bool) async {
+        if !force,
+           let last = lastRefreshAllAt,
+           Date().timeIntervalSince(last) < Self.refreshAllThrottleSeconds {
+            // Throttled — still rerun derive so dependent screens see the
+            // latest in-memory state (Top 3 / Agenda recomputes etc.).
+            refreshDerivedViewModels()
+            return
+        }
         await run {
             if self.spaces.isEmpty {
                 self.currentUser = try await self.authRepository.me()
@@ -434,6 +464,7 @@ final class AppModel: ObservableObject {
             }
             try await self.loadCoreData()
             await self.loadSupportData()
+            self.lastRefreshAllAt = Date()
         }
     }
 
@@ -853,6 +884,18 @@ final class AppModel: ObservableObject {
         agentReview = agentViewModel.review
     }
 
+    // v1.2.4 P5-2 (#32): dismissing the confirmation sheet should not destroy
+    // the pendingConfirmation — the AgentScreen banner reopens it via
+    // ``showConfirmationSheet``. Only the visibility flag flips here.
+    func dismissAgentConfirmationSheet() {
+        agentReview.showConfirmationSheet = false
+    }
+
+    func openAgentConfirmationSheet() {
+        guard agentReview.pendingConfirmation != nil else { return }
+        agentReview.showConfirmationSheet = true
+    }
+
     func reloadAgentSupport() async {
         await run {
             await self.agentViewModel.reloadSupport()
@@ -899,18 +942,38 @@ final class AppModel: ObservableObject {
         do {
             try await operation()
         } catch APIClientError.unauthorized {
+            // v1.2.4 (#8): if we still hold a device session, try a silent
+            // resume + a single retry of the failed operation before
+            // declaring the cloud session dead. This handles the common
+            // case where the 30 min access token simply expired and the
+            // device refresh token is still valid — user should never see
+            // a red banner for that.
+            if authMode == .cloudJWT, hasDeviceSession {
+                do {
+                    try await authRepository.silentResume()
+                    try await operation()
+                    return
+                } catch {
+                    // silent-resume or retry also failed — fall through
+                    // to expireCloudSession.
+                }
+            }
             expireCloudSession()
         } catch {
             errorMessage = UserFacingMessage.translate(error)
         }
     }
 
-    private func expireCloudSession() {
+    func expireCloudSession() {
         guard authMode == .cloudJWT else {
             errorMessage = UserFacingMessage.translate(APIClientError.unauthorized)
             return
         }
         try? api.tokenStore.clear()
+        // v1.2.4 (#8): also nuke DeviceSessionStore — otherwise RootView
+        // still sees hasDeviceSession == true and stays stuck in the
+        // ResumingPlaceholder forever.
+        deviceSessionStore.clearAll()
         currentUser = nil
         spaces = []
         personalTasks = []
@@ -983,7 +1046,10 @@ final class AppModel: ObservableObject {
     }
 
     private func queueOfflineMutation(_ mutation: PendingMutation, optimistic: () -> Void) async throws {
-        let count = try await mutationQueue.enqueue(mutation)
+        // v1.2.4 P6-3 (#9 / #26): stamp the current user id onto the mutation
+        // before it goes on disk so a later logout → login-as-different-user
+        // cannot pick it up.
+        let count = try await mutationQueue.enqueue(mutation, userId: localUserId())
         pendingMutationCount = count
         isNetworkReachable = false
         optimistic()
@@ -1002,7 +1068,9 @@ final class AppModel: ObservableObject {
         guard count > 0 else { return }
 
         isReplayingMutations = true
-        let result = await mutationQueue.replay(using: api)
+        // v1.2.4 P6-3 (#9): replay scopes to the current user so we never
+        // execute the previous account's pending writes against this one.
+        let result = await mutationQueue.replay(using: api, currentUserId: localUserId())
         isReplayingMutations = false
         pendingMutationCount = result.remaining
 

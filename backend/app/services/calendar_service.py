@@ -85,6 +85,7 @@ def create_calendar_item(
     data["all_day"] = bool(data.get("all_day"))
     data["timezone"] = data.get("timezone") or "America/New_York"
     data["recurrence"] = data.get("recurrence") or "none"
+    _normalize_calendar_all_day_fields(data)
     validate_calendar_type(data["type"])
     validate_recurrence(data["recurrence"])
     validate_calendar_fields(data)
@@ -117,6 +118,7 @@ def update_calendar_item(
         "recurrence": item.recurrence,
     }
     merged.update(data)
+    _normalize_calendar_all_day_fields(merged, mirror_into=data)
     validate_calendar_type(merged["type"])
     validate_recurrence(merged.get("recurrence"))
     validate_calendar_fields(merged)
@@ -134,6 +136,36 @@ def update_calendar_item(
     db.commit()
     db.refresh(item)
     return item
+
+
+def _normalize_calendar_all_day_fields(
+    merged: dict,
+    mirror_into: Optional[dict] = None,
+) -> None:
+    """Coerce mutually-exclusive all-day vs timed fields based on ``all_day``.
+
+    Reviewer #4: switching ``all_day`` on a PATCH currently leaves the previous
+    half of the fields populated, causing 422s during the otherwise-valid edit
+    flow (timed -> all-day or vice versa). Normalising before validation lets
+    the request succeed and persists the right shape.
+
+    When ``mirror_into`` is supplied (the update path), the same nulls are
+    written back to the caller's mutable ``data`` dict so the subsequent
+    ``setattr(item, field, value)`` loop actually clears the columns.
+    """
+
+    if merged.get("all_day") is True:
+        for field in ("start_at", "end_at"):
+            if merged.get(field) is not None:
+                merged[field] = None
+                if mirror_into is not None:
+                    mirror_into[field] = None
+    else:
+        for field in ("start_date", "end_date"):
+            if merged.get(field) is not None:
+                merged[field] = None
+                if mirror_into is not None:
+                    mirror_into[field] = None
 
 
 def soft_delete_calendar_item(db: Session, user_id: str, calendar_item_id: str) -> CalendarItem:

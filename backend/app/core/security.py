@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
@@ -18,7 +19,13 @@ def verify_password(plain_password: str, password_hash: str) -> bool:
     return pwd_context.verify(plain_password, password_hash)
 
 
-def create_token(subject: str, token_type: str, expires_delta: timedelta) -> str:
+def create_token(
+    subject: str,
+    token_type: str,
+    expires_delta: timedelta,
+    *,
+    extra_claims: Optional[Dict[str, Any]] = None,
+) -> str:
     settings = get_settings()
     now = datetime.now(timezone.utc)
     payload: Dict[str, Any] = {
@@ -27,6 +34,8 @@ def create_token(subject: str, token_type: str, expires_delta: timedelta) -> str
         "iat": int(now.timestamp()),
         "exp": int((now + expires_delta).timestamp()),
     }
+    if extra_claims:
+        payload.update(extra_claims)
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
@@ -39,13 +48,22 @@ def create_access_token(subject: str) -> str:
     )
 
 
-def create_refresh_token(subject: str) -> str:
+def create_refresh_token(subject: str, jti: Optional[str] = None) -> tuple[str, str]:
+    """v1.2.4 P2-3 (#19): every refresh token now carries a jti claim.
+
+    Returns ``(token, jti)`` so callers can persist the jti in the
+    ``refresh_token_jti`` blacklist table. If ``jti`` is None we mint a
+    fresh UUID4.
+    """
     settings = get_settings()
-    return create_token(
+    token_jti = jti or uuid.uuid4().hex
+    token = create_token(
         subject=subject,
         token_type="refresh",
         expires_delta=timedelta(days=settings.refresh_token_expire_days),
+        extra_claims={"jti": token_jti},
     )
+    return token, token_jti
 
 
 def decode_token(token: str, expected_type: Optional[str] = None) -> Optional[Dict[str, Any]]:

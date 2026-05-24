@@ -28,6 +28,41 @@ printf "\n"
 curl -fsS "${RESOLVE_ARG[@]}" "${BASE_URL}/api/v1/health"
 printf "\n"
 
+section "Auth surface (v1.2.4)"
+register_code=$(curl -s -o /dev/null -w "%{http_code}" "${RESOLVE_ARG[@]}" \
+  -X POST "${BASE_URL}/api/v1/auth/register" \
+  -H 'Content-Type: application/json' \
+  -d '{}')
+if [[ "$register_code" != "404" ]]; then
+  echo "Expected /auth/register to return 404 in production, got ${register_code}" >&2
+  exit 1
+fi
+echo "/auth/register -> ${register_code} (expected 404)"
+
+device_logout_code=$(curl -s -o /dev/null -w "%{http_code}" "${RESOLVE_ARG[@]}" \
+  -X POST "${BASE_URL}/api/v1/auth/device-logout" \
+  -H 'Content-Type: application/json' \
+  -d '{"device_id":"x"}')
+if [[ "$device_logout_code" != "401" ]]; then
+  echo "Expected /auth/device-logout to return 401 without auth, got ${device_logout_code}" >&2
+  exit 1
+fi
+echo "/auth/device-logout -> ${device_logout_code} (expected 401)"
+
+section "Proxy header rate-limit attribution"
+# Hit /health through the public ingress with a synthetic X-Forwarded-For so
+# the slowapi key_func observes 8.8.8.8 instead of the Nginx loopback. The
+# request must succeed (2xx); a 502/504 here means proxy-headers regressed and
+# uvicorn rejected the forwarded chain.
+forwarded_code=$(curl -s -o /dev/null -w "%{http_code}" "${RESOLVE_ARG[@]}" \
+  -H 'X-Forwarded-For: 8.8.8.8' \
+  "${BASE_URL}/health")
+if [[ "$forwarded_code" != "200" ]]; then
+  echo "Expected /health with X-Forwarded-For to return 200, got ${forwarded_code}" >&2
+  exit 1
+fi
+echo "/health (X-Forwarded-For: 8.8.8.8) -> ${forwarded_code} (expected 200)"
+
 section "TLS certificate"
 tls_connect_host="${HZ_IP:-$DOMAIN}"
 echo | openssl s_client -servername "$DOMAIN" -connect "${tls_connect_host}:443" 2>/dev/null \

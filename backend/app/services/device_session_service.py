@@ -65,7 +65,13 @@ def issue(
     device_name: Optional[str],
     platform: str,
 ) -> DeviceSessionIssue:
-    """Create or replace the active session for a device_id."""
+    """Create or replace the active session for a device_id.
+
+    v1.2.4 (#25): when an existing row was previously revoked we MUST NOT
+    silently un-revoke it — that would let a leaked device_id resurrect a
+    session the user already killed. Instead we hard-delete the dead row
+    and insert a fresh one so audit trails (created_at) stay honest.
+    """
     now = datetime.now(timezone.utc)
     expires_at = now + _ttl()
 
@@ -73,14 +79,22 @@ def issue(
         select(DeviceSession).where(DeviceSession.device_id == device_id)
     )
     plaintext = _generate_token()
+    if existing is not None and existing.revoked_at is not None:
+        # Treat revoked row as if it doesn't exist: delete it and fall
+        # through to the "create new row" branch below.
+        db.delete(existing)
+        db.flush()
+        existing = None
+
     if existing:
+        # Safety net: this branch only runs for live rows now.
+        assert existing.revoked_at is None
         existing.user_id = user.id
         existing.device_name = device_name or existing.device_name
         existing.platform = platform or existing.platform or "macos"
         existing.refresh_token_hash = _hash(plaintext)
         existing.last_seen_at = now
         existing.expires_at = expires_at
-        existing.revoked_at = None
         session = existing
     else:
         session = DeviceSession(
@@ -98,20 +112,34 @@ def issue(
     return DeviceSessionIssue(user=user, session=session, plaintext_refresh_token=plaintext)
 
 
-def rotate(
+def _as_aware_utc(value: datetime) -> datetime:
+    """SQLite (test env) hands datetimes back as naive; Postgres keeps tz info.
+
+    Normalize so comparisons with `datetime.now(timezone.utc)` never raise
+    `can't compare offset-naive and offset-aware datetimes`.
+    """
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
+def _verify_token_or_raise(
     db: Session,
     *,
     device_id: str,
     presented_refresh_token: str,
-) -> DeviceSessionIssue:
-    """Verify a presented refresh token and rotate it."""
+) -> tuple[DeviceSession, User]:
+    """Shared check used by both rotate() and verify().
+
+    Returns (session, user) on success. Raises AppError(401) otherwise.
+    """
     session = db.scalar(
         select(DeviceSession).where(DeviceSession.device_id == device_id)
     )
     if (
         session is None
         or session.revoked_at is not None
-        or session.expires_at < datetime.now(timezone.utc)
+        or _as_aware_utc(session.expires_at) < datetime.now(timezone.utc)
         or session.refresh_token_hash != _hash(presented_refresh_token)
     ):
         raise AppError(
@@ -129,6 +157,21 @@ def rotate(
             code="unauthorized",
             message="User no longer exists.",
         )
+    return session, user
+
+
+def rotate(
+    db: Session,
+    *,
+    device_id: str,
+    presented_refresh_token: str,
+) -> DeviceSessionIssue:
+    """Verify a presented refresh token and rotate it."""
+    session, user = _verify_token_or_raise(
+        db,
+        device_id=device_id,
+        presented_refresh_token=presented_refresh_token,
+    )
 
     now = datetime.now(timezone.utc)
     plaintext = _generate_token()
@@ -138,6 +181,32 @@ def rotate(
     db.commit()
     db.refresh(session)
     return DeviceSessionIssue(user=user, session=session, plaintext_refresh_token=plaintext)
+
+
+def verify(
+    db: Session,
+    *,
+    device_id: str,
+    presented_refresh_token: str,
+) -> DeviceSession:
+    """v1.2.4: validate a refresh token WITHOUT rotating it.
+
+    Used by /auth/device-logout to authenticate the caller before revoking.
+    The token stays valid; revoke() is the next call.
+    """
+    session, _user = _verify_token_or_raise(
+        db,
+        device_id=device_id,
+        presented_refresh_token=presented_refresh_token,
+    )
+    return session
+
+
+def get(db: Session, *, device_id: str) -> Optional[DeviceSession]:
+    """Fetch a device session by id without any validity checks."""
+    return db.scalar(
+        select(DeviceSession).where(DeviceSession.device_id == device_id)
+    )
 
 
 def revoke(db: Session, *, device_id: str) -> None:

@@ -21,6 +21,7 @@ class NoteCreate(NoteBase):
 
 class NoteUpdate(NoteBase):
     status: Optional[str] = None
+    linked_task_id: Optional[str] = None
 
 
 class NoteRead(ORMModel):

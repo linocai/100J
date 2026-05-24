@@ -31,6 +31,11 @@ let package = Package(
             name: "PersonalAffairsCoreTests",
             dependencies: ["PersonalAffairsCore"],
             path: "Tests/PersonalAffairsCoreTests"
+        ),
+        .testTarget(
+            name: "PersonalAffairsAppTests",
+            dependencies: ["PersonalAffairsApp", "PersonalAffairsCore"],
+            path: "Tests/PersonalAffairsAppTests"
         )
     ]
 )

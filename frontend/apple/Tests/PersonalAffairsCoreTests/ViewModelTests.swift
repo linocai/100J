@@ -95,6 +95,35 @@ final class ViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.lastError)
     }
 
+    // MARK: - v1.2.4 P4-4 (#4): calendar draft encoder respects all_day toggle
+
+    func test_calendarDraft_updateRequest_all_day_true_omits_startAt() {
+        let dayStart = ISO8601DateFormatter().date(from: "2026-06-01T09:00:00Z")!
+        var draft = CalendarDraftState(
+            spaceType: .personal,
+            title: "Was timed",
+            type: .appointment,
+            allDay: false,
+            startDate: dayStart,
+            startAt: dayStart
+        )
+
+        // Sanity check: timed branch sends startAt and clears startDate.
+        let timedRequest = draft.updateRequest(timezone: "America/New_York")
+        XCTAssertNil(timedRequest.startDate)
+        XCTAssertNotNil(timedRequest.startAt)
+
+        // Flip to all-day and confirm startAt is dropped while startDate fills.
+        draft.allDay = true
+        let allDayRequest = draft.updateRequest(timezone: "America/New_York")
+        XCTAssertEqual(allDayRequest.allDay, true)
+        XCTAssertNotNil(allDayRequest.startDate)
+        XCTAssertNil(
+            allDayRequest.startAt,
+            "all-day update must omit startAt so backend persists a pure date"
+        )
+    }
+
     @MainActor
     func testAgentViewModelHandlesRequiresConfirmationAndConfirm() async throws {
         var sawConfirm = false
@@ -136,8 +165,257 @@ final class ViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.lastError)
     }
 
+    // MARK: - v1.2.4 P5-2 (#32): AgentScreen banner needs a stable
+    // ``pendingConfirmation`` + ``showConfirmationSheet`` signal so that
+    // dismissing the sheet doesn't drop the prompt and a banner can
+    // re-present it.
+
+    @MainActor
+    func test_agentScreen_shows_banner_when_pending_confirmation_present() async throws {
+        let client = APIClient(
+            baseURL: URL(string: "http://unit.test/api/v1")!,
+            authMode: .localOwner,
+            tokenStore: InMemoryTokenStore(),
+            session: Self.stubSession { _ in
+                (200, #"{"status":"requires_confirmation","result":null,"would_execute":null,"reason":"Archive project","confirmation_token":"token-banner"}"#)
+            }
+        )
+        let viewModel = AgentViewModel(
+            repo: AgentRepository(api: client),
+            personalSpace: { Self.space(id: "personal", type: .personal) },
+            companySpace: { Self.space(id: "company", type: .company) }
+        )
+        viewModel.review = AgentReviewSession(
+            pendingCommand: AgentCommandDraft(
+                intent: ParsedCaptureIntent(target: .companyProject, title: "Release"),
+                command: "archive_project",
+                arguments: ["project_id": .string("project-1")],
+                summary: "归档公司项目：Release"
+            )
+        )
+
+        // Fresh session: nothing pending, no sheet open, no banner needed.
+        XCTAssertNil(viewModel.review.pendingConfirmation)
+        XCTAssertFalse(viewModel.review.showConfirmationSheet)
+        XCTAssertFalse(bannerVisible(viewModel.review))
+
+        // Server demands confirmation → sheet should auto-open, banner hidden
+        // (the sheet itself is the entry point).
+        await viewModel.execute(dryRun: false)
+        XCTAssertNotNil(viewModel.review.pendingConfirmation)
+        XCTAssertTrue(viewModel.review.showConfirmationSheet)
+        XCTAssertFalse(bannerVisible(viewModel.review))
+
+        // User dismisses the sheet without confirming. The prompt must
+        // survive so the banner takes over as the re-entry point.
+        viewModel.review.showConfirmationSheet = false
+        XCTAssertNotNil(viewModel.review.pendingConfirmation)
+        XCTAssertTrue(bannerVisible(viewModel.review))
+
+        // Explicit cancel clears the prompt → banner goes away.
+        viewModel.cancel()
+        XCTAssertNil(viewModel.review.pendingConfirmation)
+        XCTAssertFalse(viewModel.review.showConfirmationSheet)
+        XCTAssertFalse(bannerVisible(viewModel.review))
+    }
+
+    // Same predicate the AgentScreen view uses to decide whether to render
+    // the banner. Keeping it as a tiny local helper keeps the test honest
+    // about what UI signal it's validating.
+    private func bannerVisible(_ review: AgentReviewSession) -> Bool {
+        review.pendingConfirmation != nil && !review.showConfirmationSheet
+    }
+
+    // MARK: - v1.2.4 P5-3 (#34): JSONValue.description for .object must
+    // iterate keys in sorted order so logs / snapshots are reproducible.
+
+    func test_jsonValue_object_description_is_sorted() {
+        let object: JSONValue = .object([
+            "zeta": .string("z"),
+            "alpha": .string("a"),
+            "mu": .string("m")
+        ])
+        XCTAssertEqual(object.description, "alpha: a, mu: m, zeta: z")
+
+        // Re-run with a different insertion order to prove we don't rely on
+        // dictionary iteration order (which is intentionally randomised
+        // across Swift runtime versions).
+        let reordered: JSONValue = .object([
+            "mu": .string("m"),
+            "alpha": .string("a"),
+            "zeta": .string("z")
+        ])
+        XCTAssertEqual(reordered.description, "alpha: a, mu: m, zeta: z")
+
+        // Nested object — outer sort happens, inner description recurses
+        // and therefore inherits the same sorted invariant.
+        let nested: JSONValue = .object([
+            "b": .object(["y": .string("2"), "x": .string("1")]),
+            "a": .string("0")
+        ])
+        XCTAssertEqual(nested.description, "a: 0, b: x: 1, y: 2")
+    }
+
+    // MARK: - v1.2.4 P1-2 (#1, #12): device-session-aware APIClient refresh
+
+    @MainActor
+    func test_apiClient_uses_deviceRefresh_when_device_session_active() async throws {
+        var seenPaths: [String] = []
+        let store = InMemoryTokenStore(accessToken: "stale-access", refreshToken: "jwt-ignored")
+        let deviceSession = TestDeviceSessionStore(
+            deviceId: "test-device-uuid",
+            refreshToken: "device-refresh-token"
+        )
+        let client = APIClient(
+            baseURL: URL(string: "http://unit.test/api/v1")!,
+            authMode: .cloudJWT,
+            tokenStore: store,
+            deviceSession: deviceSession,
+            session: Self.stubSession { request in
+                seenPaths.append(request.url?.path ?? "")
+                let path = request.url?.path ?? ""
+                if path == "/api/v1/auth/device-refresh" {
+                    let body = try Self.jsonBody(from: request)
+                    XCTAssertEqual(body["device_id"] as? String, "test-device-uuid")
+                    XCTAssertEqual(body["refresh_token"] as? String, "device-refresh-token")
+                    return (200, #"""
+                    {"access_token":"new-access","refresh_token":"new-device-refresh","token_type":"bearer","device_id":"test-device-uuid","device_name":"Test","expires_at":"2099-01-01T00:00:00.000Z"}
+                    """#)
+                }
+                XCTAssertEqual(path, "/api/v1/tasks", "JWT /auth/refresh must NOT be called when device session is active")
+                let tasksCalls = seenPaths.filter { $0 == "/api/v1/tasks" }.count
+                if tasksCalls == 1 {
+                    return (401, #"{"error":{"code":"unauthorized","message":"access expired","details":{}}}"#)
+                }
+                XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer new-access")
+                return (200, #"{"items":[],"next_cursor":null}"#)
+            }
+        )
+
+        let tasks: [TaskItem] = try await client.fetchAll("/tasks")
+
+        XCTAssertEqual(tasks, [])
+        XCTAssertEqual(
+            seenPaths,
+            ["/api/v1/tasks", "/api/v1/auth/device-refresh", "/api/v1/tasks"],
+            "Refresh must go through /auth/device-refresh, not /auth/refresh"
+        )
+        XCTAssertEqual(store.accessToken, "new-access")
+        XCTAssertEqual(store.refreshToken, "new-device-refresh")
+        XCTAssertEqual(deviceSession.refreshToken, "new-device-refresh")
+    }
+
+    @MainActor
+    func test_apiClient_falls_back_to_jwt_refresh_when_no_device_session() async throws {
+        var seenPaths: [String] = []
+        let store = InMemoryTokenStore(accessToken: "old-access", refreshToken: "jwt-refresh-token")
+        let client = APIClient(
+            baseURL: URL(string: "http://unit.test/api/v1")!,
+            authMode: .cloudJWT,
+            tokenStore: store,
+            deviceSession: nil,
+            session: Self.stubSession { request in
+                seenPaths.append(request.url?.path ?? "")
+                if request.url?.path == "/api/v1/auth/refresh" {
+                    let body = try Self.jsonBody(from: request)
+                    XCTAssertEqual(body["refresh_token"] as? String, "jwt-refresh-token")
+                    return (200, #"""
+                    {"access_token":"jwt-new","refresh_token":"jwt-new-refresh","token_type":"bearer"}
+                    """#)
+                }
+                let tasksCalls = seenPaths.filter { $0 == "/api/v1/tasks" }.count
+                if tasksCalls == 1 {
+                    return (401, #"{"error":{"code":"unauthorized","message":"expired","details":{}}}"#)
+                }
+                return (200, #"{"items":[],"next_cursor":null}"#)
+            }
+        )
+
+        let tasks: [TaskItem] = try await client.fetchAll("/tasks")
+
+        XCTAssertEqual(tasks, [])
+        XCTAssertEqual(
+            seenPaths,
+            ["/api/v1/tasks", "/api/v1/auth/refresh", "/api/v1/tasks"],
+            "Without device session, refresh must use /auth/refresh"
+        )
+        XCTAssertEqual(store.accessToken, "jwt-new")
+        XCTAssertEqual(store.refreshToken, "jwt-new-refresh")
+    }
+
+    @MainActor
+    func test_unauthorized_cooldown_blocks_double_session_expire_within_5s() async throws {
+        // Two calls to the same protected path each get a 401 with no
+        // refresh path available. The FIRST should clear the token store.
+        // The SECOND, fired within the 5s cooldown, must NOT clear the
+        // store a second time — otherwise a brand-new token injected by
+        // an upstream re-auth between the two errors would be wiped out.
+        let store = ResettableInMemoryTokenStore(accessToken: "access", refreshToken: nil)
+        let client = APIClient(
+            baseURL: URL(string: "http://unit.test/api/v1")!,
+            authMode: .cloudJWT,
+            tokenStore: store,
+            deviceSession: nil,
+            session: Self.stubSession { _ in
+                (401, #"{"error":{"code":"unauthorized","message":"expired","details":{}}}"#)
+            }
+        )
+
+        // 1st 401 → unauthorized + token store cleared.
+        do {
+            let _: [TaskItem] = try await client.fetchAll("/tasks")
+            XCTFail("Expected unauthorized")
+        } catch APIClientError.unauthorized {
+            XCTAssertNil(store.accessToken)
+            XCTAssertNil(store.refreshToken)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+        XCTAssertEqual(store.clearCount, 1)
+
+        // Simulate an upper-layer re-auth that landed JUST after the 1st
+        // 401: the store now has a fresh access token but still no
+        // refresh token (the new refresh is device-bound, lives in
+        // DeviceSessionStore). The next request on the same path must
+        // NOT wipe this token out — the cooldown should suppress.
+        store.directlySetAccessToken("fresh-access")
+
+        do {
+            let _: [TaskItem] = try await client.fetchAll("/tasks")
+            XCTFail("Expected unauthorized")
+        } catch APIClientError.unauthorized {
+            XCTAssertEqual(store.accessToken, "fresh-access", "cooldown must suppress clear()")
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+        XCTAssertEqual(store.clearCount, 1, "no extra clear() while in cooldown")
+    }
+
     private static func space(id: String, type: SpaceType) -> Space {
         Space(id: id, name: type.label, type: type)
+    }
+
+    private static func jsonBody(from request: URLRequest) throws -> [String: Any] {
+        let data: Data
+        if let httpBody = request.httpBody {
+            data = httpBody
+        } else if let stream = request.httpBodyStream {
+            stream.open()
+            defer { stream.close() }
+            var collected = Data()
+            let bufferSize = 1024
+            let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+            defer { buffer.deallocate() }
+            while stream.hasBytesAvailable {
+                let count = stream.read(buffer, maxLength: bufferSize)
+                if count <= 0 { break }
+                collected.append(buffer, count: count)
+            }
+            data = collected
+        } else {
+            data = Data()
+        }
+        return (try JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
     }
 
     private static func stubSession(
@@ -211,6 +489,93 @@ final class ViewModelTests: XCTestCase {
           "version":1
         }
         """
+    }
+}
+
+/// Test-only TokenStore that lets tests inject an access token mid-flight
+/// (the real InMemoryTokenStore has `private(set)` setters) and counts how
+/// many times `clear()` has been called — useful for verifying that the
+/// APIClient cooldown actually suppresses repeated clearings.
+final class ResettableInMemoryTokenStore: TokenStore {
+    private(set) var accessToken: String?
+    private(set) var refreshToken: String?
+    private(set) var clearCount = 0
+
+    init(accessToken: String? = nil, refreshToken: String? = nil) {
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
+    }
+
+    func save(accessToken: String, refreshToken: String) throws {
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
+    }
+
+    func clear() throws {
+        accessToken = nil
+        refreshToken = nil
+        clearCount += 1
+    }
+
+    func directlySetAccessToken(_ value: String?) {
+        accessToken = value
+    }
+}
+
+/// In-memory DeviceSessionStore for unit tests — keeps refresh token and
+/// info in plain ivars instead of Keychain / UserDefaults so tests stay
+/// hermetic and don't pollute the developer's real cloud session.
+final class TestDeviceSessionStore: DeviceSessionStore {
+    private var _deviceId: String
+    private var _refreshToken: String?
+    private var _info: DeviceSessionInfo?
+    var saveCalls = 0
+    var clearAllCalls = 0
+
+    init(deviceId: String, refreshToken: String?) {
+        self._deviceId = deviceId
+        self._refreshToken = refreshToken
+        super.init(
+            defaults: UserDefaults(suiteName: "test-\(UUID().uuidString)")!,
+            keychainService: "test-\(UUID().uuidString)"
+        )
+    }
+
+    override var deviceId: String { _deviceId }
+
+    override var refreshToken: String? { _refreshToken }
+
+    override func saveRefreshToken(_ token: String) throws {
+        _refreshToken = token
+        saveCalls += 1
+    }
+
+    override func clearRefreshToken() {
+        _refreshToken = nil
+    }
+
+    override var info: DeviceSessionInfo? {
+        get { _info }
+        set { _info = newValue }
+    }
+
+    override func recordIssued(deviceName: String?, expiresAt: Date?) {
+        _info = DeviceSessionInfo(
+            deviceId: _deviceId,
+            deviceName: deviceName ?? "test",
+            expiresAt: expiresAt,
+            lastRefreshedAt: Date()
+        )
+    }
+
+    override func clearAll() {
+        _refreshToken = nil
+        _info = nil
+        clearAllCalls += 1
+    }
+
+    override var hasActiveSession: Bool {
+        _refreshToken != nil
     }
 }
 

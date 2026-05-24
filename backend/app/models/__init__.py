@@ -8,6 +8,7 @@ from app.models.email_otp import EmailOTPCode
 from app.models.llm_provider_key import LLMProviderKey
 from app.models.note import Note
 from app.models.project import Project
+from app.models.refresh_token_jti import RefreshTokenJTI
 from app.models.space import Space
 from app.models.task import Task
 from app.models.user import User
@@ -23,6 +24,7 @@ __all__ = [
     "LLMProviderKey",
     "Note",
     "Project",
+    "RefreshTokenJTI",
     "Space",
     "Task",
     "User",
