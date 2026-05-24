@@ -64,7 +64,7 @@ def validate_runtime_settings() -> None:
 def create_app() -> FastAPI:
     validate_runtime_settings()
     settings = get_settings()
-    app = FastAPI(title="Personal Affairs API", version="0.1.0")
+    app = FastAPI(title="Personal Affairs API", version="1.2.4")
 
     if settings.cors_origins:
         app.add_middleware(

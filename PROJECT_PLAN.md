@@ -1029,3 +1029,27 @@ P3 / P4 在 P2 完成后可与 P5 并行，但都要先于 P6 完成（P6 客户
   - P6-4 plan 写 "AppModel 加 `private var lastRefreshAllAt`"；实际改为 internal（理由见上）。
   - P6-5 plan 写 `requestAuthorization(options: [.alert, .sound])`；实际保留原代码的 `[.alert, .badge, .sound]`（原 sync 函数也是这个 options，三者皆是 calendar 提醒应有，砍 `.badge` 没理由）。
 - 影响范围：Phase P6（reviewer #9 / #26 / #27 / #28 / #31 / #33；#3 部分修复 + defer 到 v1.2.5）。`MutationQueue.replay(using:)` 签名 breaking change，仅生产 caller `AppModel` 和 3 个内部测试，全部更新；`PendingMutation` 增字段，旧 JSON 格式向后兼容（unknown userId fallback）。`AppModel.refreshAll()` 行为变化：30s 内的重入只跑 derive，手动入口 force=true 绕过。`LocalNotificationCenter.sync` 不再无脑 requestAuthorization，已 deny 的用户不再每次都被打扰。`NoteCreate` schema 不变，新增 16000/16001 边界测试覆盖 reviewer #33。Widget 端用户实际行为零变化（widget 还没装上）；v1.2.5 加 Xcode target 后 widget 内 `init()` 自动生效。
+
+### [2026-05-24] P7 施工补充
+- 变更内容：
+  - P7-1：`frontend/apple/PersonalAffairsApp.xcodeproj/project.pbxproj` 把双 target Debug + Release 4 处 `MARKETING_VERSION` 全部 `1.2.3` → `1.2.4`，4 处 `CURRENT_PROJECT_VERSION` 全部 `1.125` → `1.126`。`backend/pyproject.toml` `version = "1.2.3"` → `version = "1.2.4"`。`backend/app/main.py` 的 `FastAPI(title=..., version="0.1.0")` 改 `version="1.2.4"`（plan 标 main.py:32 但实际行在 67，按内容定位无歧义）。
+  - P7-2：刷新 `backend/tests/openapi_snapshot.json`。脚本用一行 `python -c` dump（`json.dumps(app.openapi(), indent=2)`），不新建 `backend/scripts/dump_openapi.py` 模块——plan 写"若不存在则按 fixture 反推"，实际 `tests/test_openapi.py` 就是 `app.openapi() == json.loads(SNAPSHOT_PATH.read_text())`，一行 inline 命令足够，避免引入一个只在发版用的脚本。Diff 仅 `info.version: "0.1.0" → "1.2.4"` 一行变化，与 P7-1 改 FastAPI version 完全一致；所有 P0-P6 期间的 endpoint 描述变化（device-logout 加可选 refresh_token、refresh rotation 描述、register 加 invite/prod 404 描述、apple flag-off 描述、NoteUpdate 加 linked_task_id）已经在各自 phase 落入 snapshot，本 phase 无新业务字段差异。
+  - P7-3：`deployment.md` 末尾"Release Candidate Verification"段之后追加 "## v1.2.4 Upgrade Notes" 段，列 plan 要求的 4 步（migrate_llm_keys_v124、env 三个新字段、alembic 0006、systemd daemon-reload）。`migrate_llm_keys_v124` 命令明确写成 `python -m scripts.migrate_llm_keys_v124`（plan 原文写法），通过 ssh 远程执行示例（与本文件其他章节风格一致）。
+  - P7-4：`scripts/prod-check.sh` 在 "Public health" 段后新增 "Auth surface (v1.2.4)" + "Proxy header rate-limit attribution" 两段，3 个 curl 检查：
+    - `/api/v1/auth/register` POST `{}` 期望 404（prod 默认无 invite token）。
+    - `/api/v1/auth/device-logout` POST `{"device_id":"x"}` 期望 401（无 auth）。
+    - `/health` + `X-Forwarded-For: 8.8.8.8` 期望 200（验证 uvicorn `--proxy-headers` + nginx 协同未 regression；plan 原文"rate-limit 后从 8.8.8.8 计费"是描述 slowapi 内部行为，实际可观察契约只能验证请求不被拒）。
+    - 每个检查 mismatch 时 stderr 报错 + `exit 1`，符合 `set -euo pipefail` 风格。
+  - P7-5：`scripts/verify-release.sh` `RUN_XCODEBUILD=1` 分支加 `command -v xcodebuild` 守卫（plan 要求 graceful 处理），并在原 iOS Simulator build 之前补 macOS xcodebuild test 步骤。实测当前 `PersonalAffairsApp` scheme 不支持 test action（Xcode 工程只有 iOS app target，macOS test 路径走 SwiftPM），所以 macOS test 前加了 `xcodebuild -showBuildSettings ... test` 探测：探测失败则打"scheme 未配置 macOS test action; 依赖上方 swift test"提示并跳过，不阻塞 release。
+- 与 plan 的差异：
+  - **P7-2** plan 写 `python -m backend.scripts.dump_openapi`；实际不创建该脚本。理由：单一 inline dump 命令 + `tests/test_openapi.py` 自身已是契约 enforcer，新建脚本是过度工程。下次需要 regen 时一行 `python -c` 即可。
+  - **P7-5** plan 列的 `xcodebuild ... -destination 'platform=macOS' -quiet test` 在当前 Xcode 项目下直接失败（scheme not configured for test）。选择 graceful skip + 打印解释而非：(a) 改 Xcode 工程加 macOS test target——超出 P7 范围且需 Xcode GUI；(b) 把 macOS test 整段砍掉——丢失了 plan 的意图（将来加 test target 后自动启用）。Probe 模式保留 "future-proof + 当前 best-effort" 两个目标。
+  - **P7-5** plan 没说 `xcodebuild` 不存在时怎么办；新增 `command -v xcodebuild` 兜底，让脚本能在 Linux CI 上跑 `RUN_XCODEBUILD=1` 不炸（直接跳过 + 打印提示）。
+  - **P7-3** plan 原文 4 步未给具体命令；这里把第 1 步写成 `ssh deploy@118.178.122.194 "..."` 形式（与文件其他章节一致），把第 4 步同样写成 ssh 形式。
+- 测试新增：无。P7 不引入业务变化，仅靠 `pytest -q`（86 passed，含 `test_openapi_schema_matches_snapshot` 验证 snapshot 与 FastAPI 实际 OpenAPI 一致）+ `swift test`（53 passed）+ `bash scripts/verify-release.sh`（全绿）三项回归。
+- 影响范围：Phase P7（plan §1.4 Release Criteria 第 7、8 条；reviewer #30 已在 P0）。
+  - iOS App + Widget 双 target build 号同步 1.126，OTA 升级路径正常。
+  - 后端 OpenAPI `info.version` 暴露 1.2.4，client 可读取（前端无此依赖）。
+  - `scripts/prod-check.sh` 在 HZ 灰度环境新增 3 项断言（register 404 / device-logout 401 / forwarded-IP 健康），不通过即 fail-fast。
+  - `scripts/verify-release.sh` 一键全绿仍是 release gate；macOS xcodebuild test 在当前 Xcode 工程结构下走 skip 路径（不影响 release，实际 macOS 测试由 `swift test` 覆盖）。
+  - `deployment.md` 新增 v1.2.4 升级清单段落，部署 runbook 自包含；现网升级时先跑 migrate_llm_keys_v124、确认 env、alembic upgrade、systemd daemon-reload 四步。

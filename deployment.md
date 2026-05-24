@@ -183,3 +183,32 @@ Set `RUN_PROD_CHECK=1` to include the HZ production check in the same run:
 ```bash
 RUN_PROD_CHECK=1 scripts/verify-release.sh
 ```
+
+## v1.2.4 Upgrade Notes
+
+Mandatory steps when upgrading an existing HZ deployment from v1.2.3 to v1.2.4:
+
+1. Run the LLM key re-derivation migration before restarting the API service:
+
+   ```bash
+   ssh deploy@118.178.122.194 \
+     "cd /opt/100j/current/backend && /opt/100j/venv/bin/python -m scripts.migrate_llm_keys_v124"
+   ```
+
+   P0-2 changed the LLM key encryption derivation. Existing encrypted keys must be re-derived once; the migrator is idempotent.
+
+2. Confirm `/opt/100j/env/100j.env` contains the v1.2.4 settings before the first restart:
+
+   - `REGISTER_INVITE_TOKEN=` (empty in production unless onboarding a new owner; gates `/auth/register`).
+   - `SMTP_HOST=...` when `EMAIL_OTP_ENABLED=true`; the runtime validator now refuses to boot in production if OTP is on without SMTP configured.
+   - `APPLE_SIGN_IN_ENABLED=false` (default; flip to `true` only after entitlements + AppleID + privacy policy land in v1.3.0).
+
+3. `alembic upgrade head` will execute `0006_refresh_token_jti`. This migration adds the refresh-token JTI blacklist table required for rotation. `scripts/deploy-hz.sh` runs Alembic via systemd as part of the normal deploy.
+
+4. The systemd unit `100j-api.service` `ExecStart` now appends `--proxy-headers --forwarded-allow-ips=127.0.0.1` so that rate-limit key derivation sees the real client IP through Nginx. `scripts/deploy-hz.sh` writes the new unit file, but existing machines must be reloaded explicitly:
+
+   ```bash
+   ssh deploy@118.178.122.194 "sudo systemctl daemon-reload && sudo systemctl restart 100j-api"
+   ```
+
+After deploy, run `scripts/prod-check.sh` to verify the new auth surface (`/auth/register` 404 without invite, `/auth/device-logout` 401 without auth, real client IP visible to the rate limiter).
