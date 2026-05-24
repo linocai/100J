@@ -136,16 +136,13 @@ open class DeviceSessionStore {
     // MARK: Keychain primitives（与 KeychainTokenStore 共用同一 service）
 
     private func readKeychain(account: String) -> String? {
-        var query: [String: Any] = [
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,
             kSecAttrAccount as String: account,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
-        if let group = KeychainAccessGroup.identifier {
-            query[kSecAttrAccessGroup as String] = group
-        }
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         guard status == errSecSuccess, let data = item as? Data else { return nil }
@@ -154,14 +151,11 @@ open class DeviceSessionStore {
 
     private func writeKeychain(value: String, account: String) throws {
         let data = Data(value.utf8)
-        var query: [String: Any] = [
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,
             kSecAttrAccount as String: account
         ]
-        if let group = KeychainAccessGroup.identifier {
-            query[kSecAttrAccessGroup as String] = group
-        }
         // 用 AfterFirstUnlockThisDeviceOnly：开机解锁后即可静默读取，
         // 不需要每次 App 启动都触发"允许访问"对话框。
         let update: [String: Any] = [
@@ -181,14 +175,11 @@ open class DeviceSessionStore {
     }
 
     private func deleteKeychain(account: String) {
-        var query: [String: Any] = [
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,
             kSecAttrAccount as String: account
         ]
-        if let group = KeychainAccessGroup.identifier {
-            query[kSecAttrAccessGroup as String] = group
-        }
         SecItemDelete(query as CFDictionary)
     }
 }

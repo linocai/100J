@@ -51,6 +51,7 @@ open class AuthRepository {
         return tokens
     }
 
+    @available(*, deprecated, message: "v1.2.4: feature gated off; backend returns 404. Re-enable in v1.3.0.")
     public func signInWithApple(idToken: String, email: String?, fullName: String?, bundleId: String) async throws -> TokenResponse {
         let tokens: TokenResponse = try await api.send(
             "/auth/apple",

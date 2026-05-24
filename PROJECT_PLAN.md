@@ -922,3 +922,29 @@ P3 / P4 在 P2 完成后可与 P5 并行，但都要先于 P6 完成（P6 客户
   - 后端新文件 `tests/test_apple_auth.py`：`test_apple_sign_in_falls_back_to_stale_jwks_when_remote_unreachable` / `test_apple_jwks_raises_503_when_no_cache_and_remote_down`（plan 多 1，覆盖空缓存 503 路径）/ `test_apple_jwks_refreshes_when_cache_expired_and_remote_ok`（plan 多 1，正常 path sanity check）。
   - 前端：`testSilentResumeHandlesRotationAndSavesNewRefreshToken` 加在 `PersonalAffairsCoreTests`（plan 第 360 行点名 `AuthRepository.silentResume` 是 Core 模块的方法，所以测试归属 CoreTests 而非 AppTests）。
 - 影响范围：Phase P2（reviewer #5 / #18 / #19；#16 / #20 已在 P0 完成）；改变 `/auth/refresh` 行为契约（rotation）和 `/auth/register` 可用性契约（prod 默认 404 + 限流）。前端 `AuthRepository.silentResume` / `APIClient.refreshTokensIfPossible` 现有 `persist()` 已能保存返回的新 refresh token，零改动即兼容。
+
+### [2026-05-24] P3 施工补充
+- 变更内容：
+  - P3-1：`apple_auth_service.sign_in_with_apple` 拆出 `_match_existing_user(db, apple_user_id, apple_email)` helper；client-supplied `email_hint` 退出"匹配既有 user"路径，仅在新建 user 且 claim 没给 email 时作为初始 email/display 候选。新增"hint collision 防御"——若 hint 与现有非本 Apple sub 的 user email 冲突，回退到 `f"apple-{sub[:8]}@private.local"` 占位而非抛 UNIQUE，避免 hostile client DoS 新用户创建。
+  - P3-2：`Settings` 新增 `apple_sign_in_enabled: bool = False`；`POST /auth/apple` 入口 if 关 → `AppError(404, "not_found", "Apple Sign-In disabled.")`。endpoint 与 service 代码保留，v1.3.0 翻 env 即可。
+  - P3-3：删除 `AppleSignInButton.swift` 文件、`AppModel.handleAppleSignIn(_:)` + 配套 `import AuthenticationServices` `#if canImport`。`AuthRepository.signInWithApple` 加 `@available(*, deprecated, message: "v1.2.4: feature gated off")` 保留 public API（后端 endpoint 还在），核心包 ABI 兼容。
+  - P3-4：删除 `KeychainAccessGroup` enum 整段；`TokenStore.read/save/delete` 和 `DeviceSessionStore.readKeychain/writeKeychain/deleteKeychain` 中所有 `if let group = KeychainAccessGroup.identifier { ... }` 分支移除（共 6 处）。`PersonalAffairsApp.swift` 本来就没 `KeychainAccessGroup.configure(...)` 调用，免动。entitlements 文件 plan 明确不动。
+- 变更原因：
+  - email_hint 漏洞是 P3 最核心修复（reviewer #2 致命）：hostile client 之前可通过 `email=victim@example.com` body + 自己的 Apple sub 接管 victim 本地 user 行；现在 email 路径只信 id_token 签名内的 `email` claim。
+  - "hint collision 防御" 是 plan 没明写但落地必须的：如果不加，hint 与既有用户冲突会让新用户创建直接 IntegrityError（500），attacker 可通过批量已知邮箱阻断新用户注册流。一行 SELECT 兜底回退到 placeholder，符合 P3-1 的原则（hint 无权威）。
+  - apple_sign_in_enabled flag 默认 false：v1.2.4 没准备好 entitlement / AppleID / 隐私 policy；endpoint 保活意在 v1.3.0 翻 flag 即重启 feature。
+  - 前端 Apple 死代码删干净优于 `@available(unavailable)`：unavailable 仍会出现在 dump 里且给 reviewer 噪音；删掉再在 v1.3.0 一次性恢复更清楚。
+  - `KeychainAccessGroup` 删整段而非保留 hook：entitlements 没声明 `keychain-access-groups`，hook 永远走 nil 分支；留着是误导。当前签名策略 ad-hoc 重签触发的 keychain 重新授权问题已由 `KeychainTokenStore.legacyServices` 迁移路径承载。
+- 测试新增：
+  - 后端 `tests/test_apple_auth.py` 追加 7 条（plan 要求 5 条 + 2 条防御性补充）：
+    - `test_apple_email_hint_does_not_match_existing_user_when_claim_missing_email`（headline #2 修复证明）
+    - `test_apple_email_claim_matches_existing_user`（claim email 仍允许 link，正面 path）
+    - `test_apple_new_user_uses_email_claim_when_present`（新 user 用 claim email，hint 不参与）
+    - `test_apple_new_user_uses_hint_when_claim_email_missing`（新 user fallback 到 hint）
+    - `test_apple_new_user_falls_back_to_private_local_placeholder`（两者都没→placeholder）
+    - `test_apple_hint_collision_with_existing_user_falls_back_to_placeholder`（plan 多 1，覆盖 hint collision 防御路径）
+    - `test_apple_endpoint_returns_404_when_disabled`（flag 关 → 404）
+    - `test_apple_endpoint_routes_through_when_enabled`（plan 多 1，证明 flag 翻开后 endpoint 真的能走通，避免 flag-only 测试漏掉 wiring）
+  - 后端 `tests/test_auth_v11.py` 中三条 existing Apple test（`test_apple_signin_creates_default_spaces_and_reuses_sub` / `test_apple_signin_binds_existing_email_user` / `test_apple_signin_rejects_unknown_audience`）原本默认开启 → 现统一加 `monkeypatch.setenv("APPLE_SIGN_IN_ENABLED", "true")` + `get_settings.cache_clear()` 包 try/finally，使行为测试在 flag 翻开下继续验证 service 层逻辑。
+  - 前端 `PersonalAffairsCoreTests.testAuthRepositoryEncodesAppleSignInAndStoresTokens` 删除（plan 第 488 行明确"删除涉及 Apple Sign-In 的现有 test case"，且 method 已 deprecated，留着会产生 deprecation warning 噪音）。
+- 影响范围：Phase P3（reviewer #2 / #11 / #13）；改变 `/auth/apple` 可用性契约（默认 404）与匹配语义契约（hint 不再用于匹配既有 user）。前端 Apple Sign-In UI 整段下线（SetupScreen 本身原本就没有 Apple 按钮入口，对用户体验零影响）。`AuthRepository.signInWithApple` 仍保留 public API（deprecated）以维持 PersonalAffairsCore 包 ABI 兼容。

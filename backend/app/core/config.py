@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     apple_allowed_audiences: Annotated[List[str], NoDecode] = Field(
         default_factory=lambda: ["top.linotsai.app.PersonalAffairs"]
     )
+    # v1.2.4 P3-2 (#13): Apple Sign-In is gated off by default for v1.2.4
+    # because entitlement / AppleID config / privacy policy aren't ready.
+    # The endpoint and service code stay so v1.3.0 can re-enable in place
+    # by flipping APPLE_SIGN_IN_ENABLED=true.
+    apple_sign_in_enabled: bool = False
     pending_confirmation_expire_minutes: int = 15
     cors_origins: Annotated[List[str], NoDecode] = Field(default_factory=list)
 

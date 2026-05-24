@@ -118,6 +118,17 @@ def owner_login(request: Request, payload: OwnerLoginRequest, db: Session = Depe
 @router.post("/apple", response_model=TokenResponse)
 @limiter.limit("5/minute")
 def apple_sign_in(request: Request, payload: AppleSignInRequest, db: Session = Depends(get_db)):
+    # v1.2.4 P3-2 (#13): Apple Sign-In is gated off by default.
+    # See settings.apple_sign_in_enabled for the rationale. We deliberately
+    # return 404 (not 503) so scanners can't tell whether the endpoint
+    # exists, and so v1.3.0 can flip the flag without touching code.
+    if not get_settings().apple_sign_in_enabled:
+        raise AppError(
+            status_code=404,
+            code="not_found",
+            message="Apple Sign-In disabled.",
+        )
+
     user = sign_in_with_apple(
         db,
         id_token=payload.id_token,

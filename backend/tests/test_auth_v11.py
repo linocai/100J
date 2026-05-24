@@ -13,6 +13,11 @@ from tests.conftest import TestingSessionLocal, register_and_auth
 
 
 def test_apple_signin_creates_default_spaces_and_reuses_sub(client, monkeypatch):
+    # v1.2.4 P3-2: the endpoint is gated off by default; enable for this
+    # behavior test that proves the service-layer logic still works when
+    # the flag is on.
+    monkeypatch.setenv("APPLE_SIGN_IN_ENABLED", "true")
+    get_settings.cache_clear()
     monkeypatch.setattr(
         apple_auth_service,
         "_verify_apple_id_token",
@@ -22,30 +27,36 @@ def test_apple_signin_creates_default_spaces_and_reuses_sub(client, monkeypatch)
         },
     )
 
-    first = client.post(
-        "/api/v1/auth/apple",
-        json={"id_token": "token-1", "bundle_id": "top.linotsai.app.PersonalAffairs"},
-    )
-    assert first.status_code == 200, first.text
-    headers = {"Authorization": f"Bearer {first.json()['access_token']}"}
-    me = client.get("/api/v1/me", headers=headers).json()
-    assert me["email"] == "apple@example.com"
+    try:
+        first = client.post(
+            "/api/v1/auth/apple",
+            json={"id_token": "token-1", "bundle_id": "top.linotsai.app.PersonalAffairs"},
+        )
+        assert first.status_code == 200, first.text
+        headers = {"Authorization": f"Bearer {first.json()['access_token']}"}
+        me = client.get("/api/v1/me", headers=headers).json()
+        assert me["email"] == "apple@example.com"
 
-    spaces = client.get("/api/v1/spaces", headers=headers).json()["items"]
-    assert {space["type"] for space in spaces} == {"personal", "company"}
+        spaces = client.get("/api/v1/spaces", headers=headers).json()["items"]
+        assert {space["type"] for space in spaces} == {"personal", "company"}
 
-    second = client.post(
-        "/api/v1/auth/apple",
-        json={"id_token": "token-2", "bundle_id": "top.linotsai.app.PersonalAffairs"},
-    )
-    assert second.status_code == 200, second.text
-    headers = {"Authorization": f"Bearer {second.json()['access_token']}"}
-    assert client.get("/api/v1/me", headers=headers).json()["id"] == me["id"]
+        second = client.post(
+            "/api/v1/auth/apple",
+            json={"id_token": "token-2", "bundle_id": "top.linotsai.app.PersonalAffairs"},
+        )
+        assert second.status_code == 200, second.text
+        headers = {"Authorization": f"Bearer {second.json()['access_token']}"}
+        assert client.get("/api/v1/me", headers=headers).json()["id"] == me["id"]
+    finally:
+        get_settings.cache_clear()
 
 
 def test_apple_signin_binds_existing_email_user(client, monkeypatch):
     headers, _ = register_and_auth(client)
     original_id = client.get("/api/v1/me", headers=headers).json()["id"]
+    # v1.2.4 P3-2: enable the gated endpoint for this behavior test.
+    monkeypatch.setenv("APPLE_SIGN_IN_ENABLED", "true")
+    get_settings.cache_clear()
     monkeypatch.setattr(
         apple_auth_service,
         "_verify_apple_id_token",
@@ -55,29 +66,39 @@ def test_apple_signin_binds_existing_email_user(client, monkeypatch):
         },
     )
 
-    response = client.post(
-        "/api/v1/auth/apple",
-        json={"id_token": "token", "bundle_id": "top.linotsai.app.PersonalAffairs"},
-    )
+    try:
+        response = client.post(
+            "/api/v1/auth/apple",
+            json={"id_token": "token", "bundle_id": "top.linotsai.app.PersonalAffairs"},
+        )
 
-    assert response.status_code == 200, response.text
-    apple_headers = {"Authorization": f"Bearer {response.json()['access_token']}"}
-    assert client.get("/api/v1/me", headers=apple_headers).json()["id"] == original_id
+        assert response.status_code == 200, response.text
+        apple_headers = {"Authorization": f"Bearer {response.json()['access_token']}"}
+        assert client.get("/api/v1/me", headers=apple_headers).json()["id"] == original_id
+    finally:
+        get_settings.cache_clear()
 
 
 def test_apple_signin_rejects_unknown_audience(client, monkeypatch):
+    # v1.2.4 P3-2: enable the gated endpoint so we still reach the
+    # audience-validation branch (otherwise we'd 404 before getting there).
+    monkeypatch.setenv("APPLE_SIGN_IN_ENABLED", "true")
+    get_settings.cache_clear()
     monkeypatch.setattr(
         apple_auth_service,
         "_verify_apple_id_token",
         lambda id_token, expected_audience: {"sub": "apple-sub-2"},
     )
 
-    response = client.post(
-        "/api/v1/auth/apple",
-        json={"id_token": "token", "bundle_id": "com.example.other"},
-    )
+    try:
+        response = client.post(
+            "/api/v1/auth/apple",
+            json={"id_token": "token", "bundle_id": "com.example.other"},
+        )
 
-    assert response.status_code == 401
+        assert response.status_code == 401
+    finally:
+        get_settings.cache_clear()
 
 
 def test_email_otp_login_success_creates_default_spaces(client, monkeypatch):

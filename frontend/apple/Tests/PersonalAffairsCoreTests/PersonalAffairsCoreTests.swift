@@ -263,31 +263,10 @@ final class PersonalAffairsCoreTests: XCTestCase {
         XCTAssertEqual(store.refreshToken, "refresh")
     }
 
-    func testAuthRepositoryEncodesAppleSignInAndStoresTokens() async throws {
-        let store = InMemoryTokenStore()
-        let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: store, session: Self.stubSession { request in
-            XCTAssertEqual(request.url?.path, "/api/v1/auth/apple")
-            XCTAssertEqual(request.httpMethod, "POST")
-            let body = try Self.jsonBody(from: request)
-            XCTAssertEqual(body["id_token"] as? String, "apple-token")
-            XCTAssertEqual(body["bundle_id"] as? String, "top.linotsai.app.PersonalAffairs")
-            XCTAssertEqual(body["email"] as? String, "user@example.com")
-            XCTAssertEqual(body["full_name"] as? String, "Lino Tsai")
-            return (200, #"{"access_token":"apple-access","refresh_token":"apple-refresh","token_type":"bearer"}"#)
-        })
-        let repository = AuthRepository(api: client)
-
-        let tokens = try await repository.signInWithApple(
-            idToken: "apple-token",
-            email: "user@example.com",
-            fullName: "Lino Tsai",
-            bundleId: "top.linotsai.app.PersonalAffairs"
-        )
-
-        XCTAssertEqual(tokens.accessToken, "apple-access")
-        XCTAssertEqual(store.accessToken, "apple-access")
-        XCTAssertEqual(store.refreshToken, "apple-refresh")
-    }
+    // v1.2.4 P3-3 (#13): `testAuthRepositoryEncodesAppleSignInAndStoresTokens`
+    // removed. The endpoint now returns 404 by default (apple_sign_in_enabled
+    // gate) and the client-side method is deprecated. v1.3.0 will reintroduce
+    // both the test and the live entrypoint together.
 
     func testAuthRepositorySeedDemoUsesMeRouteAndDecodesResponse() async throws {
         let client = APIClient(baseURL: URL(string: "http://unit.test/api/v1")!, authMode: .cloudJWT, tokenStore: InMemoryTokenStore(accessToken: "access"), session: Self.stubSession { request in

@@ -5,10 +5,6 @@ import PersonalAffairsCore
 import Network
 #endif
 
-#if canImport(AuthenticationServices)
-import AuthenticationServices
-#endif
-
 #if canImport(WidgetKit)
 import WidgetKit
 #endif
@@ -344,38 +340,10 @@ final class AppModel: ObservableObject {
         }
     }
 
-    #if canImport(AuthenticationServices)
-    func handleAppleSignIn(_ result: Result<ASAuthorization, Error>) async {
-        guard case .success(let authorization) = result else {
-            if case .failure(let error) = result {
-                errorMessage = error.localizedDescription
-            } else {
-                errorMessage = "无法完成 Apple 登录。"
-            }
-            return
-        }
-        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
-              let tokenData = credential.identityToken,
-              let idToken = String(data: tokenData, encoding: .utf8)
-        else {
-            errorMessage = "无法获取 Apple 身份令牌。"
-            return
-        }
-        updateAuthMode(.cloudJWT)
-        await run {
-            _ = try await self.authRepository.signInWithApple(
-                idToken: idToken,
-                email: credential.email,
-                fullName: credential.fullName?.formatted(),
-                bundleId: Bundle.main.bundleIdentifier ?? "top.linotsai.app.PersonalAffairs"
-            )
-            self.currentUser = try await self.authRepository.me()
-            self.spaces = try await self.spaceRepository.list()
-            try await self.loadCoreData()
-            await self.loadSupportData()
-        }
-    }
-    #endif
+    // v1.2.4 P3-3 (#13): Apple Sign-In is gated off for v1.2.4. The
+    // `handleAppleSignIn` entry point + `AppleSignInButton` UI were
+    // removed; the underlying repository method stays (deprecated) so
+    // v1.3.0 can reintroduce the feature in one place.
 
     func requestEmailOTP(email: String) async {
         let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
