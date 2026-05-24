@@ -269,8 +269,10 @@ The script needs v1.2.4 code on disk to import the new `llm_key_encryption_salt`
 
 ```bash
 ssh deploy@118.178.122.194 \
-  "cd /opt/100j/current/backend && /opt/100j/venv/bin/python -m scripts.migrate_llm_keys_v124"
+  "set -a && . /opt/100j/env/100j.env && set +a && cd /opt/100j/current/backend && /opt/100j/venv/bin/python -m scripts.migrate_llm_keys_v124"
 ```
+
+The `set -a && . /opt/100j/env/100j.env && set +a` prefix is required because one-shot SSH commands do not load systemd's `EnvironmentFile`. Without it the script falls back to the default SQLite URL and fails with `no such table: llm_provider_keys`.
 
 Expected output:
 
