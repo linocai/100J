@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from app.core.database import get_db
+from app.core.rate_limit import limiter
 from app.api.deps import get_current_user
 from app.api.v1 import agent, auth, calendar_items, devices, notes, projects, spaces, tasks
 from app.models import User
@@ -22,7 +23,12 @@ def me(current_user: User = Depends(get_current_user)):
 
 
 @api_router.post("/me/seed-demo", response_model=SeedDemoResponse)
-def seed_demo_data(db=Depends(get_db), current_user: User = Depends(get_current_user)):
+@limiter.limit("3/hour")
+def seed_demo_data(
+    request: Request,
+    db=Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     return seed_demo(db, current_user.id)
 
 

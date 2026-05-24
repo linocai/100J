@@ -108,11 +108,33 @@ path.write_text("\n".join(next_lines) + "\n")
 PY
 fi
 
+pw_sql_file="$(mktemp /tmp/100j-pw.XXXXXX.sql)"
+chmod 600 "${pw_sql_file}"
+trap 'rm -f "${pw_sql_file}"' EXIT
 if [ "$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='100j'")" != "1" ]; then
-  sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE ROLE \"100j\" LOGIN PASSWORD '${db_password}';"
+  role_action="CREATE ROLE \"100j\" LOGIN PASSWORD :'pw';"
 else
-  sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER ROLE \"100j\" WITH LOGIN PASSWORD '${db_password}';"
+  role_action="ALTER ROLE \"100j\" WITH LOGIN PASSWORD :'pw';"
 fi
+# Use python to write the psql script with the password properly escaped
+# (single quotes doubled per psql variable-substitution rules). This avoids
+# the prior naive interpolation that would break / inject if db_password
+# contained "'", a backslash, or a newline.
+python3 - "${pw_sql_file}" "${db_password}" "${role_action}" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+password = sys.argv[2]
+action = sys.argv[3]
+escaped = password.replace("'", "''")
+path.write_text("\\set pw '" + escaped + "'\n" + action + "\n")
+PY
+sudo install -m 600 -o postgres -g postgres "${pw_sql_file}" /tmp/100j-pw.sql
+sudo -u postgres psql -v ON_ERROR_STOP=1 -f /tmp/100j-pw.sql
+sudo rm -f /tmp/100j-pw.sql
+rm -f "${pw_sql_file}"
+trap - EXIT
 
 if [ "$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='100j'")" != "1" ]; then
   sudo -u postgres createdb -O "100j" "100j"
@@ -141,7 +163,7 @@ Group=deploy
 WorkingDirectory=${REMOTE_APP_DIR}/backend
 EnvironmentFile=${REMOTE_ENV_FILE}
 ExecStartPre=${REMOTE_VENV_DIR}/bin/alembic upgrade head
-ExecStart=${REMOTE_VENV_DIR}/bin/uvicorn app.main:app --host 127.0.0.1 --port ${REMOTE_API_PORT}
+ExecStart=${REMOTE_VENV_DIR}/bin/uvicorn app.main:app --host 127.0.0.1 --port ${REMOTE_API_PORT} --proxy-headers --forwarded-allow-ips=127.0.0.1
 Restart=always
 RestartSec=5
 NoNewPrivileges=true

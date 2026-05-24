@@ -70,8 +70,12 @@ def list_tools() -> list:
 
 
 def _fernet() -> Fernet:
-    secret = get_settings().llm_key_encryption_secret.encode("utf-8")
-    key = base64.urlsafe_b64encode(hashlib.sha256(secret).digest())
+    settings = get_settings()
+    secret = settings.llm_key_encryption_secret.encode("utf-8")
+    salt = settings.llm_key_encryption_salt
+    # scrypt parameters: n=2**14 (cost), r=8 (block), p=1 (parallel), dklen=32 (Fernet key).
+    derived = hashlib.scrypt(secret, salt=salt, n=2**14, r=8, p=1, dklen=32)
+    key = base64.urlsafe_b64encode(derived)
     return Fernet(key)
 
 

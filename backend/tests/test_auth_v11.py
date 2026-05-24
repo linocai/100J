@@ -1,7 +1,10 @@
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy.exc import IntegrityError
 
 import app.api.v1.auth as auth_module
 import app.services.apple_auth_service as apple_auth_service
+import app.services.email_otp_service as email_otp_service
 from app.core.config import get_settings
 from app.models import DeviceToken, EmailOTPCode, Task
 from tests.conftest import TestingSessionLocal, register_and_auth
@@ -184,6 +187,74 @@ def test_register_device_upserts_user_token(client):
         assert rows[0].last_seen_at is not None
     finally:
         db.close()
+
+
+def test_otp_per_email_throttle_blocks_6th_request_within_hour(client, monkeypatch):
+    """P0-4 (#16): same email cannot request more than the configured cap per hour."""
+
+    monkeypatch.setattr(auth_module, "get_email_sender", lambda: lambda email, code: None)
+    # Default config caps at 5/hour. Five requests must succeed, the 6th must 429.
+    # Use a unique email so the slowapi per-IP limiter (5/minute on this route)
+    # doesn't shadow what we're actually testing here — we issue from different
+    # client IPs is impossible in TestClient, so we instead pull the throttle
+    # cap down to 2 to keep us under the slowapi 5/minute window.
+    monkeypatch.setenv("RATE_LIMIT_OTP_PER_EMAIL_PER_HOUR", "2")
+    get_settings.cache_clear()
+    try:
+        first = client.post(
+            "/api/v1/auth/email-otp/request", json={"email": "throttle@example.com"}
+        )
+        second = client.post(
+            "/api/v1/auth/email-otp/request", json={"email": "throttle@example.com"}
+        )
+        third = client.post(
+            "/api/v1/auth/email-otp/request", json={"email": "throttle@example.com"}
+        )
+    finally:
+        get_settings.cache_clear()
+
+    assert first.status_code == 204, first.text
+    assert second.status_code == 204, second.text
+    assert third.status_code == 429, third.text
+    assert third.json()["error"]["code"] == "rate_limited"
+
+
+def test_otp_cleanup_removes_expired_rows():
+    """P0-4: cleanup_expired() deletes rows whose expires_at is older than 7d."""
+
+    with TestingSessionLocal() as db:
+        now = datetime.now(timezone.utc)
+        # Old expired row (10 days old) — should be deleted.
+        db.add(
+            EmailOTPCode(
+                email="stale@example.com",
+                code_hash="x" * 64,
+                expires_at=now - timedelta(days=10),
+            )
+        )
+        # Recent expired row (1 day old) — must survive (cutoff is 7 days).
+        db.add(
+            EmailOTPCode(
+                email="recent@example.com",
+                code_hash="y" * 64,
+                expires_at=now - timedelta(days=1),
+            )
+        )
+        # Live row — must survive.
+        db.add(
+            EmailOTPCode(
+                email="live@example.com",
+                code_hash="z" * 64,
+                expires_at=now + timedelta(minutes=10),
+            )
+        )
+        db.commit()
+
+        deleted = email_otp_service.cleanup_expired(db, older_than_days=7)
+        remaining = {row.email for row in db.query(EmailOTPCode).all()}
+
+    assert deleted == 1
+    assert remaining == {"recent@example.com", "live@example.com"}
 
 
 def test_db_check_rejects_overlong_task_title(client):

@@ -20,6 +20,9 @@ section() {
 if [[ "$RUN_BACKEND" == "1" ]]; then
   section "Backend lint and tests"
   (cd "$ROOT_DIR/backend" && .venv/bin/ruff check . && .venv/bin/python -m pytest)
+
+  section "Alembic drift check"
+  (cd "$ROOT_DIR/backend" && .venv/bin/python scripts/check_alembic_drift.py)
 fi
 
 if [[ "$RUN_APPLE" == "1" ]]; then
