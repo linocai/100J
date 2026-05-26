@@ -71,6 +71,9 @@ struct PlanScreen: View {
                 systemImage: "plus",
                 style: .prominent(.indigo)
             ) {
+                // DIAG v1.2.4.1: temporary log to confirm whether the
+                // tap reaches this closure. Remove once root cause known.
+                NSLog("[100J][diag] PlanScreen new-button tapped, segment=%@", segment.rawValue)
                 model.universalComposerViewModel.open(prefill: segment.composerHint)
             }
             .help("用 ⌘K Composer 创建新事项")
