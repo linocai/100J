@@ -9,6 +9,12 @@ struct MacShell: View {
     @State private var selection: AppSection = .today
     @State private var showingSettings = false
     @State private var showingComposer = false
+    // v1.2.4.1: stable @State for the confirmation sheet so all three
+    // .sheet modifiers on this view get binding identities SwiftUI can
+    // compare cheaply. The previous computed binding caused mac SwiftUI
+    // to enter a half-modal state that swallowed clicks elsewhere in
+    // the detail pane (e.g. every button on PlanScreen).
+    @State private var showingConfirmation = false
     @State private var search = ""
 
     var body: some View {
@@ -45,7 +51,7 @@ struct MacShell: View {
                 .environmentObject(model)
                 .frame(width: 560, height: 620)
         }
-        .sheet(isPresented: confirmationSheetBinding) {
+        .sheet(isPresented: $showingConfirmation) {
             if let prompt = model.agentReview.pendingConfirmation {
                 AgentConfirmationSheet(
                     prompt: prompt,
@@ -57,14 +63,39 @@ struct MacShell: View {
             }
         }
         .background(keyboardCommands)
-        .onChange(of: model.universalComposerViewModel.isOpen) { _, newValue in
-            showingComposer = newValue
+        // v1.2.4.1: subscribe directly to the Combine publishers instead of
+        // relying on .onChange(of:). onChange only fires when the view body
+        // is re-evaluated, and v1.2.4 P6-4 (#27)'s 30 s refreshAll throttle
+        // means the body stops being re-evaluated between user actions; the
+        // sheet would only appear at the *next* refresh tick, ~30 s after
+        // tapping a button. onReceive(publisher:) subscribes through Combine
+        // and fires immediately when the @Published value flips.
+        .onReceive(model.universalComposerViewModel.$isOpen) { newValue in
+            if showingComposer != newValue { showingComposer = newValue }
         }
         .onChange(of: showingComposer) { _, newValue in
             if !newValue, model.universalComposerViewModel.isOpen {
                 model.universalComposerViewModel.close()
             }
         }
+        // agentReview is a value-type struct exposed as a single @Published
+        // on AppModel; any field change ships through model.$agentReview.
+        .onReceive(model.$agentReview) { session in
+            let visible = session.showConfirmationSheet && session.pendingConfirmation != nil
+            if showingConfirmation != visible { showingConfirmation = visible }
+        }
+        .onChange(of: showingConfirmation) { _, newValue in
+            if newValue {
+                model.openAgentConfirmationSheet()
+            } else if model.agentReview.showConfirmationSheet {
+                model.dismissAgentConfirmationSheet()
+            }
+        }
+        .task { showingConfirmation = confirmationVisible }
+    }
+
+    private var confirmationVisible: Bool {
+        model.agentReview.showConfirmationSheet && model.agentReview.pendingConfirmation != nil
     }
 
     @ViewBuilder
@@ -92,20 +123,6 @@ struct MacShell: View {
             }
             .help("Universal Composer (⌘K)")
         }
-    }
-
-    // v1.2.4 P5-2 (#32): visibility-only binding (see IOSShell for rationale).
-    private var confirmationSheetBinding: Binding<Bool> {
-        Binding(
-            get: { model.agentReview.showConfirmationSheet && model.agentReview.pendingConfirmation != nil },
-            set: { newValue in
-                if newValue {
-                    model.openAgentConfirmationSheet()
-                } else {
-                    model.dismissAgentConfirmationSheet()
-                }
-            }
-        )
     }
 
     @ViewBuilder

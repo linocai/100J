@@ -8,6 +8,10 @@ struct IOSShell: View {
     @State private var selection: AppSection = .today
     @State private var showingComposer = false
     @State private var showingSettings = false
+    // v1.2.4.1: stable @State for the confirmation sheet, mirrored from
+    // model.agentReview.showConfirmationSheet via onChange. The previous
+    // computed binding caused multi-sheet modal confusion in SwiftUI.
+    @State private var showingConfirmation = false
 
     var body: some View {
         shell
@@ -29,7 +33,7 @@ struct IOSShell: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: confirmationSheetBinding) {
+            .sheet(isPresented: $showingConfirmation) {
                 if let prompt = model.agentReview.pendingConfirmation {
                     AgentConfirmationSheet(
                         prompt: prompt,
@@ -41,14 +45,34 @@ struct IOSShell: View {
                     .presentationDragIndicator(.visible)
                 }
             }
-            .onChange(of: model.universalComposerViewModel.isOpen) { _, newValue in
-                showingComposer = newValue
+            // v1.2.4.1: see MacShell for rationale. .onChange(of:) does not
+            // re-evaluate without a view body recompute, and v1.2.4 P6-4
+            // throttle starves the body of those recomputes between actions.
+            // onReceive(publisher:) subscribes through Combine directly.
+            .onReceive(model.universalComposerViewModel.$isOpen) { newValue in
+                if showingComposer != newValue { showingComposer = newValue }
             }
             .onChange(of: showingComposer) { _, newValue in
                 if !newValue, model.universalComposerViewModel.isOpen {
                     model.universalComposerViewModel.close()
                 }
             }
+            .onReceive(model.$agentReview) { session in
+                let visible = session.showConfirmationSheet && session.pendingConfirmation != nil
+                if showingConfirmation != visible { showingConfirmation = visible }
+            }
+            .onChange(of: showingConfirmation) { _, newValue in
+                if newValue {
+                    model.openAgentConfirmationSheet()
+                } else if model.agentReview.showConfirmationSheet {
+                    model.dismissAgentConfirmationSheet()
+                }
+            }
+            .task { showingConfirmation = confirmationVisible }
+    }
+
+    private var confirmationVisible: Bool {
+        model.agentReview.showConfirmationSheet && model.agentReview.pendingConfirmation != nil
     }
 
     @ViewBuilder
@@ -111,21 +135,6 @@ struct IOSShell: View {
         showingComposer = true
     }
 
-    // v1.2.4 P5-2 (#32): visibility-only binding. Dismissing the sheet hides
-    // it but keeps ``pendingConfirmation`` around so the AgentScreen banner
-    // can re-present it. Use ``model.cancelAgentCommand()`` for hard cancel.
-    private var confirmationSheetBinding: Binding<Bool> {
-        Binding(
-            get: { model.agentReview.showConfirmationSheet && model.agentReview.pendingConfirmation != nil },
-            set: { newValue in
-                if newValue {
-                    model.openAgentConfirmationSheet()
-                } else {
-                    model.dismissAgentConfirmationSheet()
-                }
-            }
-        )
-    }
 }
 
 /// 一个统一的 iOS NavigationStack 容器：大标题 + 右上角 ⊕ + 头像（开设置 sheet）。
