@@ -9,6 +9,12 @@ struct MacShell: View {
     @State private var selection: AppSection = .today
     @State private var showingSettings = false
     @State private var showingComposer = false
+    // v1.2.4.1: stable @State for the confirmation sheet so all three
+    // .sheet modifiers on this view get binding identities SwiftUI can
+    // compare cheaply. The previous computed binding caused mac SwiftUI
+    // to enter a half-modal state that swallowed clicks elsewhere in
+    // the detail pane (e.g. every button on PlanScreen).
+    @State private var showingConfirmation = false
     @State private var search = ""
 
     var body: some View {
@@ -45,7 +51,7 @@ struct MacShell: View {
                 .environmentObject(model)
                 .frame(width: 560, height: 620)
         }
-        .sheet(isPresented: confirmationSheetBinding) {
+        .sheet(isPresented: $showingConfirmation) {
             if let prompt = model.agentReview.pendingConfirmation {
                 AgentConfirmationSheet(
                     prompt: prompt,
@@ -65,6 +71,23 @@ struct MacShell: View {
                 model.universalComposerViewModel.close()
             }
         }
+        // v1.2.4.1: keep showConfirmation in sync with model state in both
+        // directions, mirroring the composer pattern above.
+        .onChange(of: confirmationVisible) { _, newValue in
+            showingConfirmation = newValue
+        }
+        .onChange(of: showingConfirmation) { _, newValue in
+            if newValue {
+                model.openAgentConfirmationSheet()
+            } else if model.agentReview.showConfirmationSheet {
+                model.dismissAgentConfirmationSheet()
+            }
+        }
+        .task { showingConfirmation = confirmationVisible }
+    }
+
+    private var confirmationVisible: Bool {
+        model.agentReview.showConfirmationSheet && model.agentReview.pendingConfirmation != nil
     }
 
     @ViewBuilder
@@ -92,20 +115,6 @@ struct MacShell: View {
             }
             .help("Universal Composer (⌘K)")
         }
-    }
-
-    // v1.2.4 P5-2 (#32): visibility-only binding (see IOSShell for rationale).
-    private var confirmationSheetBinding: Binding<Bool> {
-        Binding(
-            get: { model.agentReview.showConfirmationSheet && model.agentReview.pendingConfirmation != nil },
-            set: { newValue in
-                if newValue {
-                    model.openAgentConfirmationSheet()
-                } else {
-                    model.dismissAgentConfirmationSheet()
-                }
-            }
-        )
     }
 
     @ViewBuilder
