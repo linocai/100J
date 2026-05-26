@@ -45,16 +45,21 @@ struct IOSShell: View {
                     .presentationDragIndicator(.visible)
                 }
             }
-            .onChange(of: model.universalComposerViewModel.isOpen) { _, newValue in
-                showingComposer = newValue
+            // v1.2.4.1: see MacShell for rationale. .onChange(of:) does not
+            // re-evaluate without a view body recompute, and v1.2.4 P6-4
+            // throttle starves the body of those recomputes between actions.
+            // onReceive(publisher:) subscribes through Combine directly.
+            .onReceive(model.universalComposerViewModel.$isOpen) { newValue in
+                if showingComposer != newValue { showingComposer = newValue }
             }
             .onChange(of: showingComposer) { _, newValue in
                 if !newValue, model.universalComposerViewModel.isOpen {
                     model.universalComposerViewModel.close()
                 }
             }
-            .onChange(of: confirmationVisible) { _, newValue in
-                showingConfirmation = newValue
+            .onReceive(model.$agentReview) { session in
+                let visible = session.showConfirmationSheet && session.pendingConfirmation != nil
+                if showingConfirmation != visible { showingConfirmation = visible }
             }
             .onChange(of: showingConfirmation) { _, newValue in
                 if newValue {
