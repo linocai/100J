@@ -24,6 +24,9 @@ enum AdaptivePageLayout {
     static let maxContentWidth: CGFloat = 1200
 }
 
+/// v1.2.4.2 P1-9: `actions` defaults to `EmptyView` so every Today / Plan /
+/// Calendar caller can drop its "新建" button without changing the call
+/// site. The hero title / subtitle / eyebrow visuals are unchanged.
 struct AdaptiveHeroHeader<Actions: View>: View {
     let eyebrow: String
     let title: String
@@ -36,7 +39,7 @@ struct AdaptiveHeroHeader<Actions: View>: View {
         title: String,
         subtitle: String,
         accent: Color,
-        @ViewBuilder actions: () -> Actions
+        @ViewBuilder actions: () -> Actions = { EmptyView() }
     ) {
         self.eyebrow = eyebrow
         self.title = title
@@ -49,14 +52,18 @@ struct AdaptiveHeroHeader<Actions: View>: View {
         #if os(iOS)
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
             textBlock
-            actions
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if Actions.self != EmptyView.self {
+                actions
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         #else
         HStack(alignment: .lastTextBaseline, spacing: AppTheme.Spacing.lg) {
             textBlock
-            Spacer(minLength: 0)
-            actions
+            if Actions.self != EmptyView.self {
+                Spacer(minLength: 0)
+                actions
+            }
         }
         #endif
     }
@@ -79,56 +86,5 @@ struct AdaptiveHeroHeader<Actions: View>: View {
                 .frame(maxWidth: 540, alignment: .leading)
         }
         .multilineTextAlignment(.leading)
-    }
-}
-
-enum AdaptiveHeroActionStyle {
-    case bordered
-    case prominent(Color)
-}
-
-struct AdaptiveHeroActionButton: View {
-    let fullTitle: String
-    let compactTitle: String
-    let systemImage: String
-    let style: AdaptiveHeroActionStyle
-    let action: () -> Void
-
-    var body: some View {
-        switch style {
-        case .bordered:
-            baseButton
-                .buttonStyle(.bordered)
-        case .prominent(let tint):
-            baseButton
-                .buttonStyle(.borderedProminent)
-                .tint(tint)
-        }
-    }
-
-    private var baseButton: some View {
-        Button(action: action) {
-            adaptiveLabel
-                .lineLimit(1)
-                .frame(minHeight: 30)
-        }
-        .controlSize(.large)
-        .accessibilityLabel(fullTitle)
-    }
-
-    private var adaptiveLabel: some View {
-        #if os(iOS)
-        ViewThatFits(in: .horizontal) {
-            Label(fullTitle, systemImage: systemImage)
-                .fixedSize(horizontal: true, vertical: false)
-            Label(compactTitle, systemImage: systemImage)
-                .fixedSize(horizontal: true, vertical: false)
-            Image(systemName: systemImage)
-                .font(.body.weight(.semibold))
-                .frame(minWidth: 28)
-        }
-        #else
-        Label(fullTitle, systemImage: systemImage)
-        #endif
     }
 }

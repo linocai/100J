@@ -28,12 +28,10 @@ struct PersonalAffairsApp: App {
         #if os(macOS)
         .windowStyle(.hiddenTitleBar)
         .commands {
+            // v1.2.4.2 (P1-6): the ⌘K "Universal Composer" command was
+            // removed with the Composer chain. ⌘R still triggers a force
+            // refresh; quick-add now happens inline on each Plan tab.
             CommandGroup(after: .newItem) {
-                Button("Universal Composer") {
-                    model.universalComposerViewModel.open()
-                }
-                .keyboardShortcut("k", modifiers: .command)
-
                 Button("刷新") {
                     // v1.2.4 P6-4 (#27): explicit user-driven refresh always
                     // bypasses the throttle.

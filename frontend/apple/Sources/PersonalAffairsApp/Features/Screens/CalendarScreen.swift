@@ -42,43 +42,18 @@ struct CalendarScreen: View {
     }
 
     private var header: some View {
+        // v1.2.4.2 (P1-5): the "新建日程" AdaptiveHeroActionButton was
+        // removed with the Composer chain. Owners still create calendar
+        // items the traditional way (tap a day cell → detail sheet); the
+        // month stepper stays in the actions slot so navigation works.
         AdaptiveHeroHeader(
             eyebrow: "日程",
             title: monthTitle,
             subtitle: "只显示固定时间事项；弹性待办在 Plan 里。",
             accent: .orange
         ) {
-            calendarActions
-        }
-    }
-
-    @ViewBuilder
-    private var calendarActions: some View {
-        #if os(iOS)
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
             monthStepper
-            AdaptiveHeroActionButton(
-                fullTitle: "新建日程",
-                compactTitle: "新建",
-                systemImage: "plus",
-                style: .prominent(.orange)
-            ) {
-                model.universalComposerViewModel.open(prefill: "固定日程 ")
-            }
         }
-        #else
-        HStack(spacing: AppTheme.Spacing.sm) {
-            monthStepper
-            AdaptiveHeroActionButton(
-                fullTitle: "新建日程",
-                compactTitle: "新建",
-                systemImage: "plus",
-                style: .prominent(.orange)
-            ) {
-                model.universalComposerViewModel.open(prefill: "固定日程 ")
-            }
-        }
-        #endif
     }
 
     private var monthStepper: some View {

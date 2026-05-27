@@ -3,12 +3,16 @@ import PersonalAffairsCore
 import SwiftUI
 
 /// v1.1 macOS Shell — NavigationSplitView：sidebar 4 项 + detail 渲染 4 个共用 Screen。
-/// 设置/账号通过头像菜单弹 sheet。Composer 由 ⌘K 触发的全局 sheet。
+///
+/// v1.2.4.2 (P1-6): the global ⌘K Composer sheet, the toolbar sparkles
+/// button, and the `searchable` → Composer prefill bridge have all been
+/// removed. Quick-add now happens inline at the top of each Plan tab via
+/// `InlineQuickAddRow`; the search field stays but routes Enter to the
+/// existing search state without summoning any sheet.
 struct MacShell: View {
     @EnvironmentObject private var model: AppModel
     @State private var selection: AppSection = .today
     @State private var showingSettings = false
-    @State private var showingComposer = false
     // v1.2.4.1: stable @State for the confirmation sheet so all three
     // .sheet modifiers on this view get binding identities SwiftUI can
     // compare cheaply. The previous computed binding caused mac SwiftUI
@@ -32,20 +36,7 @@ struct MacShell: View {
         .frame(minWidth: 980, minHeight: 720)
         .searchable(text: $search,
                     placement: .toolbar,
-                    prompt: "搜索或问 Agent")
-        .onSubmit(of: .search) {
-            let text = search.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else { return }
-            model.universalComposerViewModel.open(prefill: text)
-            showingComposer = true
-            search = ""
-        }
-        .toolbar { shellToolbar }
-        .sheet(isPresented: $showingComposer) {
-            ComposerSheet(isPresented: $showingComposer)
-                .environmentObject(model)
-                .frame(width: 620, height: 420)
-        }
+                    prompt: "搜索")
         .sheet(isPresented: $showingSettings) {
             SettingsSheet(isPresented: $showingSettings)
                 .environmentObject(model)
@@ -70,16 +61,11 @@ struct MacShell: View {
         // sheet would only appear at the *next* refresh tick, ~30 s after
         // tapping a button. onReceive(publisher:) subscribes through Combine
         // and fires immediately when the @Published value flips.
-        .onReceive(model.universalComposerViewModel.$isOpen) { newValue in
-            if showingComposer != newValue { showingComposer = newValue }
-        }
-        .onChange(of: showingComposer) { _, newValue in
-            if !newValue, model.universalComposerViewModel.isOpen {
-                model.universalComposerViewModel.close()
-            }
-        }
-        // agentReview is a value-type struct exposed as a single @Published
-        // on AppModel; any field change ships through model.$agentReview.
+        //
+        // v1.2.4.2 (P1-6): the universalComposerViewModel sync was removed
+        // with the Composer chain. The agentReview sync below MUST stay —
+        // it is what makes the Agent confirmation sheet appear when the
+        // Agent surface decides a write needs human approval.
         .onReceive(model.$agentReview) { session in
             let visible = session.showConfirmationSheet && session.pendingConfirmation != nil
             if showingConfirmation != visible { showingConfirmation = visible }
@@ -112,28 +98,9 @@ struct MacShell: View {
         .navigationTitle(selection.title)
     }
 
-    @ToolbarContentBuilder
-    private var shellToolbar: some ToolbarContent {
-        ToolbarItemGroup(placement: .primaryAction) {
-            Button {
-                model.universalComposerViewModel.open()
-                showingComposer = true
-            } label: {
-                Label("Universal Composer", systemImage: "sparkles")
-            }
-            .help("Universal Composer (⌘K)")
-        }
-    }
-
     @ViewBuilder
     private var keyboardCommands: some View {
         ZStack {
-            Button("Universal Composer") {
-                model.universalComposerViewModel.open()
-                showingComposer = true
-            }
-            .keyboardShortcut("k", modifiers: .command)
-
             Button("Refresh") {
                 // v1.2.4 P6-4 (#27): explicit user-driven refresh always
                 // bypasses the throttle.

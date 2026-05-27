@@ -2,11 +2,17 @@
 import PersonalAffairsCore
 import SwiftUI
 
-/// v1.1 iOS Shell — TabView 4 项 + Liquid Glass tab bar + 顶部右上角 ⊕ Composer 入口。
+/// v1.1 iOS Shell — TabView 4 项 + Liquid Glass tab bar。
+///
+/// v1.2.4.2 (P1-7): the right-top "⊕" Composer button, the Composer sheet
+/// and the bridge to `universalComposerViewModel.isOpen` have all been
+/// removed. Quick-add now happens inline at the top of each Plan tab via
+/// `InlineQuickAddRow`. The Agent confirmation sheet bridge (added in
+/// v1.2.4.1) is preserved verbatim — confirmation is still required when
+/// the Agent surface decides a write needs human approval.
 struct IOSShell: View {
     @EnvironmentObject private var model: AppModel
     @State private var selection: AppSection = .today
-    @State private var showingComposer = false
     @State private var showingSettings = false
     // v1.2.4.1: stable @State for the confirmation sheet, mirrored from
     // model.agentReview.showConfirmationSheet via onChange. The previous
@@ -19,13 +25,6 @@ struct IOSShell: View {
                 errorBanner
                     .padding(.horizontal, AppTheme.Spacing.lg)
                     .padding(.bottom, 92)
-            }
-            .sheet(isPresented: $showingComposer) {
-                ComposerSheet(isPresented: $showingComposer)
-                    .environmentObject(model)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                    .presentationBackground(.regularMaterial)
             }
             .sheet(isPresented: $showingSettings) {
                 SettingsSheet(isPresented: $showingSettings)
@@ -49,14 +48,11 @@ struct IOSShell: View {
             // re-evaluate without a view body recompute, and v1.2.4 P6-4
             // throttle starves the body of those recomputes between actions.
             // onReceive(publisher:) subscribes through Combine directly.
-            .onReceive(model.universalComposerViewModel.$isOpen) { newValue in
-                if showingComposer != newValue { showingComposer = newValue }
-            }
-            .onChange(of: showingComposer) { _, newValue in
-                if !newValue, model.universalComposerViewModel.isOpen {
-                    model.universalComposerViewModel.close()
-                }
-            }
+            //
+            // v1.2.4.2 (P1-7): the universalComposerViewModel sync was
+            // removed with the Composer chain. The agentReview sync below
+            // MUST stay — it is what makes the Agent confirmation sheet
+            // appear when the Agent surface decides a write needs approval.
             .onReceive(model.$agentReview) { session in
                 let visible = session.showConfirmationSheet && session.pendingConfirmation != nil
                 if showingConfirmation != visible { showingConfirmation = visible }
@@ -93,25 +89,25 @@ struct IOSShell: View {
 
     private var tabs: some View {
         TabView(selection: $selection) {
-            ScreenContainer(title: "Today", showSettings: $showingSettings, openComposer: openComposer) {
+            ScreenContainer(title: "Today", showSettings: $showingSettings) {
                 TodayScreen { selection = $0 }
             }
             .tag(AppSection.today)
             .tabItem { Label("Today", systemImage: "sun.max") }
 
-            ScreenContainer(title: "Plan", showSettings: $showingSettings, openComposer: openComposer) {
+            ScreenContainer(title: "Plan", showSettings: $showingSettings) {
                 PlanScreen()
             }
             .tag(AppSection.plan)
             .tabItem { Label("Plan", systemImage: "rectangle.3.group") }
 
-            ScreenContainer(title: "Calendar", showSettings: $showingSettings, openComposer: openComposer) {
+            ScreenContainer(title: "Calendar", showSettings: $showingSettings) {
                 CalendarScreen()
             }
             .tag(AppSection.calendar)
             .tabItem { Label("Calendar", systemImage: "calendar") }
 
-            ScreenContainer(title: "Agent", showSettings: $showingSettings, openComposer: openComposer) {
+            ScreenContainer(title: "Agent", showSettings: $showingSettings) {
                 AgentScreen()
             }
             .tag(AppSection.agent)
@@ -129,19 +125,15 @@ struct IOSShell: View {
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
-
-    private func openComposer() {
-        model.universalComposerViewModel.open()
-        showingComposer = true
-    }
-
 }
 
-/// 一个统一的 iOS NavigationStack 容器：大标题 + 右上角 ⊕ + 头像（开设置 sheet）。
+/// 一个统一的 iOS NavigationStack 容器：大标题 + 头像（开设置 sheet）。
+///
+/// v1.2.4.2 (P1-7): the leading "⊕" Composer button was removed; quick-add
+/// now happens inline on each Plan tab.
 private struct ScreenContainer<Content: View>: View {
     let title: String
     @Binding var showSettings: Bool
-    let openComposer: () -> Void
     let content: () -> Content
 
     var body: some View {
@@ -150,15 +142,7 @@ private struct ScreenContainer<Content: View>: View {
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItemGroup(placement: .topBarTrailing) {
-                        Button {
-                            openComposer()
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.title3)
-                        }
-                        .accessibilityLabel("Universal Composer")
-
+                    ToolbarItem(placement: .topBarTrailing) {
                         Button {
                             showSettings = true
                         } label: {
