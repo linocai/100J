@@ -3,9 +3,13 @@ import AppKit
 import PersonalAffairsCore
 import SwiftUI
 
+/// v1.2.4.2 (P1-10): the inline "快速捕捉" field is gone — it was the menu-bar
+/// entry point into the deleted Composer / CaptureParser chain. The panel
+/// keeps the sync indicator, the Today Top 3 preview, and the open/quit
+/// shortcuts. Owners who want to record an item now click into the main
+/// window and use the Plan inline quick-add row instead.
 struct MenuBarPanel: View {
     @ObservedObject var model: AppModel
-    @State private var captureText = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
@@ -37,21 +41,6 @@ struct MenuBarPanel: View {
                 Divider()
             }
 
-            HStack(spacing: 6) {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(.purple)
-                TextField("快速捕捉", text: $captureText)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit(submitCapture)
-                Button(action: submitCapture) {
-                    Image(systemName: "arrow.up.circle.fill")
-                }
-                .buttonStyle(.borderless)
-                .disabled(captureText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-
-            Divider()
-
             HStack {
                 Button("打开 100J") {
                     NSApp.activate(ignoringOtherApps: true)
@@ -68,16 +57,6 @@ struct MenuBarPanel: View {
         }
         .padding(AppTheme.Spacing.md)
         .frame(width: 320)
-    }
-
-    private func submitCapture() {
-        let text = captureText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        Task {
-            model.universalComposerViewModel.input = text
-            _ = await model.submitUniversalComposer()
-            captureText = ""
-        }
     }
 }
 #endif

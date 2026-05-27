@@ -27,33 +27,17 @@ struct TodayScreen: View {
     // MARK: Header
 
     private var header: some View {
+        // v1.2.4.2 (P1-4): the "问 Agent" / "快速捕捉" hero buttons (and the
+        // ⌘N shortcut bound to Composer) were removed. Today is a read-only
+        // surface now; new items are recorded on the Plan tab via
+        // InlineQuickAddRow. The Agent tab is still reachable via the
+        // sidebar (mac) / tab bar (iOS).
         AdaptiveHeroHeader(
             eyebrow: eyebrow,
             title: greeting,
             subtitle: "今天先挑三件事；其余进入 Loose Ends，不会自动排进日程。",
             accent: .orange
-        ) {
-            HStack(spacing: AppTheme.Spacing.sm) {
-                AdaptiveHeroActionButton(
-                    fullTitle: "问 Agent",
-                    compactTitle: "Agent",
-                    systemImage: "sparkles",
-                    style: .bordered
-                ) {
-                    jumpTo(.agent)
-                }
-
-                AdaptiveHeroActionButton(
-                    fullTitle: "快速捕捉",
-                    compactTitle: "捕捉",
-                    systemImage: "bolt.fill",
-                    style: .prominent(.orange)
-                ) {
-                    model.universalComposerViewModel.open()
-                }
-                .keyboardShortcut("n", modifiers: .command)
-            }
-        }
+        )
     }
 
     private var eyebrow: String {
@@ -167,7 +151,7 @@ struct TodayScreen: View {
             VStack(alignment: .leading, spacing: 0) {
                 cardHeader(title: "Top 3 · 今天", meta: "公司 + 个人 合并")
                 if model.todayViewModel.topThree.isEmpty {
-                    emptyInline(title: "暂无 Top 3", message: "按 ⌘K 捕捉一个真正要推进的事项。")
+                    emptyInline(title: "暂无 Top 3", message: "在 Plan 顶部记一个真正要推进的事项。")
                 } else {
                     ForEach(model.todayViewModel.topThree) { task in
                         Divider().padding(.leading, AppTheme.Spacing.lg)

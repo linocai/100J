@@ -22,12 +22,15 @@ struct PlanScreen: View {
             case .notes: return "note.text"
             }
         }
-        var composerHint: String {
+        /// v1.2.4.2 P1-3: inline quick-add placeholder shown above the list
+        /// in each tab. Format mirrors the Notes / Linear-style "+ ..."
+        /// affordance so the row reads as a single create-action target.
+        var quickAddPlaceholder: String {
             switch self {
-            case .personal: return "个人 "
-            case .company: return "公司 "
-            case .projects: return "新项目 "
-            case .notes: return "灵感 "
+            case .personal: return "+ 记一条个人待办，按 Enter ↵"
+            case .company:  return "+ 记一条公司待办，按 Enter ↵"
+            case .projects: return "+ 新建项目，按 Enter ↵"
+            case .notes:    return "+ 记一条灵感，按 Enter ↵"
             }
         }
     }
@@ -47,6 +50,8 @@ struct PlanScreen: View {
                 .pickerStyle(.segmented)
                 .controlSize(.large)
 
+                quickAdd
+
                 content
             }
             .padding(.horizontal, AdaptivePageLayout.horizontalPadding)
@@ -59,21 +64,40 @@ struct PlanScreen: View {
     }
 
     private var header: some View {
+        // v1.2.4.2 (P1-3): the "新建" AdaptiveHeroActionButton was removed;
+        // quick-add now sits inline below the segment picker. The hero title
+        // / subtitle visuals are preserved.
         AdaptiveHeroHeader(
             eyebrow: "规划",
             title: "Plan",
             subtitle: "个人事项保持弹性；公司事项可挂项目；项目与笔记按需展开。",
             accent: .indigo
-        ) {
-            AdaptiveHeroActionButton(
-                fullTitle: "新建",
-                compactTitle: "新建",
-                systemImage: "plus",
-                style: .prominent(.indigo)
-            ) {
-                model.universalComposerViewModel.open(prefill: segment.composerHint)
+        )
+    }
+
+    /// v1.2.4.2 P1-3: tab-specific inline quick-add row. Direct POST, no
+    /// Agent, no confirmation. Returning `true` clears the field; `false`
+    /// keeps the typed text so the user can fix it (AppModel will have
+    /// surfaced an `errorMessage` for the toast / banner).
+    @ViewBuilder
+    private var quickAdd: some View {
+        switch segment {
+        case .personal:
+            InlineQuickAddRow(placeholder: segment.quickAddPlaceholder) { title in
+                await model.createPersonalTask(title: title)
             }
-            .help("用 ⌘K Composer 创建新事项")
+        case .company:
+            InlineQuickAddRow(placeholder: segment.quickAddPlaceholder) { title in
+                await model.createCompanyTask(title: title)
+            }
+        case .projects:
+            InlineQuickAddRow(placeholder: segment.quickAddPlaceholder) { title in
+                await model.createProject(name: title)
+            }
+        case .notes:
+            InlineQuickAddRow(placeholder: segment.quickAddPlaceholder) { title in
+                await model.createNote(title: title)
+            }
         }
     }
 

@@ -38,7 +38,6 @@ final class AppModel: ObservableObject {
     @Published var isNetworkReachable = true
     @Published var selectedSection: AppSection? = .today
     @Published var agentReview = AgentReviewSession()
-    @Published var menuBarCaptureText = ""
     @Published var search = ""
 
     private let api: APIClient
@@ -103,10 +102,6 @@ final class AppModel: ObservableObject {
         companyTasks: { [weak self] in self?.companyTasks ?? [] },
         projects: { [weak self] in self?.projects ?? [] },
         notes: { [weak self] in self?.notes ?? [] }
-    )
-    lazy var universalComposerViewModel = UniversalComposerViewModel(
-        personalSpace: { [weak self] in self?.personalSpace },
-        companySpace: { [weak self] in self?.companySpace }
     )
 
     convenience init() {
@@ -912,26 +907,104 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: - Inline quick-add (v1.2.4.2 P1-2)
+    //
+    // These four overloads are the direct-POST entry points used by the new
+    // `InlineQuickAddRow` on each Plan tab. They share names with the
+    // existing draft-based CRUD methods above (different argument labels —
+    // `title:` vs `_ draft:`) so the rest of AppModel keeps working
+    // unchanged. The path is intentionally minimal:
+    //
+    //  - construct the request from current personal / company space ids,
+    //  - call the repository directly (no Agent, no confirmation),
+    //  - insert the returned model at the top of the in-memory array so the
+    //    user sees the new row immediately,
+    //  - re-drive PlanViewModel / TodayViewModel via `refreshDerivedViewModels`,
+    //  - on failure surface `errorMessage` (existing toast / banner) and
+    //    return `false` so the row keeps the unsent text for editing.
+
     @discardableResult
-    func submitUniversalComposer() async -> Bool {
-        guard let draft = await universalComposerViewModel.submit() else {
-            errorMessage = "还没能解析这句输入。可以试试“个人待办 买牛奶”或“明天下午3点公司会议”。"
-            return false
-        }
-        agentReview.pendingCommand = draft
-        agentReview.pendingConfirmation = nil
-        agentReview.responseText = "已生成可审核操作。"
-        selectedSection = .agent
-        universalComposerViewModel.close()
-        return true
+    @MainActor
+    func createPersonalTask(title: String) async -> Bool {
+        await createTaskInline(title: title, useCompanySpace: false, target: \.personalTasks)
     }
 
-    func submitMenuBarCapture() async {
-        let text = menuBarCaptureText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        universalComposerViewModel.input = text
-        if await submitUniversalComposer() {
-            menuBarCaptureText = ""
+    @discardableResult
+    @MainActor
+    func createCompanyTask(title: String) async -> Bool {
+        await createTaskInline(title: title, useCompanySpace: true, target: \.companyTasks)
+    }
+
+    @discardableResult
+    @MainActor
+    func createProject(name: String) async -> Bool {
+        let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return false }
+        guard let space = companySpace else {
+            errorMessage = "公司空间还没加载完成，请稍后再试。"
+            return false
+        }
+        let request = ProjectCreateRequest(spaceId: space.id, name: cleaned)
+        do {
+            let project = try await projectRepository.create(request)
+            projects.insert(project, at: 0)
+            refreshDerivedViewModels()
+            return true
+        } catch {
+            errorMessage = UserFacingMessage.translate(error)
+            return false
+        }
+    }
+
+    @discardableResult
+    @MainActor
+    func createNote(title: String) async -> Bool {
+        let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return false }
+        guard let space = personalSpace else {
+            errorMessage = "个人空间还没加载完成，请稍后再试。"
+            return false
+        }
+        let request = NoteCreateRequest(
+            spaceId: space.id,
+            title: cleaned,
+            body: "",
+            type: .idea
+        )
+        do {
+            let note = try await noteRepository.create(request)
+            notes.insert(note, at: 0)
+            refreshDerivedViewModels()
+            return true
+        } catch {
+            errorMessage = UserFacingMessage.translate(error)
+            return false
+        }
+    }
+
+    @MainActor
+    private func createTaskInline(
+        title: String,
+        useCompanySpace: Bool,
+        target: ReferenceWritableKeyPath<AppModel, [TaskItem]>
+    ) async -> Bool {
+        let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return false }
+        guard let space = useCompanySpace ? companySpace : personalSpace else {
+            errorMessage = useCompanySpace
+                ? "公司空间还没加载完成，请稍后再试。"
+                : "个人空间还没加载完成，请稍后再试。"
+            return false
+        }
+        let request = TaskCreateRequest(spaceId: space.id, title: cleaned)
+        do {
+            let task = try await taskRepository.create(request)
+            self[keyPath: target].insert(task, at: 0)
+            refreshDerivedViewModels()
+            return true
+        } catch {
+            errorMessage = UserFacingMessage.translate(error)
+            return false
         }
     }
 
